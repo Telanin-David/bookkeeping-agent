@@ -1,0 +1,1651 @@
+openapi: 3.0.3
+info:
+  title: Bookkeeping Agent API
+  description: REST API for the Bookkeeping Agent MVP — transaction management, AI-powered chat, reports, and alerts for small shop owners.
+  version: 1.0.0
+  contact:
+    name: Bookkeeping Agent Team
+
+servers:
+  - url: https://api.yourdomain.com/api/v1
+    description: Production
+  - url: http://localhost:4000/api/v1
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: auth
+    description: Registration, login, token management
+  - name: shops
+    description: Shop creation and management
+  - name: transactions
+    description: Ledger entries — sales, expenses, receivables, payables
+  - name: chat
+    description: AI chat sessions
+  - name: reports
+    description: PDF report generation
+  - name: alerts
+    description: Alert management and history
+  - name: imports
+    description: Excel/CSV bulk upload pipeline
+  - name: health
+    description: Service health
+
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
+paths:
+
+  # ── HEALTH ──────────────────────────────────
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      description: Returns 200 when the service is up. No auth required.
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ── AUTH ─────────────────────────────────────
+  /auth/signup:
+    post:
+      tags: [auth]
+      summary: Register a new user
+      security: []
+      x-rateLimit: '10 requests per hour per IP'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            example:
+              name: Amara Osei
+              email: amara@example.com
+              phone: '+2348012345678'
+              password: 'S3cur3P@ss!'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Authenticate and receive tokens
+      security: []
+      x-rateLimit: '5 attempts per 15 minutes per IP; 15-minute lockout on breach'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: amara@example.com
+              password: 'S3cur3P@ss!'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          headers:
+            Set-Cookie:
+              description: HttpOnly refresh token cookie (refresh_token=...; HttpOnly; Secure; SameSite=Strict)
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate access token using refresh token
+      security: []
+      description: Reads the refresh token from the HttpOnly cookie set at login.
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Invalidate refresh token and clear cookie
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ── SHOPS ────────────────────────────────────
+  /shops:
+    get:
+      tags: [shops]
+      summary: List all shops owned by the authenticated user
+      x-rateLimit: '120 requests per minute'
+      responses:
+        '200':
+          description: Array of shops
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shop'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [shops]
+      summary: Create a new shop
+      x-rateLimit: '20 requests per hour'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShopRequest'
+            example:
+              name: 'Amara Provisions'
+              type: retail
+              location: 'Lagos, Nigeria'
+              currency: NGN
+      responses:
+        '201':
+          description: Shop created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /shops/{shopId}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+    get:
+      tags: [shops]
+      summary: Get a single shop
+      x-rateLimit: '120 requests per minute'
+      responses:
+        '200':
+          description: Shop details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [shops]
+      summary: Update shop details
+      x-rateLimit: '60 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateShopRequest'
+      responses:
+        '200':
+          description: Updated shop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /shops/switch:
+    post:
+      tags: [shops]
+      summary: Set active shop context for the current session
+      description: The active shop is stored server-side in the user's session so subsequent chat messages reference it automatically.
+      x-rateLimit: '60 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId]
+              properties:
+                shopId:
+                  type: string
+                  format: uuid
+            example:
+              shopId: '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+      responses:
+        '200':
+          description: Active shop updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  activeShopId:
+                    type: string
+                    format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ── TRANSACTIONS ─────────────────────────────
+  /shops/{shopId}/transactions:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+
+    get:
+      tags: [transactions]
+      summary: List transactions with optional filters
+      x-rateLimit: '120 requests per minute'
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [sale, expense, receivable, payable]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          example: '2024-01-01'
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          example: '2024-01-31'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+      responses:
+        '200':
+          description: Paginated transaction list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [transactions]
+      summary: Create a transaction
+      description: Claude categorizes the transaction automatically if `category` is omitted.
+      x-rateLimit: '300 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+            example:
+              type: sale
+              amount: 5000
+              currency: NGN
+              description: 'Sold 10 bags of rice'
+              date: '2024-01-15'
+              counterparty: 'Chukwu Market'
+      responses:
+        '201':
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /shops/{shopId}/transactions/{transactionId}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - $ref: '#/components/parameters/transactionId'
+
+    get:
+      tags: [transactions]
+      summary: Get a single transaction
+      x-rateLimit: '120 requests per minute'
+      responses:
+        '200':
+          description: Transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    patch:
+      tags: [transactions]
+      summary: Update a transaction
+      x-rateLimit: '120 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransactionRequest'
+      responses:
+        '200':
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [transactions]
+      summary: Delete a transaction
+      x-rateLimit: '60 requests per minute'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ── CHAT ─────────────────────────────────────
+  /chat/sessions:
+    get:
+      tags: [chat]
+      summary: List chat sessions for the current user
+      x-rateLimit: '60 requests per minute'
+      parameters:
+        - name: shopId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter sessions by shop
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatSession'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [chat]
+      summary: Create a new chat session
+      x-rateLimit: '30 requests per hour'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId]
+              properties:
+                shopId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /chat/sessions/{sessionId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/sessionId'
+
+    get:
+      tags: [chat]
+      summary: Get message history for a session
+      x-rateLimit: '60 requests per minute'
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Message history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [chat]
+      summary: Send a message and get an AI response
+      description: |
+        Sends the user's message to Claude with shop context assembled from recent transactions.
+        The response may include structured transaction data that the backend persists automatically.
+      x-rateLimit: '60 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            example:
+              content: 'I sold 20 bags of rice for 8000 naira today'
+              type: text
+      responses:
+        '200':
+          description: AI response with optional extracted transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ── REPORTS ──────────────────────────────────
+  /reports/receipt:
+    post:
+      tags: [reports]
+      summary: Generate a receipt PDF for a transaction
+      x-rateLimit: '30 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionId]
+              properties:
+                transactionId:
+                  type: string
+                  format: uuid
+                shopId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="receipt-2024-01-15.pdf"'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reports/credit:
+    post:
+      tags: [reports]
+      summary: Generate a credit (receivables) report PDF
+      x-rateLimit: '10 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DateRangeReportRequest'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reports/stock:
+    post:
+      tags: [reports]
+      summary: Generate a stock/inventory report PDF
+      x-rateLimit: '10 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DateRangeReportRequest'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reports/pl:
+    post:
+      tags: [reports]
+      summary: Generate a Profit & Loss statement PDF
+      x-rateLimit: '10 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DateRangeReportRequest'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ── ALERTS ───────────────────────────────────
+  /alerts:
+    get:
+      tags: [alerts]
+      summary: List active alerts for the current user
+      x-rateLimit: '60 requests per minute'
+      parameters:
+        - name: shopId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, acknowledged, dismissed]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /alerts/history:
+    get:
+      tags: [alerts]
+      summary: View full alert history (all statuses)
+      x-rateLimit: '60 requests per minute'
+      parameters:
+        - name: shopId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Alert history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertHistory'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /alerts/{alertId}/acknowledge:
+    parameters:
+      - $ref: '#/components/parameters/alertId'
+    patch:
+      tags: [alerts]
+      summary: Acknowledge an alert
+      x-rateLimit: '60 requests per minute'
+      responses:
+        '200':
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /alerts/{alertId}/dismiss:
+    parameters:
+      - $ref: '#/components/parameters/alertId'
+    patch:
+      tags: [alerts]
+      summary: Dismiss an alert
+      x-rateLimit: '60 requests per minute'
+      responses:
+        '200':
+          description: Alert dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ── IMPORTS ──────────────────────────────────
+  /imports/upload:
+    post:
+      tags: [imports]
+      summary: Upload an Excel or CSV file for processing
+      description: Max 10 MB. Returns an importId to use in subsequent steps.
+      x-rateLimit: '10 requests per hour'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, shopId]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                shopId:
+                  type: string
+                  format: uuid
+      responses:
+        '202':
+          description: File accepted; schema detection in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large (max 10 MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /imports/{importId}/validate:
+    parameters:
+      - $ref: '#/components/parameters/importId'
+    post:
+      tags: [imports]
+      summary: Run validation on an uploaded file
+      description: Validates all rows and returns per-row errors.
+      x-rateLimit: '10 requests per hour'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportColumnMapping'
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportValidationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /imports/{importId}/preview:
+    parameters:
+      - $ref: '#/components/parameters/importId'
+    get:
+      tags: [imports]
+      summary: Preview first 20 rows with detected schema
+      x-rateLimit: '30 requests per minute'
+      responses:
+        '200':
+          description: Preview data + detected column mappings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportPreview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /imports/{importId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/importId'
+    post:
+      tags: [imports]
+      summary: Confirm and ingest validated rows into the database
+      description: Only rows that passed validation are ingested. Error rows are skipped unless `skipErrors` is false.
+      x-rateLimit: '5 requests per hour'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                skipErrors:
+                  type: boolean
+                  default: true
+                  description: If false, abort if any row has errors.
+      responses:
+        '200':
+          description: Ingestion summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Import already confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+# ─────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    shopId:
+      name: shopId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    transactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    sessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    alertId:
+      name: alertId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    importId:
+      name: importId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: BAD_REQUEST
+            message: 'amount must be a positive number'
+            details: []
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: UNAUTHORIZED
+            message: 'Token is expired or missing'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: NOT_FOUND
+            message: 'Shop not found'
+    Conflict:
+      description: Conflict with existing resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: CONFLICT
+            message: 'Email already registered'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: TOO_MANY_REQUESTS
+            message: 'Too many login attempts. Try again in 15 minutes.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until the client may retry
+    UnprocessableEntity:
+      description: Request valid but unable to process (e.g. Claude API error)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: INTERNAL_SERVER_ERROR
+            message: 'An unexpected error occurred'
+
+  schemas:
+
+    # ── Common ──────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code
+        message:
+          type: string
+          description: Human-readable description
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: '1.0.0'
+
+    # ── Auth ────────────────────────────────────
+    SignupRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          description: E.164 format e.g. +2348012345678
+        password:
+          type: string
+          minLength: 8
+          description: Must contain uppercase, lowercase, digit, special char
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT; expires in 15 minutes
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        alertPreferences:
+          $ref: '#/components/schemas/AlertPreferences'
+        createdAt:
+          type: string
+          format: date-time
+
+    AlertPreferences:
+      type: object
+      properties:
+        email:
+          type: boolean
+          default: true
+        sms:
+          type: boolean
+          default: false
+        whatsapp:
+          type: boolean
+          default: false
+        quietHoursStart:
+          type: string
+          example: '22:00'
+        quietHoursEnd:
+          type: string
+          example: '07:00'
+        thresholds:
+          type: object
+          properties:
+            lowCash:
+              type: number
+              example: 10000
+            highPayable:
+              type: number
+              example: 50000
+            overdueReceivableDays:
+              type: integer
+              example: 30
+
+    # ── Shops ────────────────────────────────────
+    Shop:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [retail, wholesale, services, food, other]
+        location:
+          type: string
+        currency:
+          type: string
+          default: NGN
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateShopRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        type:
+          type: string
+          enum: [retail, wholesale, services, food, other]
+        location:
+          type: string
+        currency:
+          type: string
+          default: NGN
+
+    UpdateShopRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [retail, wholesale, services, food, other]
+        location:
+          type: string
+        currency:
+          type: string
+
+    # ── Transactions ─────────────────────────────
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        shopId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [sale, expense, receivable, payable]
+        amount:
+          type: number
+          format: float
+        currency:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          description: Auto-assigned by Claude if not provided
+        counterparty:
+          type: string
+          description: Customer or supplier name
+        date:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+          description: For receivables/payables
+        status:
+          type: string
+          enum: [pending, settled, overdue]
+        aiCategorized:
+          type: boolean
+        importId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTransactionRequest:
+      type: object
+      required: [type, amount, date]
+      properties:
+        type:
+          type: string
+          enum: [sale, expense, receivable, payable]
+        amount:
+          type: number
+          minimum: 0.01
+        currency:
+          type: string
+          default: NGN
+        description:
+          type: string
+          maxLength: 500
+        category:
+          type: string
+          description: If omitted, Claude categorizes automatically
+        counterparty:
+          type: string
+        date:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+
+    UpdateTransactionRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [sale, expense, receivable, payable]
+        amount:
+          type: number
+          minimum: 0.01
+        description:
+          type: string
+        category:
+          type: string
+        counterparty:
+          type: string
+        date:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, settled, overdue]
+
+    TransactionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ── Chat ────────────────────────────────────
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        shopId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lastMessageAt:
+          type: string
+          format: date-time
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+        type:
+          type: string
+          enum: [text, voice, image]
+        content:
+          type: string
+        extractedTransactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+          description: Transactions the agent extracted and saved from this message
+        createdAt:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          maxLength: 4000
+        type:
+          type: string
+          enum: [text, voice, image]
+          default: text
+        mediaUrl:
+          type: string
+          description: URL to uploaded audio/image for voice or image messages
+
+    ChatMessageResponse:
+      type: object
+      properties:
+        userMessage:
+          $ref: '#/components/schemas/ChatMessage'
+        assistantMessage:
+          $ref: '#/components/schemas/ChatMessage'
+
+    # ── Reports ──────────────────────────────────
+    DateRangeReportRequest:
+      type: object
+      required: [shopId, dateFrom, dateTo]
+      properties:
+        shopId:
+          type: string
+          format: uuid
+        dateFrom:
+          type: string
+          format: date
+        dateTo:
+          type: string
+          format: date
+        sendEmail:
+          type: boolean
+          default: false
+          description: Also email the report to the authenticated user
+
+    # ── Alerts ───────────────────────────────────
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        shopId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly]
+        status:
+          type: string
+          enum: [active, acknowledged, dismissed]
+        message:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AlertHistory:
+      allOf:
+        - $ref: '#/components/schemas/Alert'
+        - type: object
+          properties:
+            deliveryChannels:
+              type: array
+              items:
+                type: object
+                properties:
+                  channel:
+                    type: string
+                    enum: [email, sms, whatsapp, in_app]
+                  status:
+                    type: string
+                    enum: [sent, failed, skipped]
+                  deliveredAt:
+                    type: string
+                    format: date-time
+
+    # ── Imports ──────────────────────────────────
+    ImportJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        shopId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        status:
+          type: string
+          enum: [uploaded, validating, validated, confirmed, failed]
+        rowCount:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ImportColumnMapping:
+      type: object
+      description: Maps detected file columns to known transaction fields
+      properties:
+        date:
+          type: string
+          description: Column name in file that maps to transaction date
+        amount:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        counterparty:
+          type: string
+        category:
+          type: string
+
+    ImportValidationResult:
+      type: object
+      properties:
+        importId:
+          type: string
+          format: uuid
+        totalRows:
+          type: integer
+        validRows:
+          type: integer
+        errorRows:
+          type: integer
+        qualityScore:
+          type: number
+          format: float
+          description: 0.0–1.0 data quality score
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              row:
+                type: integer
+              field:
+                type: string
+              message:
+                type: string
+
+    ImportPreview:
+      type: object
+      properties:
+        importId:
+          type: string
+          format: uuid
+        detectedColumns:
+          type: array
+          items:
+            type: object
+            properties:
+              columnName:
+                type: string
+              detectedType:
+                type: string
+                enum: [date, amount, text, unknown]
+              suggestedMapping:
+                type: string
+        previewRows:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: true
+
+    ImportResult:
+      type: object
+      properties:
+        importId:
+          type: string
+          format: uuid
+        rowsIngested:
+          type: integer
+        rowsSkipped:
+          type: integer
+        detectedPatterns:
+          type: object
+          properties:
+            topCategory:
+              type: string
+            estimatedMonthlyRevenue:
+              type: number
+            estimatedMonthlyExpenses:
+              type: number
