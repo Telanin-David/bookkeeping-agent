@@ -24,7 +24,7 @@ export default function DashboardPage() {
     queryFn: () => alertsApi.list({ status: 'active', limit: 3 }).then((r) => r.data),
   });
 
-  const income  = txData?.data.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0) ?? 0;
+  const income  = txData?.data.filter((t) => t.type === 'sale').reduce((s, t) => s + t.amount, 0) ?? 0;
   const expense = txData?.data.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0) ?? 0;
 
   const stats = [

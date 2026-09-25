@@ -54,7 +54,7 @@ const DEMO_MESSAGES: ChatMessage[] = [
 
 // Stand-in for the agent's receipt tool: match a customer named in the message, else the latest sale.
 function findDemoReceiptTarget(content: string) {
-  const sales = DEMO_TRANSACTIONS.filter((t) => t.type === 'income' || t.type === 'receivable');
+  const sales = DEMO_TRANSACTIONS.filter((t) => t.type === 'sale' || t.type === 'receivable');
   const text = content.toLowerCase();
   return sales.find((t) => t.counterparty?.toLowerCase().split(' ').some((w) => w.length > 2 && text.includes(w)))
     ?? sales[0];

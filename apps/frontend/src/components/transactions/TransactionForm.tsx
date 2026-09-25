@@ -7,14 +7,14 @@ import Button from '@/components/ui/Button';
 import type { Transaction } from '@/types';
 
 const schema = z.object({
-  type:         z.enum(['income', 'expense', 'receivable', 'payable', 'transfer']),
+  type:         z.enum(['sale', 'expense', 'receivable', 'payable']),
   amount:       z.coerce.number().positive(),
   description:  z.string().min(1),
   date:         z.string().min(1),
   category:     z.string().optional(),
   counterparty: z.string().optional(),
   dueDate:      z.string().optional(),
-  status:       z.enum(['pending', 'completed', 'overdue', 'cancelled']).default('pending'),
+  status:       z.enum(['pending', 'settled', 'overdue']).default('pending'),
   currency:     z.string().default('NGN'),
 });
 
@@ -40,7 +40,7 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
           <select {...register('type')} className={selectCls}>
-            {['income', 'expense', 'receivable', 'payable', 'transfer'].map((t) => (
+            {['sale', 'expense', 'receivable', 'payable'].map((t) => (
               <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>
             ))}
           </select>
