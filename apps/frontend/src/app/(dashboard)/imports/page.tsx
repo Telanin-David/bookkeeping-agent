@@ -34,7 +34,7 @@ export default function ImportsPage() {
 
   async function onMapped(mapping: Record<string, string>) {
     const { data } = await importsApi.validate(job!.id, mapping);
-    setValidation(data);
+    setValidation(data as ValidationResult);
     setStep('validate');
   }
 
