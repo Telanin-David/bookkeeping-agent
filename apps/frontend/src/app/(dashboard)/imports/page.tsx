@@ -67,9 +67,9 @@ export default function ImportsPage() {
           <ValidationSummary result={validation} onConfirm={onConfirm} loading={confirmLoading} />
         )}
         {step === 'done' && (
-          <div className="rounded-xl bg-green-50 p-6 text-center">
-            <p className="text-lg font-semibold text-green-700">Import complete!</p>
-            <p className="mt-1 text-sm text-green-600">Your transactions have been imported.</p>
+          <div className="glass-card rounded-2xl p-8 text-center">
+            <p className="text-lg font-semibold text-emerald-400">Import complete!</p>
+            <p className="mt-1 text-sm text-white/50">Your transactions have been imported.</p>
           </div>
         )}
       </div>

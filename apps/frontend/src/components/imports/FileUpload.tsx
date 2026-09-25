@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useState } from 'react';
+import { Upload } from 'lucide-react';
 import { importsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import Button from '@/components/ui/Button';
@@ -42,11 +43,17 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 transition-colors ${
-        dragging ? 'border-brand-500 bg-brand-50' : 'border-gray-300 bg-gray-50'
+      className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 transition-all ${
+        dragging
+          ? 'border-amber-500/60 bg-amber-500/5'
+          : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.03]'
       }`}
     >
-      <p className="mb-3 text-sm text-gray-500">Drag & drop an Excel or CSV file, or</p>
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20">
+        <Upload size={20} className="text-amber-400" />
+      </div>
+      <p className="mb-1 text-sm font-medium text-white/70">Drop your file here</p>
+      <p className="mb-4 text-xs text-white/30">.xlsx, .xls or .csv — max 10 MB</p>
       <label>
         <input
           type="file"
@@ -54,9 +61,9 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
           className="sr-only"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); }}
         />
-        <Button as="span" loading={loading}>Browse file</Button>
+        <Button variant="secondary" loading={loading}>Browse file</Button>
       </label>
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
     </div>
   );
 }

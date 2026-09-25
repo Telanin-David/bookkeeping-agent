@@ -1,6 +1,6 @@
 'use client';
 import { useState, type KeyboardEvent } from 'react';
-import Button from '@/components/ui/Button';
+import { Send } from 'lucide-react';
 
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>;
@@ -31,7 +31,7 @@ export default function MessageInput({ onSend, disabled }: MessageInputProps) {
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-gray-200 bg-white p-4">
+    <div className="flex items-end gap-2 border-t border-white/[0.06] bg-ink-950/60 p-4 backdrop-blur-lg">
       <textarea
         rows={2}
         value={value}
@@ -39,11 +39,19 @@ export default function MessageInput({ onSend, disabled }: MessageInputProps) {
         onKeyDown={onKeyDown}
         placeholder="Ask about your finances… (Enter to send)"
         disabled={disabled || loading}
-        className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+        className="glass-input flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm disabled:opacity-40"
       />
-      <Button onClick={submit} loading={loading} disabled={disabled || !value.trim()}>
-        Send
-      </Button>
+      <button
+        onClick={submit}
+        disabled={disabled || loading || !value.trim()}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-30 enabled:btn-amber"
+        aria-label="Send"
+      >
+        {loading
+          ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          : <Send size={15} />
+        }
+      </button>
     </div>
   );
 }
