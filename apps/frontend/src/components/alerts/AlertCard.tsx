@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Check, X } from '@phosphor-icons/react';
 import { alertsApi } from '@/lib/api';
 import { useAlertsStore } from '@/store/alerts';
 import Badge from '@/components/ui/Badge';
@@ -35,23 +36,24 @@ export default function AlertCard({ alert, onUpdate }: AlertCardProps) {
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="glass-card rounded-2xl p-4 transition-all hover:bg-white/[0.06]">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <Badge color={alert.status === 'active' ? 'red' : 'gray'}>{capitalize(alert.status)}</Badge>
-            <Badge color="blue">{capitalize(alert.type)}</Badge>
+        <div className="flex-1 min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <Badge>{capitalize(alert.status)}</Badge>
+            <Badge>{capitalize(alert.type.replace(/_/g, ' '))}</Badge>
           </div>
-          <p className="text-sm text-gray-800">{alert.message}</p>
-          <p className="mt-1 text-xs text-gray-400">{formatDateTime(alert.createdAt)}</p>
+          <p className="text-sm text-white/75 leading-relaxed">{alert.message}</p>
+          <p className="mt-1.5 text-xs text-white/30">{formatDateTime(alert.createdAt)}</p>
         </div>
         {alert.status === 'active' && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button size="sm" variant="secondary" onClick={handleAck} loading={loading === 'ack'}>
-              Acknowledge
+              <Check size={12} />
+              <span className="hidden sm:inline">Acknowledge</span>
             </Button>
             <Button size="sm" variant="ghost" onClick={handleDismiss} loading={loading === 'dismiss'}>
-              Dismiss
+              <X size={12} />
             </Button>
           </div>
         )}

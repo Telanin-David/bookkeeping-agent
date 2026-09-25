@@ -2,8 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@layer base {
+  html {
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    letter-spacing: -0.011em;
+    background-color: #09090b;
+  }
 
-html {
-  font-family: Inter, system-ui, sans-serif;
+  body {
+    background-color: #09090b;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  h1, h2, h3 {
+    font-family: 'Bricolage Grotesque Variable', var(--font-geist-sans), system-ui, sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  ::-webkit-scrollbar { width: 3px; height: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+  }
+}
+
+@layer utilities {
+  /* ── Thick glass — visible edges, real frosted depth ── */
+  .glass {
+    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(40px) saturate(140%);
+    -webkit-backdrop-filter: blur(40px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.07) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.2) inset;
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(48px) saturate(150%);
+    -webkit-backdrop-filter: blur(48px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.15) inset,
+      0 8px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .glass-elevated {
+    background: rgba(255, 255, 255, 0.09);
+    backdrop-filter: blur(60px) saturate(160%);
+    -webkit-backdrop-filter: blur(60px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.10) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.15) inset,
+      0 16px 64px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Floating menus sit over busy content, so they need a near-solid fill to stay legible. */
+  .glass-menu {
+    background: rgba(30, 30, 33, 0.98);
+    backdrop-filter: blur(40px) saturate(160%);
+    -webkit-backdrop-filter: blur(40px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.09) inset,
+      0 20px 60px rgba(0, 0, 0, 0.65);
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.80);
+    outline: none;
+    transition: border-color 150ms, background 150ms;
+  }
+  .glass-input::placeholder { color: rgba(255, 255, 255, 0.20); }
+  .glass-input:focus {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  /* Monochrome primary button */
+  .btn-primary {
+    background: rgba(255, 255, 255, 0.11);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    transition: background 150ms, border-color 150ms;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+  .btn-primary:disabled { opacity: 0.35; }
+}
+
+@media print {
+  @page { margin: 10mm; }
+  html, body { background: #fff !important; }
 }

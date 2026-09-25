@@ -1,53 +1,75 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  SquaresFour, ArrowsLeftRight, ChatCircle,
+  ChartBar, Bell, UploadSimple, Storefront,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useAlertsStore } from '@/store/alerts';
 
 const NAV = [
-  { href: '/',             label: 'Dashboard',     icon: '⊞' },
-  { href: '/transactions', label: 'Transactions',  icon: '↕' },
-  { href: '/chat',         label: 'Chat',           icon: '💬' },
-  { href: '/reports',      label: 'Reports',        icon: '📄' },
-  { href: '/alerts',       label: 'Alerts',         icon: '🔔' },
-  { href: '/imports',      label: 'Import Excel',   icon: '📥' },
-  { href: '/shops',        label: 'Shops',          icon: '🏪' },
+  { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
+  { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
+  { href: '/chat',         label: 'Chat',          Icon: ChatCircle },
+  { href: '/reports',      label: 'Reports',       Icon: ChartBar },
+  { href: '/alerts',       label: 'Alerts',        Icon: Bell },
+  { href: '/imports',      label: 'Import',        Icon: UploadSimple },
+  { href: '/shops',        label: 'Shops',         Icon: Storefront },
 ];
 
 export default function Sidebar() {
-  const pathname  = usePathname();
+  const pathname   = usePathname();
   const alertCount = useAlertsStore((s) => s.activeCount);
+  const navItems = (
+    <nav className="flex-1 space-y-0.5 px-2 py-2">
+      {NAV.map(({ href, label, Icon }) => {
+        const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={() => {}}
+            className={cn(
+              'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+              active
+                ? 'glass-elevated text-white/90'
+                : 'text-white/45 hover:bg-white/[0.05] hover:text-white/75',
+            )}
+          >
+            <Icon
+              size={17}
+              className={cn(
+                'shrink-0 transition-colors',
+                active ? 'text-white/80' : 'text-white/35 group-hover:text-white/60',
+              )}
+            />
+            <span>{label}</span>
+            {label === 'Alerts' && alertCount > 0 && (
+              <span className="ml-auto flex h-4.5 min-w-4 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] px-1 text-[10px] font-bold text-white/60">
+                {alertCount}
+              </span>
+            )}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 
   return (
-    <aside className="flex h-full w-56 flex-col bg-brand-900 text-white">
-      <div className="px-5 py-6">
-        <p className="text-xs font-semibold uppercase tracking-widest text-brand-100/60">Bookkeeping</p>
-        <p className="mt-0.5 text-lg font-bold">Agent</p>
-      </div>
+    <>
+      {/* Sidebar — desktop only */}
+      <aside className="flex h-full w-60 flex-col border-r border-white/[0.07] bg-ink-950/90 backdrop-blur-2xl">
+        {/* Wordmark */}
+        <div className="flex items-center gap-2 px-5 py-5 border-b border-white/[0.06]">
+          <p className="text-base font-bold tracking-tight text-white/85">Bookkeeping</p>
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-white/25 self-end pb-0.5">AI</span>
+        </div>
 
-      <nav className="flex-1 space-y-0.5 px-3">
-        {NAV.map(({ href, label, icon }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                active ? 'bg-white/10 text-white' : 'text-brand-100/70 hover:bg-white/5 hover:text-white',
-              )}
-            >
-              <span className="text-base leading-none">{icon}</span>
-              <span>{label}</span>
-              {label === 'Alerts' && alertCount > 0 && (
-                <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-bold">
-                  {alertCount}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-    </aside>
+        {navItems}
+
+        <div className="h-6 bg-gradient-to-t from-ink-950/90 to-transparent" />
+      </aside>
+    </>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
+import { Stamp, Storefront } from '@phosphor-icons/react';
 import { shopsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -25,18 +27,19 @@ type Form = z.infer<typeof schema>;
 
 export default function ShopsPage() {
   const qc = useQueryClient();
-  const { activeShopId, setActiveShop, setShops } = useShopsStore();
+  const { shops, activeShopId, setActiveShop, setShops } = useShopsStore();
   const [showCreate, setShowCreate] = useState(false);
 
-  const { data: shops = [], isLoading } = useQuery({
+  const { isLoading } = useQuery({
     queryKey: ['shops'],
-    queryFn: () => shopsApi.list().then((r) => { setShops(r.data); return r.data; }),
+    queryFn: () => shopsApi.list().then((data) => { setShops(data); return data; }),
   });
 
   const createMut = useMutation({
     mutationFn: (body: Form) => shopsApi.create(body).then((r) => r.data),
     onSuccess: (shop) => {
       qc.setQueryData<Shop[]>(['shops'], (old = []) => [...old, shop]);
+      setShops([...shops, shop]);
       setShowCreate(false);
     },
   });
@@ -52,24 +55,45 @@ export default function ShopsPage() {
   });
 
   return (
-    <PageWrapper title="Shops" actions={<Button onClick={() => setShowCreate(true)}>+ Add shop</Button>}>
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-400"><Spinner className="h-4 w-4" /> Loading…</div>
+    <PageWrapper
+      title="Shops"
+      actions={
+        <>
+          <Link
+            href="/shops/branding"
+            className="flex h-9 items-center gap-2 rounded-xl px-3 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white/90"
+          >
+            <Stamp size={16} />
+            Receipt branding
+          </Link>
+          <Button onClick={() => setShowCreate(true)}>+ Add shop</Button>
+        </>
+      }
+    >
+      {isLoading && shops.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-white/30">
+          <Spinner className="h-4 w-4 text-white/20" /> Loading…
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shops.map((shop) => (
-            <div key={shop.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">{shop.name}</h3>
-                {activeShopId === shop.id && <Badge color="green">Active</Badge>}
+            <div key={shop.id} className="glass-card rounded-2xl p-5 transition-all hover:bg-white/[0.06]">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg glass">
+                    <Storefront size={16} className="text-white/50" />
+                  </div>
+                  <h3 className="font-semibold text-white/90 leading-tight">{shop.name}</h3>
+                </div>
+                {activeShopId === shop.id && <Badge>Active</Badge>}
               </div>
-              <p className="text-sm text-gray-500 capitalize">{shop.type}{shop.location ? ` · ${shop.location}` : ''}</p>
-              <p className="text-xs text-gray-400 mt-1">{shop.currency}</p>
+              <p className="text-sm text-white/40 capitalize">{shop.type}{shop.location ? ` · ${shop.location}` : ''}</p>
+              <p className="mt-0.5 text-xs text-white/25">{shop.currency}</p>
               {activeShopId !== shop.id && (
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="mt-3"
+                  className="mt-4"
                   onClick={() => switchMut.mutate(shop.id)}
                   loading={switchMut.isPending}
                 >
@@ -85,16 +109,16 @@ export default function ShopsPage() {
         <form onSubmit={handleSubmit((v) => createMut.mutateAsync(v))} className="space-y-4">
           <Input id="name"     label="Shop name"  error={errors.name?.message}     {...register('name')} />
           <Input id="location" label="Location"   error={errors.location?.message} {...register('location')} />
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Type</label>
-            <select {...register('type')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
+            <select {...register('type')} className="glass-input w-full rounded-xl px-3.5 py-2.5 text-sm bg-transparent">
               {['retail','wholesale','services','food','other'].map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>
               ))}
             </select>
           </div>
           <Input id="currency" label="Currency" error={errors.currency?.message} {...register('currency')} />
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button type="submit" loading={isSubmitting}>Create</Button>
           </div>
