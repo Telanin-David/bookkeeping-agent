@@ -50,51 +50,36 @@ export default function MobileNav() {
 
   return (
     <>
-      {/* ── Floating pill top bar ── */}
-      <div className="flex justify-center px-4 pt-3 pb-1 z-30 relative">
-        <div className="flex items-center glass-elevated rounded-2xl px-1 py-1 gap-0.5">
+      {/* ── Top bar: two separate floating elements ── */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-1 z-30 relative">
 
-          {/* Hamburger */}
-          <button
-            onClick={() => { setRightOpen(false); setLeftOpen((v) => !v); }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white/90"
-            aria-label="Open menu"
-          >
-            <Menu size={18} />
-          </button>
+        {/* Left — hamburger in its own glass circle */}
+        <button
+          onClick={() => { setRightOpen(false); setLeftOpen((v) => !v); }}
+          className="flex h-11 w-11 items-center justify-center rounded-full glass-elevated text-white/60 transition hover:text-white/90"
+          aria-label="Open menu"
+        >
+          <Menu size={18} />
+        </button>
 
-          <div className="w-px h-5 bg-white/[0.08] mx-0.5" />
-
-          {/* Current page icon */}
+        {/* Right — new-chat + account in a small glass pill */}
+        <div className="flex items-center glass-elevated rounded-full px-1 py-1 gap-0.5">
           <button
             onClick={() => router.push('/chat')}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
-            aria-label="Current page"
-          >
-            <PageIcon size={17} />
-          </button>
-
-          {/* New chat shortcut */}
-          <button
-            onClick={() => router.push('/chat')}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
             aria-label="New chat"
           >
             <Plus size={17} />
           </button>
-
-          <div className="w-px h-5 bg-white/[0.08] mx-0.5" />
-
-          {/* More / shop menu */}
           <button
             onClick={() => { setLeftOpen(false); setRightOpen((v) => !v); }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
-            aria-label="Open shop menu"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
+            aria-label="Open account menu"
           >
             <MoreHorizontal size={18} />
           </button>
-
         </div>
+
       </div>
 
       {/* ── Backdrop ── */}
