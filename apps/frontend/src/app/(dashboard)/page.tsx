@@ -1,28 +1,20 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
 import { TrendUp, TrendDown, Bell } from '@phosphor-icons/react';
-import { transactionsApi, alertsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import { useShops } from '@/hooks/useShops';
+import { useTransactions } from '@/hooks/useTransactions';
+import { useAlerts } from '@/hooks/useAlerts';
 import PageWrapper from '@/components/layout/PageWrapper';
 import Spinner from '@/components/ui/Spinner';
 import Badge from '@/components/ui/Badge';
-import { formatCurrency } from '@/lib/utils';
+import { capitalize, formatCurrency, formatDate } from '@/lib/utils';
 
 export default function DashboardPage() {
   useShops();
   const activeShop = useShopsStore((s) => s.activeShop());
 
-  const { data: txData, isLoading: txLoading } = useQuery({
-    queryKey: ['transactions', activeShop?.id, 'recent'],
-    queryFn: () => transactionsApi.list(activeShop!.id, { limit: 5 }).then((r) => r.data),
-    enabled: !!activeShop,
-  });
-
-  const { data: alertData } = useQuery({
-    queryKey: ['alerts', 'active'],
-    queryFn: () => alertsApi.list({ status: 'active', limit: 3 }).then((r) => r.data),
-  });
+  const { data: txData, isLoading: txLoading } = useTransactions(activeShop?.id ?? '', { limit: 5 });
+  const { data: alertData } = useAlerts('active');
 
   const income  = txData?.data.filter((t) => t.type === 'sale').reduce((s, t) => s + t.amount, 0) ?? 0;
   const expense = txData?.data.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0) ?? 0;
@@ -63,13 +55,13 @@ export default function DashboardPage() {
         ) : (
           txData?.data.map((tx) => (
             <div key={tx.id} className="flex items-center justify-between border-b border-white/[0.04] px-5 py-3.5 last:border-0 hover:bg-white/[0.02] transition-colors">
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-white/80">{tx.description}</p>
-                <p className="text-xs text-white/30">{tx.date}</p>
+                <p className="text-xs text-white/30">{formatDate(tx.date)}</p>
               </div>
-              <div className="flex items-center gap-3">
-                <Badge>{tx.type}</Badge>
-                <span className="text-sm font-medium tabular-nums text-white/70">
+              <div className="flex shrink-0 items-center gap-3">
+                <Badge>{capitalize(tx.type)}</Badge>
+                <span className="whitespace-nowrap text-sm font-medium tabular-nums text-white/70">
                   {tx.type === 'expense' ? '−' : '+'}{formatCurrency(tx.amount, tx.currency)}
                 </span>
               </div>
