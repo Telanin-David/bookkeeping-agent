@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Menu, X, LayoutDashboard, ArrowLeftRight, MessageSquare,
   BarChart2, Bell, Upload, Store, LogOut, MoreHorizontal,
-  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,23 +61,14 @@ export default function MobileNav() {
           <Menu size={18} />
         </button>
 
-        {/* Right — new-chat + account in a small glass pill */}
-        <div className="flex items-center glass-elevated rounded-full px-1 py-1 gap-0.5">
-          <button
-            onClick={() => router.push('/chat')}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
-            aria-label="New chat"
-          >
-            <Plus size={17} />
-          </button>
-          <button
-            onClick={() => { setLeftOpen(false); setRightOpen((v) => !v); }}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white/80"
-            aria-label="Open account menu"
-          >
-            <MoreHorizontal size={18} />
-          </button>
-        </div>
+        {/* Right — single glass circle, three dots → account/settings */}
+        <button
+          onClick={() => { setLeftOpen(false); setRightOpen((v) => !v); }}
+          className="flex h-11 w-11 items-center justify-center rounded-full glass-elevated text-white/50 transition hover:text-white/80"
+          aria-label="Open account menu"
+        >
+          <MoreHorizontal size={18} />
+        </button>
 
       </div>
 
