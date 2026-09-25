@@ -45,12 +45,12 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
       onDrop={onDrop}
       className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 transition-all ${
         dragging
-          ? 'border-amber-500/60 bg-amber-500/5'
+          ? 'border-white/25 bg-white/[0.04]'
           : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.03]'
       }`}
     >
-      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20">
-        <Upload size={20} className="text-amber-400" />
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl glass">
+        <Upload size={20} className="text-white/45" />
       </div>
       <p className="mb-1 text-sm font-medium text-white/70">Drop your file here</p>
       <p className="mb-4 text-xs text-white/30">.xlsx, .xls or .csv — max 10 MB</p>
@@ -63,7 +63,7 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
         />
         <Button variant="secondary" loading={loading}>Browse file</Button>
       </label>
-      {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-xs text-white/45">{error}</p>}
     </div>
   );
 }

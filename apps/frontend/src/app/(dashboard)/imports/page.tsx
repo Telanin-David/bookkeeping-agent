@@ -68,7 +68,7 @@ export default function ImportsPage() {
         )}
         {step === 'done' && (
           <div className="glass-card rounded-2xl p-8 text-center">
-            <p className="text-lg font-semibold text-emerald-400">Import complete!</p>
+            <p className="text-lg font-semibold text-white/75">Import complete!</p>
             <p className="mt-1 text-sm text-white/50">Your transactions have been imported.</p>
           </div>
         )}

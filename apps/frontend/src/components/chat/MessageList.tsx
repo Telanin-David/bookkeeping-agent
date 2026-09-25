@@ -20,8 +20,8 @@ export default function MessageList({ messages }: MessageListProps) {
           <div className={cn(
             'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
             msg.role === 'user'
-              ? 'bg-amber-500 text-ink-950 font-medium'
-              : 'glass text-white/85',
+              ? 'glass-elevated text-white/85'
+              : 'glass text-white/70',
           )}>
             {msg.content}
           </div>

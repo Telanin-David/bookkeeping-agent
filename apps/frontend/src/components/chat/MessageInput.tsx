@@ -1,6 +1,6 @@
 'use client';
 import { useState, type KeyboardEvent } from 'react';
-import { Send } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>;
@@ -31,7 +31,7 @@ export default function MessageInput({ onSend, disabled }: MessageInputProps) {
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-white/[0.06] bg-ink-950/60 p-4 backdrop-blur-lg">
+    <div className="flex items-end gap-2 border-t border-white/[0.06] bg-ink-950/60 p-4 backdrop-blur-xl">
       <textarea
         rows={2}
         value={value}
@@ -44,12 +44,12 @@ export default function MessageInput({ onSend, disabled }: MessageInputProps) {
       <button
         onClick={submit}
         disabled={disabled || loading || !value.trim()}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-30 enabled:btn-amber"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl btn-primary transition-all disabled:opacity-25"
         aria-label="Send"
       >
         {loading
           ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          : <Send size={15} />
+          : <ArrowUp size={15} />
         }
       </button>
     </div>

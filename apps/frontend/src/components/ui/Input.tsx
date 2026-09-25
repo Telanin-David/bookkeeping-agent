@@ -19,12 +19,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         id={id}
         className={cn(
           'glass-input block w-full rounded-xl px-3.5 py-2.5 text-sm transition-all placeholder:text-white/25',
-          error ? 'border-red-500/50 focus:ring-red-500/20' : '',
+          error ? 'border-white/25' : '',
           className,
         )}
         {...props}
       />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-white/45">{error}</p>}
     </div>
   ),
 );

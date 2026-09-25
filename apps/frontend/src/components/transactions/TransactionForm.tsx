@@ -44,7 +44,7 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
               <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>
             ))}
           </select>
-          {errors.type && <p className="text-xs text-red-400">{errors.type.message}</p>}
+          {errors.type && <p className="text-xs text-white/45">{errors.type.message}</p>}
         </div>
         <Input id="amount" label="Amount" type="number" step="0.01" error={errors.amount?.message} {...register('amount')} />
       </div>

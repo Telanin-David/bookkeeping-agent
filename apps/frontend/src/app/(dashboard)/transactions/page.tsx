@@ -39,7 +39,7 @@ export default function TransactionsPage() {
       <div className="space-y-4">
         <TransactionFilters value={filters} onChange={setFilters} />
         {isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-white/30"><Spinner className="h-4 w-4 text-amber-400/50" /> Loading…</div>
+          <div className="flex items-center gap-2 text-sm text-white/30"><Spinner className="h-4 w-4 text-white/20" /> Loading…</div>
         ) : (
           <TransactionTable data={data?.data ?? []} />
         )}

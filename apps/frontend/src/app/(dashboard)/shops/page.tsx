@@ -56,7 +56,7 @@ export default function ShopsPage() {
     <PageWrapper title="Shops" actions={<Button onClick={() => setShowCreate(true)}>+ Add shop</Button>}>
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-white/30">
-          <Spinner className="h-4 w-4 text-amber-400/50" /> Loading…
+          <Spinner className="h-4 w-4 text-white/20" /> Loading…
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -64,12 +64,12 @@ export default function ShopsPage() {
             <div key={shop.id} className="glass-card rounded-2xl p-5 transition-all hover:bg-white/[0.06]">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <Store size={14} className="text-amber-400" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg glass">
+                    <Store size={14} className="text-white/50" />
                   </div>
                   <h3 className="font-semibold text-white/90 leading-tight">{shop.name}</h3>
                 </div>
-                {activeShopId === shop.id && <Badge color="green">Active</Badge>}
+                {activeShopId === shop.id && <Badge>Active</Badge>}
               </div>
               <p className="text-sm text-white/40 capitalize">{shop.type}{shop.location ? ` · ${shop.location}` : ''}</p>
               <p className="mt-0.5 text-xs text-white/25">{shop.currency}</p>

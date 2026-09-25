@@ -61,7 +61,7 @@ export default function ReportForm() {
         <Input id="to"   label="To"   type="date" value={to}   onChange={(e) => setTo(e.target.value)}   />
       </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-white/45">{error}</p>}
 
       <Button onClick={generate} loading={loading} disabled={!from || !to} className="gap-2">
         <Download size={14} />
