@@ -11,14 +11,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantCls: Record<Variant, string> = {
-  primary:
-    'btn-amber disabled:opacity-50 disabled:cursor-not-allowed',
-  secondary:
-    'glass text-white/80 hover:bg-white/8 hover:text-white disabled:opacity-40',
-  ghost:
-    'text-white/60 hover:bg-white/6 hover:text-white disabled:opacity-40',
-  danger:
-    'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 disabled:opacity-40',
+  primary:   'btn-primary disabled:opacity-40',
+  secondary: 'bg-white/[0.06] border border-white/[0.08] text-white/70 hover:bg-white/[0.09] hover:text-white/90 disabled:opacity-40',
+  ghost:     'text-white/50 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-40',
+  danger:    'bg-white/[0.06] border border-white/[0.08] text-white/60 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40',
 };
 
 const sizeCls: Record<Size, string> = {
@@ -33,7 +29,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50',
+        'inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30',
         variantCls[variant],
         sizeCls[size],
         className,

@@ -1,6 +1,6 @@
 'use client';
 import { useState, type KeyboardEvent } from 'react';
-import { Send } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>;
@@ -15,41 +15,34 @@ export default function MessageInput({ onSend, disabled }: MessageInputProps) {
     const trimmed = value.trim();
     if (!trimmed || loading) return;
     setLoading(true);
-    try {
-      await onSend(trimmed);
-      setValue('');
-    } finally {
-      setLoading(false);
-    }
+    try { await onSend(trimmed); setValue(''); }
+    finally { setLoading(false); }
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submit();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-white/[0.06] bg-ink-950/60 p-4 backdrop-blur-lg">
+    <div className="flex items-end gap-2 border-t border-white/[0.06] bg-ink-950/70 p-4 backdrop-blur-xl">
       <textarea
         rows={2}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Ask about your finances… (Enter to send)"
+        placeholder="Ask about your finances…"
         disabled={disabled || loading}
         className="glass-input flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm disabled:opacity-40"
       />
       <button
         onClick={submit}
         disabled={disabled || loading || !value.trim()}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-30 enabled:btn-amber"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.07] text-white/60 transition hover:bg-white/[0.12] hover:text-white/90 disabled:opacity-25"
         aria-label="Send"
       >
         {loading
           ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          : <Send size={15} />
+          : <ArrowUp size={15} strokeWidth={2} />
         }
       </button>
     </div>
