@@ -17,14 +17,15 @@ export interface Shop {
   signatureUrl?: string | null;
 }
 
+// Matches the backend's TransactionType/TransactionStatus exactly (DB CHECK constraint
+// + OpenAPI spec) — the backend is the source of truth here, not the other way round.
 export type TransactionType =
-  | 'income'
+  | 'sale'
   | 'expense'
   | 'receivable'
-  | 'payable'
-  | 'transfer';
+  | 'payable';
 
-export type TransactionStatus = 'pending' | 'completed' | 'overdue' | 'cancelled';
+export type TransactionStatus = 'pending' | 'settled' | 'overdue';
 
 export interface Transaction {
   id: string;

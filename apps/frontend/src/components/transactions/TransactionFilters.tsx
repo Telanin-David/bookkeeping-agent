@@ -13,8 +13,8 @@ interface TransactionFiltersProps {
   onChange: (f: Filters) => void;
 }
 
-const TYPES: TransactionType[] = ['income', 'expense', 'receivable', 'payable', 'transfer'];
-const STATUSES: TransactionStatus[] = ['pending', 'completed', 'overdue', 'cancelled'];
+const TYPES: TransactionType[] = ['sale', 'expense', 'receivable', 'payable'];
+const STATUSES: TransactionStatus[] = ['pending', 'settled', 'overdue'];
 
 const selectCls = 'glass-input rounded-xl px-3 py-2 text-sm bg-transparent cursor-pointer';
 

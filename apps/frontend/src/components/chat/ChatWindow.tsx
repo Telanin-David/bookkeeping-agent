@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { chatApi } from '@/lib/api';
 import MessageList from './MessageList';
 import MessageInput, { type Attachment } from './MessageInput';
@@ -54,7 +55,7 @@ const DEMO_MESSAGES: ChatMessage[] = [
 
 // Stand-in for the agent's receipt tool: match a customer named in the message, else the latest sale.
 function findDemoReceiptTarget(content: string) {
-  const sales = DEMO_TRANSACTIONS.filter((t) => t.type === 'income' || t.type === 'receivable');
+  const sales = DEMO_TRANSACTIONS.filter((t) => t.type === 'sale' || t.type === 'receivable');
   const text = content.toLowerCase();
   return sales.find((t) => t.counterparty?.toLowerCase().split(' ').some((w) => w.length > 2 && text.includes(w)))
     ?? sales[0];
@@ -73,7 +74,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
     queryKey: ['chat-messages', sessionId],
     queryFn: () => isDemo
       ? Promise.resolve(DEMO_MESSAGES)
-      : chatApi.listMessages(sessionId).then((r) => r.data),
+      : chatApi.listMessages(sessionId),
   });
 
   async function handleSend(content: string, attachments: Attachment[]) {
@@ -121,8 +122,13 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
       qc.setQueryData<ChatMessage[]>(['chat-messages', sessionId], (old = []) => [
         ...old, data.userMessage, data.assistantMessage,
       ]);
-    } catch {
+    } catch (err) {
       setOptimistic((prev) => prev.filter((m) => m.id !== tempId));
+      // The server may have saved the message before failing (e.g. assistant unavailable) —
+      // refetch so it shows, and pass the server's explanation to the input to display.
+      qc.invalidateQueries({ queryKey: ['chat-messages', sessionId] });
+      const serverMessage = isAxiosError(err) ? err.response?.data?.message : undefined;
+      throw new Error(serverMessage ?? 'Message failed to send. Check your connection and try again.');
     }
   }
 

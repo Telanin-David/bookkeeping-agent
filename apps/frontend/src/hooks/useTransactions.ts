@@ -5,9 +5,10 @@ import { DEMO_TRANSACTIONS, findDemoTransaction, isDemoShop } from '@/lib/demo';
 import type { PaginatedResponse, Transaction } from '@/types';
 
 function demoPage(params?: Parameters<typeof transactionsApi.list>[1]): PaginatedResponse<Transaction> {
-  const data = DEMO_TRANSACTIONS.filter((t) =>
+  const matching = DEMO_TRANSACTIONS.filter((t) =>
     (!params?.type || t.type === params.type) && (!params?.status || t.status === params.status));
-  return { data, total: data.length, page: 1, limit: data.length, totalPages: 1 };
+  const data = params?.limit ? matching.slice(0, params.limit) : matching;
+  return { data, total: matching.length, page: 1, limit: data.length, totalPages: 1 };
 }
 
 export function useTransactions(shopId: string, params?: Parameters<typeof transactionsApi.list>[1]) {

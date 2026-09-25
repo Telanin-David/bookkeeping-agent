@@ -7,7 +7,6 @@ export function receiptNumber(tx: Transaction) {
 }
 
 export function receiptStatus(tx: Transaction) {
-  if (tx.status === 'cancelled') return 'Void';
   if (tx.status === 'overdue') return 'Overdue';
   if (tx.type === 'receivable' || tx.status === 'pending') return 'Balance due';
   return 'Paid';
