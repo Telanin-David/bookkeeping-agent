@@ -9,16 +9,20 @@ interface BadgeProps {
 }
 
 const colorCls: Record<Color, string> = {
-  gray:   'bg-gray-100 text-gray-700',
-  green:  'bg-green-100 text-green-700',
-  yellow: 'bg-yellow-100 text-yellow-700',
-  red:    'bg-red-100 text-red-700',
-  blue:   'bg-blue-100 text-blue-700',
+  gray:   'bg-white/8 text-white/50 border-white/10',
+  green:  'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+  yellow: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+  red:    'bg-red-500/15 text-red-400 border-red-500/20',
+  blue:   'bg-sky-500/15 text-sky-400 border-sky-500/20',
 };
 
 export default function Badge({ color = 'gray', children, className }: BadgeProps) {
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', colorCls[color], className)}>
+    <span className={cn(
+      'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+      colorCls[color],
+      className,
+    )}>
       {children}
     </span>
   );

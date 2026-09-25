@@ -21,21 +21,21 @@ export default function Table<T extends Record<string, unknown>>({
   columns, data, keyExtractor, onRowClick, emptyMessage = 'No records found', className,
 }: TableProps<T>) {
   return (
-    <div className={cn('overflow-x-auto rounded-lg border border-gray-200', className)}>
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
+    <div className={cn('glass-card overflow-x-auto rounded-2xl', className)}>
+      <table className="min-w-full">
+        <thead>
+          <tr className="border-b border-white/[0.06]">
             {columns.map((col) => (
-              <th key={col.key} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <th key={col.key} className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest text-white/35">
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 bg-white">
+        <tbody>
           {data.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="py-8 text-center text-sm text-gray-400">
+              <td colSpan={columns.length} className="py-10 text-center text-sm text-white/30">
                 {emptyMessage}
               </td>
             </tr>
@@ -43,10 +43,13 @@ export default function Table<T extends Record<string, unknown>>({
             <tr
               key={keyExtractor(row)}
               onClick={() => onRowClick?.(row)}
-              className={cn('transition-colors', onRowClick && 'cursor-pointer hover:bg-gray-50')}
+              className={cn(
+                'border-b border-white/[0.04] last:border-0 transition-colors',
+                onRowClick && 'cursor-pointer hover:bg-white/[0.03]',
+              )}
             >
               {columns.map((col) => (
-                <td key={col.key} className={cn('px-4 py-3 text-sm text-gray-700', col.className)}>
+                <td key={col.key} className={cn('px-4 py-3 text-sm text-white/75', col.className)}>
                   {col.render ? col.render(row) : String(row[col.key] ?? '')}
                 </td>
               ))}

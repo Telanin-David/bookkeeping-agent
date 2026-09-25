@@ -21,26 +21,26 @@ export default function ValidationSummary({ result, onConfirm, loading }: Valida
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-4">
-        <div className="flex-1 rounded-lg bg-green-50 p-3 text-center">
-          <p className="text-2xl font-bold text-green-700">{result.validRows}</p>
-          <p className="text-xs text-green-600">Valid rows</p>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="glass-card rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-emerald-400">{result.validRows}</p>
+          <p className="text-xs text-white/40 mt-0.5">Valid rows</p>
         </div>
-        <div className="flex-1 rounded-lg bg-red-50 p-3 text-center">
-          <p className="text-2xl font-bold text-red-700">{result.errorRows}</p>
-          <p className="text-xs text-red-600">Error rows</p>
+        <div className="glass-card rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-red-400">{result.errorRows}</p>
+          <p className="text-xs text-white/40 mt-0.5">Error rows</p>
         </div>
-        <div className="flex-1 rounded-lg bg-blue-50 p-3 text-center">
-          <p className="text-2xl font-bold text-blue-700">{pct}%</p>
-          <p className="text-xs text-blue-600">Quality score</p>
+        <div className="glass-card rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-amber-400">{pct}%</p>
+          <p className="text-xs text-white/40 mt-0.5">Quality score</p>
         </div>
       </div>
 
       {result.errors.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded-lg border border-red-200 bg-red-50 p-3 space-y-1">
+        <div className="max-h-40 overflow-y-auto glass rounded-xl p-3 space-y-1">
           {result.errors.map((e, i) => (
-            <p key={i} className="text-xs text-red-700">
-              Row {e.row} · <strong>{e.field}</strong>: {e.message}
+            <p key={i} className="text-xs text-red-400">
+              Row {e.row} · <strong className="text-red-300">{e.field}</strong>: {e.message}
             </p>
           ))}
         </div>

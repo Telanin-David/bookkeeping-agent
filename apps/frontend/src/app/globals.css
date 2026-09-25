@@ -2,8 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&display=swap');
 
-html {
-  font-family: Inter, system-ui, sans-serif;
+@layer base {
+  html {
+    font-family: Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #09090b;
+    color: #fafafa;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+}
+
+@layer utilities {
+  /* Glass morphism primitives */
+  .glass {
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .glass-elevated {
+    background: rgba(255,255,255,0.07);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .glass-card {
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 1px 0 0 rgba(255,255,255,0.04) inset, 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  .glass-input {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fafafa;
+  }
+
+  .glass-input::placeholder { color: rgba(255,255,255,0.3); }
+
+  .glass-input:focus {
+    outline: none;
+    border-color: rgba(245,158,11,0.6);
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.1);
+  }
+
+  /* Amber glow for primary actions */
+  .btn-amber {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #09090b;
+    font-weight: 600;
+    box-shadow: 0 0 20px rgba(245,158,11,0.2);
+  }
+  .btn-amber:hover {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    box-shadow: 0 0 28px rgba(245,158,11,0.35);
+  }
+
+  /* Divider */
+  .glass-divider { border-color: rgba(255,255,255,0.07); }
 }
