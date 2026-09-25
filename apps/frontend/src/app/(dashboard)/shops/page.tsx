@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Store } from 'lucide-react';
+import Link from 'next/link';
+import { Stamp, Storefront } from '@phosphor-icons/react';
 import { shopsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -26,18 +27,19 @@ type Form = z.infer<typeof schema>;
 
 export default function ShopsPage() {
   const qc = useQueryClient();
-  const { activeShopId, setActiveShop, setShops } = useShopsStore();
+  const { shops, activeShopId, setActiveShop, setShops } = useShopsStore();
   const [showCreate, setShowCreate] = useState(false);
 
-  const { data: shops = [], isLoading } = useQuery({
+  const { isLoading } = useQuery({
     queryKey: ['shops'],
-    queryFn: () => shopsApi.list().then((r) => { setShops(r.data); return r.data; }),
+    queryFn: () => shopsApi.list().then((data) => { setShops(data); return data; }),
   });
 
   const createMut = useMutation({
     mutationFn: (body: Form) => shopsApi.create(body).then((r) => r.data),
     onSuccess: (shop) => {
       qc.setQueryData<Shop[]>(['shops'], (old = []) => [...old, shop]);
+      setShops([...shops, shop]);
       setShowCreate(false);
     },
   });
@@ -53,8 +55,22 @@ export default function ShopsPage() {
   });
 
   return (
-    <PageWrapper title="Shops" actions={<Button onClick={() => setShowCreate(true)}>+ Add shop</Button>}>
-      {isLoading ? (
+    <PageWrapper
+      title="Shops"
+      actions={
+        <>
+          <Link
+            href="/shops/branding"
+            className="flex h-9 items-center gap-2 rounded-xl px-3 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white/90"
+          >
+            <Stamp size={16} />
+            Receipt branding
+          </Link>
+          <Button onClick={() => setShowCreate(true)}>+ Add shop</Button>
+        </>
+      }
+    >
+      {isLoading && shops.length === 0 ? (
         <div className="flex items-center gap-2 text-sm text-white/30">
           <Spinner className="h-4 w-4 text-white/20" /> Loading…
         </div>
@@ -65,7 +81,7 @@ export default function ShopsPage() {
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg glass">
-                    <Store size={14} className="text-white/50" />
+                    <Storefront size={16} className="text-white/50" />
                   </div>
                   <h3 className="font-semibold text-white/90 leading-tight">{shop.name}</h3>
                 </div>

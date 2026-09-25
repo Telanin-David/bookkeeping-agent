@@ -1,14 +1,14 @@
 'use client';
 import { useState } from 'react';
-import { Download } from 'lucide-react';
+import { DownloadSimple } from '@phosphor-icons/react';
 import { reportsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import type { ReportType } from '@/types';
 
-const REPORT_TYPES: { value: ReportType; label: string }[] = [
-  { value: 'receipt',  label: 'Receipt Report' },
+// Receipts are per-transaction, so they live in the Receipts tab rather than this date-range form.
+const REPORT_TYPES: { value: Exclude<ReportType, 'receipt'>; label: string }[] = [
   { value: 'credit',   label: 'Credit Report' },
   { value: 'stock',    label: 'Stock Report' },
   { value: 'pl',       label: 'Profit & Loss' },
@@ -64,7 +64,7 @@ export default function ReportForm() {
       {error && <p className="text-xs text-white/45">{error}</p>}
 
       <Button onClick={generate} loading={loading} disabled={!from || !to} className="gap-2">
-        <Download size={14} />
+        <DownloadSimple size={15} />
         Generate &amp; Download PDF
       </Button>
     </div>

@@ -1,5 +1,5 @@
 'use client';
-import { LogOut } from 'lucide-react';
+import { SignOut } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/auth';
 import { useShopsStore } from '@/store/shops';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,7 +30,7 @@ export default function Header() {
           title="Sign out"
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.05] text-white/50 transition hover:bg-white/[0.09] hover:text-white/80"
         >
-          <LogOut size={14} />
+          <SignOut size={15} />
         </button>
       </div>
     </header>

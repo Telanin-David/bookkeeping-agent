@@ -1,6 +1,6 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Bell } from 'lucide-react';
+import { TrendUp, TrendDown, Bell } from '@phosphor-icons/react';
 import { transactionsApi, alertsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import { useShops } from '@/hooks/useShops';
@@ -28,8 +28,8 @@ export default function DashboardPage() {
   const expense = txData?.data.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0) ?? 0;
 
   const stats = [
-    { label: 'Recent Income',   value: formatCurrency(income),          Icon: TrendingUp },
-    { label: 'Recent Expenses', value: formatCurrency(expense),          Icon: TrendingDown },
+    { label: 'Recent Income',   value: formatCurrency(income),          Icon: TrendUp },
+    { label: 'Recent Expenses', value: formatCurrency(expense),          Icon: TrendDown },
     { label: 'Active Alerts',   value: String(alertData?.total ?? 0),   Icon: Bell },
   ];
 
@@ -41,7 +41,7 @@ export default function DashboardPage() {
           <div key={label} className="glass-card rounded-2xl p-5">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-wider text-white/35">{label}</p>
-              <Icon size={15} className="text-white/25" />
+              <Icon size={17} className="text-white/30" />
             </div>
             <p className="text-2xl font-bold text-white/85">{value}</p>
           </div>

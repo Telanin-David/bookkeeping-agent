@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '@/lib/api';
 import MessageList from './MessageList';
-import MessageInput from './MessageInput';
+import MessageInput, { type Attachment } from './MessageInput';
 import Spinner from '@/components/ui/Spinner';
+import { DEMO_TRANSACTIONS } from '@/lib/demo';
+import { formatCurrency } from '@/lib/utils';
 import type { ChatMessage } from '@/types';
 
 const DEMO_MESSAGES: ChatMessage[] = [
@@ -50,6 +52,14 @@ const DEMO_MESSAGES: ChatMessage[] = [
   },
 ];
 
+// Stand-in for the agent's receipt tool: match a customer named in the message, else the latest sale.
+function findDemoReceiptTarget(content: string) {
+  const sales = DEMO_TRANSACTIONS.filter((t) => t.type === 'income' || t.type === 'receivable');
+  const text = content.toLowerCase();
+  return sales.find((t) => t.counterparty?.toLowerCase().split(' ').some((w) => w.length > 2 && text.includes(w)))
+    ?? sales[0];
+}
+
 interface ChatWindowProps {
   sessionId: string;
 }
@@ -66,26 +76,36 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
       : chatApi.listMessages(sessionId).then((r) => r.data),
   });
 
-  async function handleSend(content: string) {
+  async function handleSend(content: string, attachments: Attachment[]) {
     if (isDemo) {
-      const userMsg: ChatMessage = {
-        id: `demo-tmp-${Date.now()}`,
-        sessionId,
-        role: 'user',
-        type: 'text',
-        content,
-        createdAt: new Date().toISOString(),
-      };
+      const now = new Date().toISOString();
+      const stamp = Date.now();
+      const imageMsgs: ChatMessage[] = attachments.map((a, i) => ({
+        id: `demo-img-${stamp}-${i}`, sessionId, role: 'user', type: 'image',
+        content: '', mediaUrl: a.url, createdAt: now,
+      }));
+      const textMsg: ChatMessage[] = content
+        ? [{ id: `demo-tmp-${stamp}`, sessionId, role: 'user', type: 'text', content, createdAt: now }]
+        : [];
+      const receiptTx = /receipt/i.test(content) ? findDemoReceiptTarget(content) : undefined;
       const reply: ChatMessage = {
-        id: `demo-reply-${Date.now()}`,
+        id: `demo-reply-${stamp}`,
         sessionId,
         role: 'assistant',
         type: 'text',
-        content: 'This is a demo — connect to the backend to get real AI responses. Your message: "' + content + '"',
-        createdAt: new Date().toISOString(),
+        content: receiptTx
+          ? `Here's the receipt for ${receiptTx.counterparty ?? 'the walk-in customer'}: ${receiptTx.description}, ${formatCurrency(receiptTx.amount, receiptTx.currency)}. Tap below to view and print it.`
+          : 'This is a demo — connect to the backend to get real AI responses.',
+        receiptTransactionId: receiptTx?.id,
+        createdAt: now,
       };
-      qc.setQueryData<ChatMessage[]>(['chat-messages', sessionId], (old = []) => [...old, userMsg, reply]);
+      qc.setQueryData<ChatMessage[]>(['chat-messages', sessionId], (old = []) => [...old, ...imageMsgs, ...textMsg, reply]);
       return;
+    }
+
+    // The API expects images as an uploaded mediaUrl, and no media upload endpoint exists yet.
+    if (attachments.length > 0) {
+      throw new Error("Photos can't be sent yet — support is coming soon.");
     }
 
     const tempId = `tmp-${Date.now()}`;

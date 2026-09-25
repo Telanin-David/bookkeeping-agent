@@ -1,54 +1,29 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { chatApi } from '@/lib/api';
+import { useEffect } from 'react';
 import { useShopsStore } from '@/store/shops';
+import { useChatStore } from '@/store/chat';
+import { useChatSessions } from '@/hooks/useChatSessions';
 import ChatWindow from '@/components/chat/ChatWindow';
 import Spinner from '@/components/ui/Spinner';
 import { formatDateTime } from '@/lib/utils';
-import type { ChatSession } from '@/types';
 
 export default function ChatPage() {
   const activeShop = useShopsStore((s) => s.activeShop());
-  const qc = useQueryClient();
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const setActiveSessionId = useChatStore((s) => s.setActiveSessionId);
+  const { sessions, isLoading, creating, createSession } = useChatSessions();
 
-  const { data: sessions = [], isLoading } = useQuery({
-    queryKey: ['chat-sessions'],
-    queryFn: () => chatApi.listSessions().then((r) => r.data),
-  });
-
-  async function createSession() {
-    if (!activeShop || creating) return;
-    setCreating(true);
-    try {
-      const { data } = await chatApi.createSession(activeShop.id);
-      qc.setQueryData<ChatSession[]>(['chat-sessions'], (old = []) => [data, ...old]);
-      setActiveSessionId(data.id);
-    } catch {
-      // backend not available in demo — use a placeholder session id
-      setActiveSessionId('demo-session-1');
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  // Auto-start a session as soon as we have a shop and sessions have loaded
   useEffect(() => {
     if (isLoading || activeSessionId) return;
-    if (sessions.length > 0) {
-      setActiveSessionId(sessions[0].id);
-    } else if (activeShop) {
-      createSession();
-    }
+    if (sessions.length > 0) setActiveSessionId(sessions[0].id);
+    else if (activeShop) createSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, sessions, activeShop]);
+  }, [isLoading, sessions, activeShop, activeSessionId]);
 
   return (
     <div className="flex flex-1 overflow-hidden">
 
-      {/* Session history — desktop sidebar only */}
+      {/* Session history — desktop only; mobile gets it from the hamburger menu */}
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-white/[0.06] bg-ink-950/60 overflow-y-auto">
         <div className="p-3 border-b border-white/[0.06]">
           <button
@@ -79,14 +54,13 @@ export default function ChatPage() {
         ))}
       </aside>
 
-      {/* Chat — full width on mobile */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {creating || isLoading ? (
           <div className="flex flex-1 items-center justify-center">
             <Spinner className="h-5 w-5 text-white/20" />
           </div>
         ) : activeSessionId ? (
-          <ChatWindow sessionId={activeSessionId} />
+          <ChatWindow key={activeSessionId} sessionId={activeSessionId} />
         ) : null}
       </div>
 

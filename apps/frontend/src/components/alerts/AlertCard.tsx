@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, X } from '@phosphor-icons/react';
 import { alertsApi } from '@/lib/api';
 import { useAlertsStore } from '@/store/alerts';
 import Badge from '@/components/ui/Badge';

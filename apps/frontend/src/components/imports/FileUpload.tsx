@@ -1,8 +1,9 @@
 'use client';
-import { useCallback, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { UploadSimple } from '@phosphor-icons/react';
 import { importsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
+import { useImportsStore } from '@/store/imports';
 import Button from '@/components/ui/Button';
 import type { ExcelImport } from '@/types';
 
@@ -30,6 +31,15 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
     }
   }
 
+  // A file picked from the chat's + menu is handed over through the store; read it once.
+  useEffect(() => {
+    const { pendingFile, setPendingFile } = useImportsStore.getState();
+    if (!pendingFile) return;
+    setPendingFile(null);
+    uploadFile(pendingFile);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -50,7 +60,7 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
       }`}
     >
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl glass">
-        <Upload size={20} className="text-white/45" />
+        <UploadSimple size={22} className="text-white/45" />
       </div>
       <p className="mb-1 text-sm font-medium text-white/70">Drop your file here</p>
       <p className="mb-4 text-xs text-white/30">.xlsx, .xls or .csv — max 10 MB</p>

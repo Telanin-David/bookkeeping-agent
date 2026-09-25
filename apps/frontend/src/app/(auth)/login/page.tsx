@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/auth';
 import { useShopsStore } from '@/store/shops';
+import { DEMO_USER_ID } from '@/lib/demo';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 
@@ -23,7 +24,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const { setAuth } = useAuthStore();
-  const { setShops, setActiveShop } = useShopsStore();
+  const { setShops } = useShopsStore();
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<Form>({
     resolver: zodResolver(schema),
@@ -38,20 +39,11 @@ export default function LoginPage() {
     }
   }
 
+  // Preview starts at onboarding, like a new account; onboarding creates the demo shop.
   function enterPreviewMode() {
-    const demoShop = {
-      id: 'demo-shop-1',
-      ownerId: 'demo-user-1',
-      name: 'My Demo Shop',
-      type: 'retail' as const,
-      location: 'Lagos',
-      currency: 'NGN',
-      isActive: true,
-    };
-    setShops([demoShop]);
-    setActiveShop('demo-shop-1');
-    setAuth({ id: 'demo-user-1', name: 'Demo User', email: 'demo@example.com' }, 'demo-token');
-    router.replace('/chat');
+    setShops([]);
+    setAuth({ id: DEMO_USER_ID, name: 'Demo User', email: 'demo@example.com' }, 'demo-token');
+    router.replace('/onboarding');
   }
 
   return (

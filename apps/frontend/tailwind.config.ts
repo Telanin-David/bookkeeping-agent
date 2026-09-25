@@ -24,7 +24,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Bricolage Grotesque', 'system-ui', 'sans-serif'],
+        sans:    ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
+        display: ['"Bricolage Grotesque Variable"', 'var(--font-geist-sans)', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         glass: '0 1px 0 0 rgba(255,255,255,0.07) inset, 0 4px 24px rgba(0,0,0,0.4)',

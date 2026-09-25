@@ -1,122 +1,187 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Menu, X, LayoutDashboard, ArrowLeftRight, MessageSquare,
-  BarChart2, Bell, Upload, Store, LogOut, MoreHorizontal,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+  X, SquaresFour, ArrowsLeftRight, ChartBar, Bell,
+  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp,
+} from '@phosphor-icons/react';
+import { MenuIcon } from '@/components/ui/icons';
+import { cn, formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useChatSessions } from '@/hooks/useChatSessions';
 import { useAuthStore } from '@/store/auth';
 import { useShopsStore } from '@/store/shops';
 import { useAlertsStore } from '@/store/alerts';
+import { useChatStore } from '@/store/chat';
 
-const NAV = [
-  { href: '/chat',         label: 'Chat',         Icon: MessageSquare },
-  { href: '/',             label: 'Dashboard',    Icon: LayoutDashboard },
-  { href: '/transactions', label: 'Transactions', Icon: ArrowLeftRight },
-  { href: '/reports',      label: 'Reports',      Icon: BarChart2 },
+const PAGES = [
+  { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
+  { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
+  { href: '/reports',      label: 'Reports',      Icon: ChartBar },
   { href: '/alerts',       label: 'Alerts',       Icon: Bell },
-  { href: '/imports',      label: 'Import',       Icon: Upload },
-  { href: '/shops',        label: 'Shops',        Icon: Store },
 ];
 
-function getPageIcon(pathname: string) {
-  if (pathname.startsWith('/transactions')) return ArrowLeftRight;
-  if (pathname.startsWith('/reports'))      return BarChart2;
-  if (pathname.startsWith('/alerts'))       return Bell;
-  if (pathname.startsWith('/imports'))      return Upload;
-  if (pathname.startsWith('/shops'))        return Store;
-  if (pathname.startsWith('/chat'))         return MessageSquare;
-  return LayoutDashboard;
-}
+const circleBtn =
+  'flex h-11 w-11 items-center justify-center rounded-full glass-elevated text-white/70 transition duration-150 active:scale-[0.94] hover:text-white';
 
 export default function MobileNav() {
   const pathname   = usePathname();
   const router     = useRouter();
   const alertCount = useAlertsStore((s) => s.activeCount);
   const user       = useAuthStore((s) => s.user);
-  const active     = useShopsStore((s) => s.activeShop());
+  const shop       = useShopsStore((s) => s.activeShop());
+  const activeSessionId    = useChatStore((s) => s.activeSessionId);
+  const setActiveSessionId = useChatStore((s) => s.setActiveSessionId);
+  const { sessions, createSession } = useChatSessions();
   const { logout } = useAuth();
 
-  const [leftOpen,  setLeftOpen]  = useState(false);
-  const [rightOpen, setRightOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
-  function closeAll() { setLeftOpen(false); setRightOpen(false); }
+  function closeAll() { setMenuOpen(false); setMoreOpen(false); }
 
-  const PageIcon = getPageIcon(pathname);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeAll(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  async function newChat() {
+    closeAll();
+    await createSession();
+    router.push('/chat');
+  }
+
+  function openChat(id: string) {
+    closeAll();
+    setActiveSessionId(id);
+    router.push('/chat');
+  }
+
+  const initial = (user?.name ?? 'U').charAt(0).toUpperCase();
 
   return (
     <>
-      {/* ── Top bar: two separate floating elements ── */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-1 z-30 relative">
-
-        {/* Left — hamburger in its own glass circle */}
+      {/* ── Top controls ── */}
+      <div className="relative z-30 flex items-center justify-between px-4 pb-1 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
-          onClick={() => { setRightOpen(false); setLeftOpen((v) => !v); }}
-          className="flex h-11 w-11 items-center justify-center rounded-full glass-elevated text-white/60 transition hover:text-white/90"
+          onClick={() => { setMoreOpen(false); setMenuOpen(true); }}
+          className={circleBtn}
           aria-label="Open menu"
         >
-          <Menu size={18} />
+          <MenuIcon size={21} />
         </button>
 
-        {/* Right — single glass circle, three dots → account/settings */}
-        <button
-          onClick={() => { setLeftOpen(false); setRightOpen((v) => !v); }}
-          className="flex h-11 w-11 items-center justify-center rounded-full glass-elevated text-white/50 transition hover:text-white/80"
-          aria-label="Open account menu"
-        >
-          <MoreHorizontal size={18} />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => { setMenuOpen(false); setMoreOpen((v) => !v); }}
+            className={cn(circleBtn, moreOpen && 'text-white')}
+            aria-label="More options"
+            aria-expanded={moreOpen}
+          >
+            <DotsThree size={22} weight="bold" />
+          </button>
 
+          {/* ── Three-dots card ── */}
+          <div
+            className={cn(
+              'absolute right-0 top-[calc(100%+10px)] z-50 w-[252px] origin-top-right rounded-[22px] glass-menu p-1.5 transition duration-150 ease-out',
+              moreOpen ? 'scale-100 opacity-100' : 'pointer-events-none scale-[0.96] opacity-0',
+            )}
+            role="menu"
+          >
+            {shop && (
+              <Link
+                href="/shops"
+                onClick={closeAll}
+                className="flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-white/[0.06]"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] ring-1 ring-inset ring-white/[0.08]">
+                  <Storefront size={19} className="text-white/70" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium text-white/90">{shop.name}</span>
+                  <span className="mt-0.5 block text-[13px] capitalize text-white/40">{shop.type} · {shop.currency}</span>
+                </span>
+                <CaretRight size={14} className="shrink-0 text-white/30" />
+              </Link>
+            )}
+
+            <div className="mx-3 my-1.5 h-px bg-white/[0.07]" />
+
+            <MenuRow href="/shops" Icon={Storefront} label="Manage shops" onClick={closeAll} />
+            <MenuRow href="/shops/branding" Icon={Stamp} label="Receipt branding" onClick={closeAll} />
+
+            <div className="mx-3 my-1.5 h-px bg-white/[0.07]" />
+
+            <button
+              onClick={() => { closeAll(); logout(); }}
+              className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[15px] text-white/60 transition hover:bg-white/[0.06] hover:text-white/90"
+            >
+              <SignOut size={19} className="shrink-0 text-white/45" />
+              Sign out
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ── Backdrop ── */}
-      {(leftOpen || rightOpen) && (
-        <div
-          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm"
-          onClick={closeAll}
-        />
-      )}
+      {/* ── Backdrops ── */}
+      {moreOpen && <div className="fixed inset-0 z-20" onClick={closeAll} />}
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px] transition-opacity duration-300',
+          menuOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
+        onClick={closeAll}
+      />
 
-      {/* ── Left drawer: navigation ── */}
-      <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 flex w-72 flex-col glass-elevated transition-transform duration-200',
-        leftOpen ? 'translate-x-0' : '-translate-x-full',
-      )}>
-        <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-5">
-          <div>
-            <p className="text-base font-bold tracking-tight text-white/85">Bookkeeping AI</p>
-            <p className="mt-0.5 text-[10px] text-white/30 tracking-wide">{user?.name ?? 'Demo User'}</p>
-          </div>
+      {/* ── Hamburger drawer ── */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-[84%] max-w-[330px] flex-col rounded-r-[28px] glass-menu transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          menuOpen ? 'translate-x-0' : '-translate-x-[calc(100%+80px)]',
+        )}
+        aria-hidden={!menuOpen}
+      >
+        <div className="flex items-center justify-between px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
+          <p className="font-display text-[21px] font-semibold tracking-[-0.03em] text-white/90">Bookkeeping AI</p>
           <button
-            onClick={() => setLeftOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg glass text-white/45 hover:text-white/80 transition"
+            onClick={closeAll}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/55 transition hover:text-white/90"
+            aria-label="Close menu"
           >
-            <X size={15} />
+            <X size={16} weight="bold" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-          {NAV.map(({ href, label, Icon }) => {
-            const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+        <div className="px-3">
+          <button
+            onClick={newChat}
+            className="flex h-12 w-full items-center gap-3 rounded-2xl bg-white/[0.08] px-3.5 text-[15px] font-medium text-white/90 ring-1 ring-inset ring-white/[0.08] transition hover:bg-white/[0.11] active:scale-[0.99]"
+          >
+            <NotePencil size={20} className="shrink-0" />
+            New chat
+          </button>
+        </div>
+
+        <nav className="mt-3 px-3">
+          {PAGES.map(({ href, label, Icon }) => {
+            const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link
                 key={href}
                 href={href}
                 onClick={closeAll}
                 className={cn(
-                  'flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all',
-                  isActive
-                    ? 'bg-white/[0.09] text-white/90 border border-white/[0.08]'
-                    : 'text-white/45 hover:bg-white/[0.05] hover:text-white/75',
+                  'flex h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] transition',
+                  active ? 'bg-white/[0.07] text-white' : 'text-white/65 hover:bg-white/[0.05] hover:text-white/90',
                 )}
               >
-                <Icon size={17} className={cn('shrink-0', isActive ? 'text-white/70' : 'text-white/30')} />
+                <Icon size={20} weight={active ? 'fill' : 'regular'} className={cn('shrink-0', active ? 'text-white/85' : 'text-white/45')} />
                 <span className="flex-1">{label}</span>
                 {label === 'Alerts' && alertCount > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.07] px-1.5 text-[10px] font-semibold text-white/55">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/[0.10] px-1.5 text-[11px] font-medium tabular-nums text-white/70">
                     {alertCount}
                   </span>
                 )}
@@ -125,71 +190,52 @@ export default function MobileNav() {
           })}
         </nav>
 
-        <div className="border-t border-white/[0.07] px-3 py-3">
-          <button
-            onClick={() => { closeAll(); logout(); }}
-            className="flex w-full items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/65"
-          >
-            <LogOut size={17} className="shrink-0 text-white/25" />
-            Sign out
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Right drawer: shop & account ── */}
-      <aside className={cn(
-        'fixed inset-y-0 right-0 z-50 flex w-72 flex-col glass-elevated transition-transform duration-200',
-        rightOpen ? 'translate-x-0' : 'translate-x-full',
-      )}>
-        <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-5">
-          <div>
-            <p className="text-base font-bold tracking-tight text-white/85">Account</p>
-            <p className="mt-0.5 text-[10px] text-white/30 tracking-wide">{user?.email ?? ''}</p>
-          </div>
-          <button
-            onClick={() => setRightOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg glass text-white/45 hover:text-white/80 transition"
-          >
-            <X size={15} />
-          </button>
+        <p className="mt-6 px-6 pb-2 text-[13px] font-medium text-white/35">Recents</p>
+        <div className="flex-1 overflow-y-auto px-3 pb-3">
+          {sessions.length === 0 ? (
+            <p className="px-3.5 py-2 text-[15px] text-white/30">No chats yet</p>
+          ) : sessions.map((s) => {
+            const active = pathname.startsWith('/chat') && s.id === activeSessionId;
+            return (
+              <button
+                key={s.id}
+                onClick={() => openChat(s.id)}
+                className={cn(
+                  'flex h-11 w-full items-center rounded-xl px-3.5 text-left text-[15px] transition',
+                  active ? 'bg-white/[0.07] text-white' : 'text-white/60 hover:bg-white/[0.05] hover:text-white/90',
+                )}
+              >
+                <span className="truncate">{formatDateTime(s.lastMessageAt)}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex-1 px-3 py-3 space-y-2">
-          {active && (
-            <div className="rounded-xl glass p-4">
-              <p className="text-[10px] uppercase tracking-widest text-white/25 mb-3">Active shop</p>
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg glass">
-                  <Store size={15} className="text-white/45" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white/85 truncate">{active.name}</p>
-                  <p className="text-xs text-white/35 capitalize mt-0.5">{active.type} · {active.currency}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <Link
-            href="/shops"
-            onClick={closeAll}
-            className="flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium text-white/45 transition hover:bg-white/[0.05] hover:text-white/75"
-          >
-            <Store size={17} className="shrink-0 text-white/25" />
-            Manage shops
-          </Link>
-        </div>
-
-        <div className="border-t border-white/[0.07] px-3 py-3">
-          <button
-            onClick={() => { closeAll(); logout(); }}
-            className="flex w-full items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/65"
-          >
-            <LogOut size={17} className="shrink-0 text-white/25" />
-            Sign out
-          </button>
+        <div className="flex items-center gap-3 border-t border-white/[0.06] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.09] font-display text-[15px] font-semibold text-white/80 ring-1 ring-inset ring-white/[0.08]">
+            {initial}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-medium text-white/85">{user?.name}</span>
+            <span className="block truncate text-[13px] text-white/40">{user?.email}</span>
+          </span>
         </div>
       </aside>
     </>
+  );
+}
+
+function MenuRow({ href, Icon, label, onClick }: {
+  href: string; Icon: typeof Storefront; label: string; onClick: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className="flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+    >
+      <Icon size={19} className="shrink-0 text-white/50" />
+      {label}
+    </Link>
   );
 }

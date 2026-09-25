@@ -2,20 +2,20 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, ArrowLeftRight, MessageSquare,
-  BarChart2, Bell, Upload, Store,
-} from 'lucide-react';
+  SquaresFour, ArrowsLeftRight, ChatCircle,
+  ChartBar, Bell, UploadSimple, Storefront,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useAlertsStore } from '@/store/alerts';
 
 const NAV = [
-  { href: '/',             label: 'Dashboard',    Icon: LayoutDashboard },
-  { href: '/transactions', label: 'Transactions', Icon: ArrowLeftRight },
-  { href: '/chat',         label: 'Chat',          Icon: MessageSquare },
-  { href: '/reports',      label: 'Reports',       Icon: BarChart2 },
+  { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
+  { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
+  { href: '/chat',         label: 'Chat',          Icon: ChatCircle },
+  { href: '/reports',      label: 'Reports',       Icon: ChartBar },
   { href: '/alerts',       label: 'Alerts',        Icon: Bell },
-  { href: '/imports',      label: 'Import',        Icon: Upload },
-  { href: '/shops',        label: 'Shops',         Icon: Store },
+  { href: '/imports',      label: 'Import',        Icon: UploadSimple },
+  { href: '/shops',        label: 'Shops',         Icon: Storefront },
 ];
 
 export default function Sidebar() {
@@ -38,7 +38,7 @@ export default function Sidebar() {
             )}
           >
             <Icon
-              size={16}
+              size={17}
               className={cn(
                 'shrink-0 transition-colors',
                 active ? 'text-white/80' : 'text-white/35 group-hover:text-white/60',

@@ -55,8 +55,8 @@ export default function ImportsPage() {
         <div className="flex items-center gap-2 text-sm">
           {(['upload', 'map', 'validate', 'done'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
-              {i > 0 && <span className="text-gray-300">›</span>}
-              <span className={step === s ? 'font-semibold text-brand-600' : 'text-gray-400 capitalize'}>{s}</span>
+              {i > 0 && <span className="text-white/20">›</span>}
+              <span className={step === s ? 'font-semibold capitalize text-white/85' : 'capitalize text-white/35'}>{s}</span>
             </div>
           ))}
         </div>
