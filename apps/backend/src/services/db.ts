@@ -151,14 +151,18 @@ export async function createTransaction(data: {
   shopId: string; userId: string; type: TransactionType; amount: number;
   currency?: string; description?: string; category?: string;
   counterparty?: string; date: string; dueDate?: string; aiCategorized?: boolean;
+  status?: TransactionStatus;
 }): Promise<Transaction> {
+  // Sales and expenses change hands on the spot; only receivables/payables are still owed.
+  // (The column's own default is 'pending', which printed cash sales as "Balance due".)
+  const status = data.status ?? (data.type === 'sale' || data.type === 'expense' ? 'settled' : 'pending');
   const { rows } = await db.query(
     `INSERT INTO transactions
-       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [data.shopId, data.userId, data.type, data.amount, data.currency ?? 'NGN',
      data.description ?? null, data.category ?? null, data.counterparty ?? null,
-     data.date, data.dueDate ?? null, data.aiCategorized ?? false],
+     data.date, data.dueDate ?? null, data.aiCategorized ?? false, status],
   );
   return mapTransaction(rows[0]);
 }
@@ -195,6 +199,63 @@ export async function deleteTransaction(id: string, shopId: string, userId: stri
   return (rowCount ?? 0) > 0;
 }
 
+/** Used by the chat agent's find_transactions tool — free-text search rather than exact filters. */
+export async function searchTransactions(shopId: string, userId: string, opts: {
+  counterparty?: string; description?: string; type?: TransactionType; limit?: number;
+}): Promise<Transaction[]> {
+  const conditions = ['shop_id = $1', 'user_id = $2'];
+  const values: unknown[] = [shopId, userId];
+  let i = 3;
+  if (opts.counterparty) { conditions.push(`counterparty ILIKE $${i++}`); values.push(`%${opts.counterparty}%`); }
+  if (opts.description)  { conditions.push(`description ILIKE $${i++}`); values.push(`%${opts.description}%`); }
+  if (opts.type)          { conditions.push(`type = $${i++}`);            values.push(opts.type); }
+  const limit = Math.min(opts.limit ?? 10, 25);
+  const { rows } = await db.query(
+    `SELECT * FROM transactions WHERE ${conditions.join(' AND ')} ORDER BY date DESC, created_at DESC LIMIT $${i}`,
+    [...values, limit],
+  );
+  return rows.map(mapTransaction);
+}
+
+export async function findTransactionsByIds(ids: string[], shopId: string, userId: string): Promise<Transaction[]> {
+  if (ids.length === 0) return [];
+  const { rows } = await db.query(
+    'SELECT * FROM transactions WHERE id = ANY($1) AND shop_id = $2 AND user_id = $3',
+    [ids, shopId, userId],
+  );
+  return rows.map(mapTransaction);
+}
+
+export interface SpendingSummary {
+  from: string;
+  to: string;
+  byType: { type: TransactionType; total: number; count: number }[];
+  byCategory: { type: TransactionType; category: string | null; total: number; count: number }[];
+}
+
+/** Used by the chat agent's get_spending_summary tool — real SQL aggregation, not model arithmetic. */
+export async function getSpendingSummary(shopId: string, userId: string, from: string, to: string): Promise<SpendingSummary> {
+  const [{ rows: byType }, { rows: byCategory }] = await Promise.all([
+    db.query(
+      `SELECT type, SUM(amount) AS total, COUNT(*) AS count FROM transactions
+       WHERE shop_id = $1 AND user_id = $2 AND date BETWEEN $3 AND $4
+       GROUP BY type ORDER BY type`,
+      [shopId, userId, from, to],
+    ),
+    db.query(
+      `SELECT type, category, SUM(amount) AS total, COUNT(*) AS count FROM transactions
+       WHERE shop_id = $1 AND user_id = $2 AND date BETWEEN $3 AND $4
+       GROUP BY type, category ORDER BY total DESC`,
+      [shopId, userId, from, to],
+    ),
+  ]);
+  return {
+    from, to,
+    byType: byType.map((r) => ({ type: r['type'], total: parseFloat(r['total']), count: parseInt(r['count'], 10) })),
+    byCategory: byCategory.map((r) => ({ type: r['type'], category: r['category'], total: parseFloat(r['total']), count: parseInt(r['count'], 10) })),
+  };
+}
+
 // ── Chat ──────────────────────────────────────────────────────
 export async function createChatSession(userId: string, shopId: string): Promise<ChatSession> {
   const { rows } = await db.query(
@@ -218,13 +279,16 @@ export async function listChatSessions(userId: string, shopId?: string, page = 1
   return { data: rows.map(mapSession), total: parseInt(countRows[0].count), page, limit };
 }
 
-export async function addChatMessage(sessionId: string, role: 'user' | 'assistant', content: string, type = 'text', mediaUrl?: string): Promise<ChatMessage> {
+export async function addChatMessage(sessionId: string, role: 'user' | 'assistant', content: string, type = 'text', mediaUrl?: string, extra?: {
+  extractedTransactionIds?: string[]; receiptTransactionId?: string;
+}): Promise<ChatMessage> {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      'INSERT INTO chat_messages (session_id, role, type, content, media_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [sessionId, role, type, content, mediaUrl ?? null],
+      `INSERT INTO chat_messages (session_id, role, type, content, media_url, extracted_transaction_ids, receipt_transaction_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [sessionId, role, type, content, mediaUrl ?? null, extra?.extractedTransactionIds ?? [], extra?.receiptTransactionId ?? null],
     );
     await client.query('UPDATE chat_sessions SET last_message_at = NOW() WHERE id = $1', [sessionId]);
     await client.query('COMMIT');
@@ -235,6 +299,12 @@ export async function addChatMessage(sessionId: string, role: 'user' | 'assistan
   } finally {
     client.release();
   }
+}
+
+/** Ownership check for a chat session — used before reading or posting to it. */
+export async function findChatSessionById(id: string, userId: string): Promise<ChatSession | null> {
+  const { rows } = await db.query('SELECT * FROM chat_sessions WHERE id = $1 AND user_id = $2', [id, userId]);
+  return rows[0] ? mapSession(rows[0]) : null;
 }
 
 export async function listChatMessages(sessionId: string, page = 1, limit = 50): Promise<PaginatedResponse<ChatMessage>> {
@@ -383,6 +453,8 @@ function mapMessage(row: Record<string, unknown>): ChatMessage {
     type: row['type'] as ChatMessage['type'],
     content: row['content'] as string,
     mediaUrl: row['media_url'] as string | undefined,
+    extractedTransactionIds: (row['extracted_transaction_ids'] as string[] | null) ?? [],
+    receiptTransactionId: row['receipt_transaction_id'] as string | undefined,
     createdAt: row['created_at'] as Date,
   };
 }

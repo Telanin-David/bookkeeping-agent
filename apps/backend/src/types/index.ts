@@ -72,6 +72,10 @@ export interface ChatMessage {
   type: MessageType;
   content: string;
   mediaUrl?: string;
+  /** Transactions Claude created while producing this message (assistant messages only). */
+  extractedTransactionIds: string[];
+  /** Set when this message presents a receipt/invoice for an existing transaction. */
+  receiptTransactionId?: string;
   createdAt: Date;
 }
 

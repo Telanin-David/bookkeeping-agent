@@ -9,6 +9,16 @@ import { categorizeTransaction } from '../services/claude';
 const router = Router({ mergeParams: true });
 router.use(requireAuth);
 
+// Every route here is nested under /shops/:shopId — without this check, any signed-in
+// user could write transactions into someone else's shop just by knowing its id.
+router.use(async (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    const shop = await db.findShopById(req.params['shopId']!, req.user!.id);
+    if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
+    next();
+  } catch (err) { next(err); }
+});
+
 const createSchema = z.object({
   type: z.enum(['sale', 'expense', 'receivable', 'payable']),
   amount: z.number().positive(),
