@@ -200,17 +200,29 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
   const state: ToolState = { createdTransactionIds: [] };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    const response = await client.messages.create({
-      model: CHAT_MODEL,
-      max_tokens: 4096,
-      output_config: { effort: CHAT_EFFORT },
-      system: [
-        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: dynamicContext(ctx) },
-      ],
-      tools: TOOLS,
-      messages,
-    });
+    let response: Anthropic.Message;
+    try {
+      response = await client.messages.create({
+        model: CHAT_MODEL,
+        max_tokens: 4096,
+        output_config: { effort: CHAT_EFFORT },
+        system: [
+          { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: dynamicContext(ctx) },
+        ],
+        tools: TOOLS,
+        messages,
+      });
+    } catch (err) {
+      // If a transaction was already saved this turn, surfacing an error would make the
+      // owner resend and record it twice — report what was saved instead.
+      if (state.createdTransactionIds.length === 0) throw err;
+      return {
+        reply: `I saved ${state.createdTransactionIds.length === 1 ? 'that transaction' : `${state.createdTransactionIds.length} transactions`}, but couldn't finish my reply. Check your transactions list before sending it again.`,
+        extractedTransactionIds: state.createdTransactionIds,
+        receiptTransactionId: state.receiptTransactionId,
+      };
+    }
 
     if (response.stop_reason === 'refusal') {
       return {

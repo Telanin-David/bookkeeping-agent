@@ -31,7 +31,9 @@ router.get('/sessions', async (req: Request, res: Response, next: NextFunction) 
 
 router.post('/sessions', validate(createSessionSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const session = await db.createChatSession(req.user!.id, req.body.shopId);
+    const shop = await db.findShopById(req.body.shopId, req.user!.id);
+    if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
+    const session = await db.createChatSession(req.user!.id, shop.id);
     res.status(201).json(session);
   } catch (err) { next(err); }
 });
@@ -78,16 +80,27 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
       content: m.content,
     }));
 
-    const result = await claudeService.sendChatMessage(
-      {
-        shopId: shop.id,
-        userId: req.user!.id,
-        shopName: shop.name,
-        shopType: shop.type,
-        currency: shop.currency,
-      },
-      history,
-    );
+    let result: claudeService.ClaudeChatResult;
+    try {
+      result = await claudeService.sendChatMessage(
+        {
+          shopId: shop.id,
+          userId: req.user!.id,
+          shopName: shop.name,
+          shopType: shop.type,
+          currency: shop.currency,
+        },
+        history,
+      );
+    } catch (err) {
+      // Bad/missing key, exhausted credit, rate limits, or an Anthropic outage — tell the
+      // owner plainly instead of a generic 500. The user's message stays saved either way.
+      if (err instanceof Anthropic.APIError) {
+        console.error('Claude request failed:', err.message);
+        throw new AppError(503, 'AI_UNAVAILABLE', 'The assistant is unavailable right now. Your message was saved — please try again in a moment.');
+      }
+      throw err;
+    }
 
     const assistantMsg = await db.addChatMessage(session.id, 'assistant', result.reply, 'text', undefined, {
       extractedTransactionIds: result.extractedTransactionIds,

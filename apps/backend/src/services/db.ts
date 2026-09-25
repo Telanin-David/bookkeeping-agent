@@ -151,14 +151,18 @@ export async function createTransaction(data: {
   shopId: string; userId: string; type: TransactionType; amount: number;
   currency?: string; description?: string; category?: string;
   counterparty?: string; date: string; dueDate?: string; aiCategorized?: boolean;
+  status?: TransactionStatus;
 }): Promise<Transaction> {
+  // Sales and expenses change hands on the spot; only receivables/payables are still owed.
+  // (The column's own default is 'pending', which printed cash sales as "Balance due".)
+  const status = data.status ?? (data.type === 'sale' || data.type === 'expense' ? 'settled' : 'pending');
   const { rows } = await db.query(
     `INSERT INTO transactions
-       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [data.shopId, data.userId, data.type, data.amount, data.currency ?? 'NGN',
      data.description ?? null, data.category ?? null, data.counterparty ?? null,
-     data.date, data.dueDate ?? null, data.aiCategorized ?? false],
+     data.date, data.dueDate ?? null, data.aiCategorized ?? false, status],
   );
   return mapTransaction(rows[0]);
 }

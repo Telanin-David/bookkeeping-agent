@@ -118,6 +118,25 @@ describe('sendChatMessage', () => {
     expect(result.receiptTransactionId).toBeUndefined();
   });
 
+  it('reports an already-saved transaction instead of erroring if Claude fails mid-turn', async () => {
+    mockDb.createTransaction.mockResolvedValue(fakeTransaction());
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', {
+        type: 'sale', amount: 5000, description: '2 bags of rice', category: 'Groceries',
+      }))
+      .mockRejectedValueOnce(new Error('rate limited'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'I sold 2 bags of rice for 5000' }]);
+
+    expect(result.extractedTransactionIds).toEqual(['tx-1']);
+    expect(result.reply).toMatch(/saved that transaction/i);
+  });
+
+  it('rethrows a Claude failure when nothing has been saved yet', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('invalid key'));
+    await expect(sendChatMessage(ctx, [{ role: 'user', content: 'hi' }])).rejects.toThrow('invalid key');
+  });
+
   it('stops after MAX_TOOL_ITERATIONS rather than looping forever', async () => {
     mockDb.searchTransactions.mockResolvedValue([]);
     mockCreate.mockResolvedValue(toolUseResponse('find_transactions', {}));
