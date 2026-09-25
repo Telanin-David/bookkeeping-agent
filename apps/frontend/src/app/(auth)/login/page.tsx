@@ -51,7 +51,7 @@ export default function LoginPage() {
     setShops([demoShop]);
     setActiveShop('demo-shop-1');
     setAuth({ id: 'demo-user-1', name: 'Demo User', email: 'demo@example.com' }, 'demo-token');
-    router.replace('/');
+    router.replace('/chat');
   }
 
   return (

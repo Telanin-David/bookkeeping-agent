@@ -10,7 +10,7 @@ export default function Header() {
   const { logout } = useAuth();
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-ink-950/60 px-5 backdrop-blur-xl md:px-6">
+    <header className="flex h-14 w-full shrink-0 items-center justify-between border-b border-white/[0.06] bg-ink-950/60 px-5 backdrop-blur-xl md:px-6">
       {/* Active shop pill */}
       <div className="flex items-center gap-2 pl-10 md:pl-0">
         {active && (

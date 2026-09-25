@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
+import MobileNav from '@/components/layout/MobileNav';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -23,9 +24,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden bg-ink-950">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden md:pl-0 pl-0">
-        <Header />
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex">
+        <Sidebar />
+      </div>
+
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Desktop header */}
+        <div className="hidden md:flex">
+          <Header />
+        </div>
+
+        {/* Mobile top nav */}
+        <div className="flex flex-col md:hidden">
+          <MobileNav />
+        </div>
+
         <main className="flex flex-1 overflow-hidden">{children}</main>
       </div>
     </div>
