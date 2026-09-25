@@ -7,8 +7,8 @@
 | 1 | Backend API Specification (OpenAPI YAML + docs) | ✅ Done | `feat/deliverable-1-api-spec` | merged to main |
 | 2 | Database Schema & Migrations | ✅ Done | `feat/deliverable-2-database-schema` | merged to main |
 | 3 | Backend Source Code Structure & Entry Point | ✅ Done | `feat/deliverable-3-backend-structure` | merged to main |
-| 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | pending review |
-| 5 | Claude Integration & System Prompt | ⬜ Not started | — | — |
+| 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | merged to main |
+| 5 | Claude Integration & System Prompt | 🔄 In progress | `feat/deliverable-5-claude-integration` | — |
 | 6 | Authentication & Authorization System | ⬜ Not started | — | — |
 | 7 | Report Generation & PDF Templates | ⬜ Not started | — | — |
 | 8 | Alert Detection & Routing System | ⬜ Not started | — | — |
@@ -16,6 +16,9 @@
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
+
+## Notes
+- `feat/premium-ui-polish` (PR #14, merged to main) substantially extended Deliverable 4's UI beyond its original scope: mobile navigation redesign, monochrome glass design system, printable receipts, and shop onboarding/branding. It also added `Shop.logoUrl`/`signatureUrl` and a `/shops/{shopId}/branding/{kind}` endpoint to `docs/api/openapi.yaml` — not yet implemented server-side, so whoever picks up Deliverable 7 (Report Generation & PDF Templates) should check that spec section.
 
 ## Rules
 - Never commit/push to `main` directly.
