@@ -1,40 +1,30 @@
 'use client';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { alertsApi } from '@/lib/api';
-import { useAlertsStore } from '@/store/alerts';
+import { useAlerts, useAlertAction } from '@/hooks/useAlerts';
 import PageWrapper from '@/components/layout/PageWrapper';
 import AlertCard from '@/components/alerts/AlertCard';
 import Spinner from '@/components/ui/Spinner';
-import type { Alert } from '@/types';
+import { cn } from '@/lib/utils';
+import type { AlertStatus } from '@/types';
 
 export default function AlertsPage() {
-  const [statusFilter, setStatusFilter] = useState<'active' | 'acknowledged' | 'dismissed' | ''>('active');
-  const setActiveCount = useAlertsStore((s) => s.setActiveCount);
-
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['alerts', statusFilter],
-    queryFn: async () => {
-      const res = await alertsApi.list({ status: statusFilter || undefined, limit: 50 });
-      if (!statusFilter || statusFilter === 'active') setActiveCount(res.data.total);
-      return res.data;
-    },
-  });
-
-  function handleUpdate(updated: Alert) {
-    refetch();
-  }
+  const [statusFilter, setStatusFilter] = useState<AlertStatus | ''>('active');
+  const { data, isLoading } = useAlerts(statusFilter);
+  const { apply } = useAlertAction();
 
   return (
     <PageWrapper title="Alerts">
-      <div className="mb-4 flex gap-2">
+      <div className="mb-5 inline-flex rounded-full glass p-1" role="tablist">
         {(['active', 'acknowledged', 'dismissed', ''] as const).map((s) => (
           <button
             key={s}
+            role="tab"
+            aria-selected={statusFilter === s}
             onClick={() => setStatusFilter(s)}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-              statusFilter === s ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={cn(
+              'h-9 rounded-full px-4 text-[14px] font-medium transition',
+              statusFilter === s ? 'bg-white/[0.12] text-white shadow-[0_1px_0_rgba(255,255,255,0.08)_inset]' : 'text-white/50 hover:text-white/80',
+            )}
           >
             {s === '' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
@@ -42,12 +32,12 @@ export default function AlertsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-400"><Spinner className="h-4 w-4" /> Loading…</div>
+        <div className="flex items-center gap-2 text-[14px] text-white/40"><Spinner className="h-4 w-4 text-white/20" /> Loading…</div>
       ) : (
         <div className="space-y-3">
-          {data?.data.length === 0 && <p className="text-sm text-gray-400">No alerts.</p>}
+          {data?.data.length === 0 && <p className="text-[14px] text-white/35">No alerts.</p>}
           {data?.data.map((alert) => (
-            <AlertCard key={alert.id} alert={alert} onUpdate={handleUpdate} />
+            <AlertCard key={alert.id} alert={alert} onAcknowledge={() => apply(alert, 'ack')} onDismiss={() => apply(alert, 'dismiss')} />
           ))}
         </div>
       )}

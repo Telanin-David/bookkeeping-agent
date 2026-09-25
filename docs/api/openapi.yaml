@@ -293,6 +293,64 @@ paths:
           $ref: '#/components/responses/InternalError'
 
   # ── TRANSACTIONS ─────────────────────────────
+  /shops/{shopId}/branding/{kind}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [logo, signature]
+    put:
+      tags: [shops]
+      summary: Upload or replace the shop's receipt logo or signature
+      description: |
+        Max 2 MB; PNG, JPEG or WebP. The client already converts the image to grayscale and scales it
+        to at most 600×300 px, because receipts are printed in black and white. The server stores the file
+        and sets `logoUrl` or `signatureUrl` to a URL the browser can load.
+      x-rateLimit: '20 requests per hour'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Updated shop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [shops]
+      summary: Remove the shop's receipt logo or signature
+      responses:
+        '200':
+          description: Updated shop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /shops/{shopId}/transactions:
     parameters:
       - $ref: '#/components/parameters/shopId'
@@ -1245,6 +1303,16 @@ components:
         currency:
           type: string
           default: NGN
+        logoUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Printed at the top of every receipt and invoice. Stored as a grayscale PNG.
+        signatureUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Printed on invoices (credit sales) only, above the "Authorised signature" line.
         createdAt:
           type: string
           format: date-time
@@ -1440,6 +1508,12 @@ components:
           items:
             $ref: '#/components/schemas/Transaction'
           description: Transactions the agent extracted and saved from this message
+        receiptTransactionId:
+          type: string
+          format: uuid
+          description: |
+            Set when the user asked for a receipt and the agent resolved which transaction it is for.
+            The client renders a printable receipt card for this transaction.
         createdAt:
           type: string
           format: date-time

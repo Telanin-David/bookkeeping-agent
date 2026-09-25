@@ -1,5 +1,5 @@
 'use client';
-import { LogOut, ChevronDown } from 'lucide-react';
+import { SignOut } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/auth';
 import { useShopsStore } from '@/store/shops';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,28 +10,27 @@ export default function Header() {
   const { logout } = useAuth();
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-ink-950/60 px-5 backdrop-blur-lg md:px-6">
-      {/* Left: active shop pill */}
-      <div className="flex items-center gap-2">
+    <header className="flex h-14 w-full shrink-0 items-center justify-between border-b border-white/[0.06] bg-ink-950/60 px-5 backdrop-blur-xl md:px-6">
+      {/* Active shop pill */}
+      <div className="flex items-center gap-2 pl-10 md:pl-0">
         {active && (
-          <button className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/8 hover:text-white">
+          <span className="rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 py-1.5 text-sm font-medium text-white/65">
             {active.name}
-            <ChevronDown size={13} className="text-white/40" />
-          </button>
+          </span>
         )}
       </div>
 
-      {/* Right: user + sign out */}
+      {/* User + sign out */}
       <div className="flex items-center gap-3">
         {user && (
-          <span className="hidden text-sm text-white/50 sm:block">{user.name}</span>
+          <span className="hidden text-sm text-white/40 sm:block">{user.name}</span>
         )}
         <button
           onClick={logout}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/8 hover:text-white"
+          title="Sign out"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.05] text-white/50 transition hover:bg-white/[0.09] hover:text-white/80"
         >
-          <LogOut size={13} />
-          <span className="hidden sm:inline">Sign out</span>
+          <SignOut size={15} />
         </button>
       </div>
     </header>

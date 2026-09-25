@@ -1,8 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Check, X } from 'lucide-react';
-import { alertsApi } from '@/lib/api';
-import { useAlertsStore } from '@/store/alerts';
+import { Check, X } from '@phosphor-icons/react';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { formatDateTime, capitalize } from '@/lib/utils';
@@ -10,29 +8,21 @@ import type { Alert } from '@/types';
 
 interface AlertCardProps {
   alert: Alert;
-  onUpdate: (updated: Alert) => void;
+  onAcknowledge: () => Promise<unknown>;
+  onDismiss: () => Promise<unknown>;
 }
 
-export default function AlertCard({ alert, onUpdate }: AlertCardProps) {
+export default function AlertCard({ alert, onAcknowledge, onDismiss }: AlertCardProps) {
   const [loading, setLoading] = useState<'ack' | 'dismiss' | null>(null);
-  const decrement = useAlertsStore((s) => s.decrement);
 
   async function handleAck() {
     setLoading('ack');
-    try {
-      const { data } = await alertsApi.acknowledge(alert.id);
-      onUpdate(data);
-      decrement();
-    } finally { setLoading(null); }
+    try { await onAcknowledge(); } finally { setLoading(null); }
   }
 
   async function handleDismiss() {
     setLoading('dismiss');
-    try {
-      const { data } = await alertsApi.dismiss(alert.id);
-      onUpdate(data);
-      decrement();
-    } finally { setLoading(null); }
+    try { await onDismiss(); } finally { setLoading(null); }
   }
 
   return (
@@ -40,10 +30,10 @@ export default function AlertCard({ alert, onUpdate }: AlertCardProps) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <Badge color={alert.status === 'active' ? 'yellow' : 'gray'}>{capitalize(alert.status)}</Badge>
-            <Badge color="blue">{capitalize(alert.type.replace(/_/g, ' '))}</Badge>
+            <Badge>{capitalize(alert.status)}</Badge>
+            <Badge>{capitalize(alert.type.replace(/_/g, ' '))}</Badge>
           </div>
-          <p className="text-sm text-white/80 leading-relaxed">{alert.message}</p>
+          <p className="text-sm text-white/75 leading-relaxed">{alert.message}</p>
           <p className="mt-1.5 text-xs text-white/30">{formatDateTime(alert.createdAt)}</p>
         </div>
         {alert.status === 'active' && (

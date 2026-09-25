@@ -60,7 +60,7 @@ export const authApi = {
 // ── Shops ─────────────────────────────────────────────────────
 export const shopsApi = {
   list: () =>
-    api.get<Shop[]>('/api/v1/shops'),
+    api.get<{ data: Shop[] }>('/api/v1/shops').then((r) => r.data.data),
 
   get: (shopId: string) =>
     api.get<Shop>(`/api/v1/shops/${shopId}`),
@@ -73,7 +73,20 @@ export const shopsApi = {
 
   switchActive: (shopId: string) =>
     api.post<{ activeShopId: string }>('/api/v1/shops/switch', { shopId }),
+
+  uploadBranding: (shopId: string, kind: BrandingKind, file: Blob) => {
+    const form = new FormData();
+    form.append('file', file, `${kind}.png`);
+    return api.put<Shop>(`/api/v1/shops/${shopId}/branding/${kind}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  removeBranding: (shopId: string, kind: BrandingKind) =>
+    api.delete<Shop>(`/api/v1/shops/${shopId}/branding/${kind}`),
 };
+
+export type BrandingKind = 'logo' | 'signature';
 
 // ── Transactions ──────────────────────────────────────────────
 export const transactionsApi = {

@@ -13,6 +13,8 @@ export interface Shop {
   location?: string;
   currency: string;
   isActive: boolean;
+  logoUrl?: string | null;
+  signatureUrl?: string | null;
 }
 
 export type TransactionType =
@@ -57,6 +59,7 @@ export interface ChatMessage {
   type: 'text' | 'voice' | 'image';
   content: string;
   mediaUrl?: string;
+  receiptTransactionId?: string;
   createdAt: string;
 }
 

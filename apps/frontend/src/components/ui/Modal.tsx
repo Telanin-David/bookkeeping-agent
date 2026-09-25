@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 interface ModalProps {
