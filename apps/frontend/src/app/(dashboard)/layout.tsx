@@ -6,6 +6,8 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import MobileNav from '@/components/layout/MobileNav';
 import { useShops } from '@/hooks/useShops';
+import { useAlerts } from '@/hooks/useAlerts';
+import { useAlertsStore } from '@/store/alerts';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -20,6 +22,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (fetched && fetched.length === 0) router.replace('/onboarding');
   }, [fetched, router]);
+
+  // Keeps the ☰ / sidebar alert badge correct everywhere, not just after visiting Alerts.
+  const { data: activeAlerts } = useAlerts('active');
+  const setActiveCount = useAlertsStore((s) => s.setActiveCount);
+  useEffect(() => {
+    if (activeAlerts) setActiveCount(activeAlerts.total);
+  }, [activeAlerts, setActiveCount]);
 
   if (!isAuthenticated) {
     return (
