@@ -6,8 +6,8 @@
 |---|-------------|--------|--------|----|
 | 1 | Backend API Specification (OpenAPI YAML + docs) | ✅ Done | `feat/deliverable-1-api-spec` | merged to main |
 | 2 | Database Schema & Migrations | ✅ Done | `feat/deliverable-2-database-schema` | pending review |
-| 3 | Backend Source Code Structure & Entry Point | ✅ Done | `feat/deliverable-3-backend-structure` | pending review |
-| 4 | Frontend Source Code Structure & Components | ⬜ Not started | — | — |
+| 3 | Backend Source Code Structure & Entry Point | ✅ Done | `feat/deliverable-3-backend-structure` | merged to main |
+| 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | pending review |
 | 5 | Claude Integration & System Prompt | ⬜ Not started | — | — |
 | 6 | Authentication & Authorization System | ⬜ Not started | — | — |
 | 7 | Report Generation & PDF Templates | ⬜ Not started | — | — |
