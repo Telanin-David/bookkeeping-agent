@@ -112,13 +112,13 @@ export const transactionsApi = {
 // ── Chat ──────────────────────────────────────────────────────
 export const chatApi = {
   listSessions: () =>
-    api.get<ChatSession[]>('/api/v1/chat/sessions'),
+    api.get<{ data: ChatSession[] }>('/api/v1/chat/sessions').then((r) => r.data.data),
 
   createSession: (shopId: string) =>
     api.post<ChatSession>('/api/v1/chat/sessions', { shopId }),
 
   listMessages: (sessionId: string) =>
-    api.get<ChatMessage[]>(`/api/v1/chat/sessions/${sessionId}/messages`),
+    api.get<{ data: ChatMessage[] }>(`/api/v1/chat/sessions/${sessionId}/messages`).then((r) => r.data.data),
 
   sendMessage: (sessionId: string, content: string) =>
     api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>(

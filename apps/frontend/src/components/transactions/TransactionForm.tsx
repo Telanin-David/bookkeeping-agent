@@ -6,14 +6,18 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import type { Transaction } from '@/types';
 
+// Blank optional inputs submit as '' — send them as absent instead, since the API
+// rejects an empty dueDate and would store empty strings for category/counterparty.
+const optionalText = z.string().optional().transform((v) => (v?.trim() ? v.trim() : undefined));
+
 const schema = z.object({
   type:         z.enum(['sale', 'expense', 'receivable', 'payable']),
   amount:       z.coerce.number().positive(),
   description:  z.string().min(1),
   date:         z.string().min(1),
-  category:     z.string().optional(),
-  counterparty: z.string().optional(),
-  dueDate:      z.string().optional(),
+  category:     optionalText,
+  counterparty: optionalText,
+  dueDate:      optionalText,
   status:       z.enum(['pending', 'settled', 'overdue']).default('pending'),
   currency:     z.string().default('NGN'),
 });

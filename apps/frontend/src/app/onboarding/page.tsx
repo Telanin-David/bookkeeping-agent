@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { shopsApi } from '@/lib/api';
 import { saveBranding } from '@/lib/branding';
 import { DEMO_SHOP_ID, DEMO_USER_ID } from '@/lib/demo';
@@ -23,6 +24,7 @@ const primaryBtn =
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const qc = useQueryClient();
   const { isAuthenticated, user } = useAuthStore();
   const { shops, setShops, setActiveShop } = useShopsStore();
   const isDemo = user?.id === DEMO_USER_ID;
@@ -50,7 +52,11 @@ export default function OnboardingPage() {
       const created: Shop = isDemo
         ? { id: DEMO_SHOP_ID, ownerId: DEMO_USER_ID, isActive: true, ...body }
         : (await shopsApi.create(body)).data;
-      setShops([...shops.filter((s) => s.id !== created.id), created]);
+      const nextShops = [...shops.filter((s) => s.id !== created.id), created];
+      setShops(nextShops);
+      // The dashboard layout redirects here while its cached shop list is empty — update
+      // that cache too, or it bounces the owner straight back after onboarding.
+      qc.setQueryData<Shop[]>(['shops'], nextShops);
       setActiveShop(created.id);
       setShop(created);
       setStep(2);

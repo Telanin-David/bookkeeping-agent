@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { chatApi } from '@/lib/api';
 import MessageList from './MessageList';
 import MessageInput, { type Attachment } from './MessageInput';
@@ -73,7 +74,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
     queryKey: ['chat-messages', sessionId],
     queryFn: () => isDemo
       ? Promise.resolve(DEMO_MESSAGES)
-      : chatApi.listMessages(sessionId).then((r) => r.data),
+      : chatApi.listMessages(sessionId),
   });
 
   async function handleSend(content: string, attachments: Attachment[]) {
@@ -121,8 +122,13 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
       qc.setQueryData<ChatMessage[]>(['chat-messages', sessionId], (old = []) => [
         ...old, data.userMessage, data.assistantMessage,
       ]);
-    } catch {
+    } catch (err) {
       setOptimistic((prev) => prev.filter((m) => m.id !== tempId));
+      // The server may have saved the message before failing (e.g. assistant unavailable) —
+      // refetch so it shows, and pass the server's explanation to the input to display.
+      qc.invalidateQueries({ queryKey: ['chat-messages', sessionId] });
+      const serverMessage = isAxiosError(err) ? err.response?.data?.message : undefined;
+      throw new Error(serverMessage ?? 'Message failed to send. Check your connection and try again.');
     }
   }
 
