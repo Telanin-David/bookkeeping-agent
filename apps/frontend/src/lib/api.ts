@@ -149,7 +149,7 @@ export const importsApi = {
     ),
 
   validate: (importId: string, columnMapping: Record<string, string>) =>
-    api.post<{ importId: string; totalRows: number; validRows: number; errorRows: number; qualityScore: number; errors: unknown[] }>(
+    api.post<{ importId: string; totalRows: number; validRows: number; errorRows: number; qualityScore: number; errors: { row: number; field: string; message: string }[] }>(
       `/api/v1/imports/${importId}/validate`,
       columnMapping,
     ),
