@@ -13,7 +13,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!isAuthenticated) router.replace('/login');
   }, [isAuthenticated, router]);
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <span className="text-gray-400 text-sm">Loading…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
