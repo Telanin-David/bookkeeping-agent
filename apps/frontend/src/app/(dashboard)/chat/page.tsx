@@ -4,11 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import ChatWindow from '@/components/chat/ChatWindow';
-import PageWrapper from '@/components/layout/PageWrapper';
-import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { formatDateTime } from '@/lib/utils';
 import type { ChatSession } from '@/types';
+import { Plus, MessageSquare } from 'lucide-react';
 
 export default function ChatPage() {
   const activeShop = useShopsStore((s) => s.activeShop());
@@ -29,33 +28,65 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* Session list */}
-      <aside className="w-56 border-r border-gray-200 bg-white overflow-y-auto">
-        <div className="p-3">
-          <Button size="sm" className="w-full" onClick={createSession}>+ New chat</Button>
+
+      {/* Session list — desktop only */}
+      <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-white/[0.06] bg-ink-950/60 overflow-y-auto">
+        <div className="p-3 border-b border-white/[0.06]">
+          <button
+            onClick={createSession}
+            className="flex w-full items-center justify-center gap-2 rounded-xl btn-primary px-3 py-2 text-sm font-medium"
+          >
+            <Plus size={14} />
+            New chat
+          </button>
         </div>
-        {isLoading && <div className="p-3"><Spinner className="h-4 w-4" /></div>}
+        {isLoading && (
+          <div className="flex items-center justify-center p-4">
+            <Spinner className="h-4 w-4 text-white/20" />
+          </div>
+        )}
+        {sessions.length === 0 && !isLoading && (
+          <p className="px-4 py-6 text-xs text-white/25 text-center">No sessions yet</p>
+        )}
         {sessions.map((s) => (
           <button
             key={s.id}
             onClick={() => setActiveSessionId(s.id)}
-            className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-gray-50 ${activeSessionId === s.id ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-700'}`}
+            className={`w-full text-left px-4 py-3 text-sm transition-colors border-b border-white/[0.04] ${
+              activeSessionId === s.id
+                ? 'bg-white/[0.07] text-white/85 font-medium'
+                : 'text-white/40 hover:bg-white/[0.04] hover:text-white/65'
+            }`}
           >
             {formatDateTime(s.lastMessageAt)}
           </button>
         ))}
       </aside>
 
-      {/* Chat area */}
+      {/* Chat area — full width on mobile */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {activeSessionId ? (
           <ChatWindow sessionId={activeSessionId} />
         ) : (
-          <PageWrapper title="Chat with your bookkeeping agent">
-            <p className="text-sm text-gray-500">Start a new chat or select an existing session to ask about your finances.</p>
-          </PageWrapper>
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl glass">
+              <MessageSquare size={24} className="text-white/35" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-white/75">Chat with your bookkeeping agent</p>
+              <p className="mt-1.5 text-sm text-white/35">Ask about your finances, transactions, or reports.</p>
+            </div>
+            <button
+              onClick={createSession}
+              className="flex items-center gap-2 rounded-xl btn-primary px-5 py-2.5 text-sm font-medium"
+            >
+              <Plus size={15} />
+              Start a new chat
+            </button>
+          </div>
         )}
       </div>
+
     </div>
   );
 }
