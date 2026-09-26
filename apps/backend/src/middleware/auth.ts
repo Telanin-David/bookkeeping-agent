@@ -7,21 +7,37 @@ import * as db from '../services/db';
 interface AccessTokenPayload {
   sub: string;
   email: string;
+  sid?: string;
 }
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
+/**
+ * Verifies the access token, then checks its device session is still signed in — so
+ * "Sign out" (or a detected stolen refresh token) cuts the device off at once instead of
+ * leaving its access token usable until it expires. Costs one indexed lookup per request.
+ */
+export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return next(new AppError(401, 'UNAUTHORIZED', 'Authorization header missing'));
   }
 
-  const token = header.slice(7);
+  let payload: AccessTokenPayload;
   try {
-    const payload = jwt.verify(token, config.jwt.accessSecret) as AccessTokenPayload;
+    payload = jwt.verify(header.slice(7), config.jwt.accessSecret) as AccessTokenPayload;
+  } catch {
+    return next(new AppError(401, 'UNAUTHORIZED', 'Token is expired or invalid'));
+  }
+
+  try {
+    // Tokens issued before sessions were tracked carry no sid; a 401 makes the app
+    // refresh, which issues one that does.
+    if (!payload.sid || !(await db.isSessionActive(payload.sid, payload.sub))) {
+      return next(new AppError(401, 'UNAUTHORIZED', 'Session has ended. Please log in again.'));
+    }
     req.user = { id: payload.sub, email: payload.email };
     next();
-  } catch {
-    next(new AppError(401, 'UNAUTHORIZED', 'Token is expired or invalid'));
+  } catch (err) {
+    next(err);
   }
 }
 

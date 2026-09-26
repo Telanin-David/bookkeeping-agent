@@ -59,7 +59,7 @@ export async function createRefreshToken(data: {
 }
 
 export type RefreshRotation =
-  | { status: 'rotated'; userId: string }
+  | { status: 'rotated'; userId: string; familyId: string }
   // Unknown, expired, or revoked moments ago by a parallel refresh (e.g. two tabs
   // reloading at once) — reject this request but leave the session alone.
   | { status: 'invalid' }
@@ -105,7 +105,7 @@ export async function rotateRefreshToken(
         'INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)',
         [row.user_id, row.family_id, newHash, newExpiresAt],
       );
-      result = { status: 'rotated', userId: row.user_id };
+      result = { status: 'rotated', userId: row.user_id, familyId: row.family_id };
     }
 
     await client.query('COMMIT');
@@ -116,6 +116,17 @@ export async function rotateRefreshToken(
   } finally {
     client.release();
   }
+}
+
+/** True while the device session (token family) is signed in: not revoked, not expired. */
+export async function isSessionActive(familyId: string, userId: string): Promise<boolean> {
+  const { rows } = await db.query(
+    `SELECT 1 FROM refresh_tokens
+     WHERE family_id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > NOW()
+     LIMIT 1`,
+    [familyId, userId],
+  );
+  return rows.length > 0;
 }
 
 /** Signs out the one device that holds this token (its whole family). */

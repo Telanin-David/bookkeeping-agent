@@ -44,6 +44,10 @@
     - Behind nginx, set `TRUST_PROXY=1` (the number of proxies in front). Without it, every request looks like it comes from 127.0.0.1, so 5 failed logins from anyone would block logins for everyone. Keep it at `0` when nothing is in front; trusting `X-Forwarded-For` there would let clients fake their IP.
     - Expired and revoked `refresh_tokens` rows are never pruned. A periodic `DELETE ... WHERE expires_at < NOW()` job belongs in D10.
   - Not built (needs an email provider): password reset / "forgot password".
+- **Auth hardening (follow-up to D6):**
+  - **Instant sign-out.** Access tokens carry `sid` (the device's refresh-token family). `requireAuth` checks that session is still active on every request, costing one indexed lookup. Signing a device out, or stolen-token detection, now cuts off its access token immediately, not up to 15 minutes later. Tokens without `sid` get a 401, so the app refreshes once and continues.
+  - **Weak secrets.** In production, the server refuses to start if `JWT_ACCESS_SECRET` is under 32 characters or is the `.env.example` placeholder. Generate one with `openssl rand -base64 48`.
+  - **Login limit per IP raised from 5 to 25 failed attempts per 15 minutes.** Nigerian mobile carriers put many phones behind one public IP, so 5 per IP let strangers lock each other out. Guessing a single account is still stopped at 5 by the per-account lockout, which doesn't depend on IP.
 
 ## Rules
 - Never commit/push to `main` directly.

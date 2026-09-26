@@ -2,6 +2,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 jest.mock('../services/db');
 
@@ -37,7 +38,7 @@ describe('POST /auth/refresh', () => {
   });
 
   it('rotates the token and returns a new access token plus the user', async () => {
-    mockDb.rotateRefreshToken.mockResolvedValue({ status: 'rotated', userId: 'user-1' });
+    mockDb.rotateRefreshToken.mockResolvedValue({ status: 'rotated', userId: 'user-1', familyId: 'family-1' });
     mockDb.findUserById.mockResolvedValue(user);
 
     const res = await request(app).post('/api/v1/auth/refresh').set('Cookie', 'refresh_token=old-token');
@@ -45,6 +46,8 @@ describe('POST /auth/refresh', () => {
     expect(res.status).toBe(200);
     expect(res.body.accessToken).toEqual(expect.any(String));
     expect(res.body.user).toEqual({ id: 'user-1', name: 'Amara Okafor', email: 'amara@test.ng' });
+    // The access token names the device session, so signing that device out cuts it off.
+    expect(jwt.decode(res.body.accessToken)).toMatchObject({ sub: 'user-1', sid: 'family-1' });
     const [oldHash, newHash] = mockDb.rotateRefreshToken.mock.calls[0]!;
     expect(oldHash).toMatch(/^[0-9a-f]{64}$/); // only the hash ever reaches the database
     expect(newHash).not.toBe(oldHash);
@@ -94,6 +97,8 @@ describe('POST /auth/login', () => {
       userId: 'user-1', familyId: expect.any(String), tokenHash: expect.stringMatching(/^[0-9a-f]{64}$/),
     }));
     expect(refreshCookie(res)).toMatch(/HttpOnly/);
+    const familyId = mockDb.createRefreshToken.mock.calls[0]![0].familyId;
+    expect(jwt.decode(res.body.accessToken)).toMatchObject({ sub: 'user-1', sid: familyId });
   });
 
   it('gives the same answer for an unknown email as for a wrong password', async () => {
