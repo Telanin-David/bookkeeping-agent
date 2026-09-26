@@ -41,7 +41,7 @@
   - Tests: 8 route tests in `routes/auth.test.ts` (supertest, db mocked). Also verified against real Postgres: a 30-check API walkthrough and an 11-check browser walkthrough (reload, token expiry, sign-out, demo mode).
   - **For Deliverable 10 (DevOps):**
     - The refresh cookie is `SameSite=Strict; Path=/api/v1/auth`. That works when the frontend and API are the same *site* (e.g. `app.example.com` + `api.example.com`, or the frontend proxying `/api/*` via its existing Next.js rewrite). It will **not** be sent if they sit on unrelated domains, e.g. `*.vercel.app` and a separate API host: every reload would then sign the owner out.
-    - Behind a proxy, Express also needs `trust proxy` set so the per-IP rate limits see the real client IP.
+    - Behind nginx, set `TRUST_PROXY=1` (the number of proxies in front). Without it, every request looks like it comes from 127.0.0.1, so 5 failed logins from anyone would block logins for everyone. Keep it at `0` when nothing is in front; trusting `X-Forwarded-For` there would let clients fake their IP.
     - Expired and revoked `refresh_tokens` rows are never pruned. A periodic `DELETE ... WHERE expires_at < NOW()` job belongs in D10.
   - Not built (needs an email provider): password reset / "forgot password".
 

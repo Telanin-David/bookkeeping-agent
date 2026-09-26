@@ -15,6 +15,14 @@ function parseDuration(value: string): number {
   return parseInt(match[1]!, 10) * unitMs;
 }
 
+function parseTrustProxy(value: string): number {
+  const hops = Number(value.trim());
+  if (!Number.isInteger(hops) || hops < 0) {
+    throw new Error(`Invalid TRUST_PROXY: ${value} (expected the number of proxies in front, e.g. 1 for nginx)`);
+  }
+  return hops;
+}
+
 export const config = {
   port: parseInt(process.env['PORT'] ?? '4000', 10),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
@@ -56,6 +64,13 @@ export const config = {
   cors: {
     frontendUrl: process.env['FRONTEND_URL'] ?? 'http://localhost:3000',
   },
+
+  // How many reverse proxies (e.g. nginx) sit in front of this server. Behind nginx,
+  // every request arrives from 127.0.0.1; with this set, Express reads the visitor's
+  // real IP from X-Forwarded-For instead — otherwise the per-IP login rate limit counts
+  // the whole world as one visitor. Keep 0 when nothing is in front: trusting the
+  // header then would let anyone fake their IP and dodge the limit.
+  trustProxyHops: parseTrustProxy(process.env['TRUST_PROXY'] ?? '0'),
 };
 
 export const db = new Pool({
