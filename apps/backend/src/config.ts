@@ -1,5 +1,12 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
+
+// Postgres DATE columns (transaction date, due date) have no time or timezone. By default
+// pg turns them into a JS Date at local midnight, and converting that back to text shifts
+// the day on any server east of UTC — on a Lagos-time VPS a sale on the 25th read back
+// as the 24th. Keep them as the 'YYYY-MM-DD' text Postgres sends.
+const PG_DATE_OID = 1082;
+types.setTypeParser(PG_DATE_OID, (value) => value);
 
 function required(name: string): string {
   const value = process.env[name];
@@ -76,9 +83,15 @@ export const config = {
 
   storage: {
     driver: (process.env['STORAGE_DRIVER'] ?? 'local') as 'local' | 's3',
+    // Where the local driver keeps uploads (Excel imports, shop logos/signatures). On the
+    // VPS, point this at a persistent folder that is included in backups.
+    localDir: process.env['UPLOAD_DIR'] ?? 'tmp/uploads',
     s3Bucket: process.env['AWS_S3_BUCKET'] ?? '',
     s3Region: process.env['AWS_REGION'] ?? 'us-east-1',
   },
+
+  // Calendar days ("today", due dates, report periods) are counted in this zone.
+  businessTimeZone: process.env['BUSINESS_TIME_ZONE'] ?? 'Africa/Lagos',
 
   cors: {
     frontendUrl: process.env['FRONTEND_URL'] ?? 'http://localhost:3000',

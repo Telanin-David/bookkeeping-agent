@@ -106,6 +106,42 @@ describe('sendChatMessage', () => {
     expect(result.receiptTransactionId).toBe('tx-2');
   });
 
+  it('settles an existing debt when the customer pays, instead of recording a new sale', async () => {
+    const debt = fakeTransaction({ id: 'debt-1', type: 'receivable', status: 'pending', counterparty: 'Mama Nkechi', amount: 20000 });
+    mockDb.searchTransactions.mockResolvedValue([debt]);
+    mockDb.markDebtPaid.mockResolvedValue({ ...debt, status: 'settled' });
+
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('find_transactions', { counterparty: 'Mama Nkechi', unpaidOnly: true }, 'call-1'))
+      .mockResolvedValueOnce(toolUseResponse('mark_debt_paid', { transactionId: 'debt-1' }, 'call-2'))
+      .mockResolvedValueOnce(textResponse('Done — Mama Nkechi’s ₦20,000 is marked as paid.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'Mama Nkechi has paid her 20k' }]);
+
+    expect(mockDb.searchTransactions).toHaveBeenCalledWith('shop-1', 'user-1', expect.objectContaining({ unpaidOnly: true }));
+    expect(mockDb.markDebtPaid).toHaveBeenCalledWith('debt-1', 'shop-1', 'user-1');
+    expect(mockDb.createTransaction).not.toHaveBeenCalled(); // no new sale: that would count the income twice
+    expect(result.extractedTransactionIds).toEqual(['debt-1']);
+  });
+
+  it('refuses to mark an already-paid debt again, and tells the model why', async () => {
+    mockDb.markDebtPaid.mockResolvedValue(null);
+    mockDb.findTransactionById.mockResolvedValue(fakeTransaction({ id: 'debt-1', type: 'receivable', status: 'settled' }));
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('mark_debt_paid', { transactionId: 'debt-1' }))
+      .mockResolvedValueOnce(textResponse('That debt was already marked as paid.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'Mama Nkechi paid' }]);
+
+    const finalMessages = mockCreate.mock.calls[1][0].messages;
+    const toolResultUserMsg = finalMessages.find(
+      (m: { content: unknown }) => Array.isArray(m.content) && m.content[0]?.type === 'tool_result',
+    );
+    expect(toolResultUserMsg.content[0].is_error).toBe(true);
+    expect(toolResultUserMsg.content[0].content).toMatch(/already marked as paid/i);
+    expect(result.extractedTransactionIds).toEqual([]);
+  });
+
   it('never sets receiptTransactionId for a transaction id that does not belong to this shop', async () => {
     mockDb.findTransactionById.mockResolvedValue(null); // not found for this shop/user
 

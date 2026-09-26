@@ -9,8 +9,8 @@
 | 3 | Backend Source Code Structure & Entry Point | ✅ Done | `feat/deliverable-3-backend-structure` | merged to main |
 | 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | merged to main |
 | 5 | Claude Integration & System Prompt | ✅ Done | `feat/deliverable-5-claude-integration` | merged to main (#16) |
-| 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | — |
-| 7 | Report Generation & PDF Templates | ⬜ Not started | — | — |
+| 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | merged to main (#18, #19) |
+| 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | — |
 | 8 | Alert Detection & Routing System | ⬜ Not started | — | — |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
@@ -48,6 +48,35 @@
   - **Instant sign-out.** Access tokens carry `sid` (the device's refresh-token family). `requireAuth` checks that session is still active on every request, costing one indexed lookup. Signing a device out, or stolen-token detection, now cuts off its access token immediately, not up to 15 minutes later. Tokens without `sid` get a 401, so the app refreshes once and continues.
   - **Weak secrets.** In production, the server refuses to start if `JWT_ACCESS_SECRET` is under 32 characters or is the `.env.example` placeholder. Generate one with `openssl rand -base64 48`.
   - **Login limit per IP raised from 5 to 25 failed attempts per 15 minutes.** Nigerian mobile carriers put many phones behind one public IP, so 5 per IP let strangers lock each other out. Guessing a single account is still stopped at 5 by the per-account lockout, which doesn't depend on IP.
+
+- **Deliverable 7** made reports real. Before it, the report form sent `from`/`to` while the API expects `dateFrom`/`dateTo`, so every download failed; the endpoints also returned a line of text labelled as a PDF.
+  - **PDFs** (`services/pdf/`, pdfkit):
+    - Profit & Loss (A4)
+    - Credit Report (A4): who owes the shop, and the shop's unpaid bills
+    - 80 mm receipts and invoices
+    - All carry the shop's logo; invoices carry the signature. Long tables continue across pages with the header repeated and "Page x of y".
+  - **Fonts:** text is set in Geist, the web app's font, bundled in `apps/backend/assets/fonts` with its OFL licence. Any character Geist lacks (₦, and Yoruba letters like ṣ) is drawn from DejaVu Sans, also bundled. Don't switch to a font without ₦.
+  - **Accounting rule (owner's decision): accrual.** A credit sale is income on the day of the sale; a bill on credit is a cost on the day received. The P&L shows how much of each is still unpaid.
+    - A debt being paid is recorded by marking it `settled`, never as a new sale; otherwise the income would be counted twice.
+    - Added for this: a "Mark paid" button on Transactions, and a `mark_debt_paid` chat tool. The system prompt tells the agent to settle debts rather than record sales, and part-payments aren't supported yet.
+    - The app still records no payment dates, so the Credit Report shows the current status of debts recorded in the period, not a historical "as of" snapshot.
+  - **Stock report is not available yet.** There are no products or quantities, so `POST /reports/stock` returns 501 and the UI hides it. The owner wants real shelf counting with low-stock warnings, planned as its own deliverable next.
+  - **Branding upload** (`PUT/DELETE /shops/{id}/branding/{logo|signature}`, migration `004_shop_branding.sql`):
+    - PNG and JPEG only, checked from the file's bytes, because those are the formats pdfkit can embed.
+    - Each upload gets a new random file name; the old file is deleted.
+    - Served publicly at `/api/v1/files/branding/{key}`.
+    - Files live under `UPLOAD_DIR`. On the VPS this must be a persistent, backed-up folder.
+  - **Date bug fixed:**
+    - pg parsed Postgres `DATE` columns into JS Dates at local midnight, and `toISOString()` shifted them a day early on any server east of UTC. On a Lagos-time VPS, every transaction would have shown the previous day. `DATE` is now read as plain `YYYY-MM-DD` text.
+    - "Today", due-date lateness and receipt times now use `BUSINESS_TIME_ZONE` (default `Africa/Lagos`) instead of UTC. The chat agent used UTC "today", so it dated sales as yesterday between midnight and 1am.
+  - **Frontend:**
+    - Receipt page has "Share PDF" (the phone share sheet, e.g. WhatsApp; download on desktop).
+    - Transactions show as cards on phones, so amount, status and "Mark paid" aren't off-screen.
+    - Plain labels replace jargon: "Credit sale"/"Bill on credit" for receivable/payable, and "Paid"/"Unpaid" for the statuses.
+    - An invoice for a paid credit sale now says "Paid", not "Balance due".
+    - Chat list no longer shows "1 Jan 1970" or creates duplicate empty chats.
+    - The shared `Table` component's typing is fixed, so frontend `tsc` is now clean with 0 errors.
+  - **Suggested, not done:** the Claude API guidance recommends server-side refusal fallbacks (`fallbacks: "default"`) for `claude-opus-5`. This needs the chat loop moved to the beta messages endpoint, so it was left for a separate change.
 
 ## Rules
 - Never commit/push to `main` directly.

@@ -2,7 +2,7 @@ import { db } from '../config';
 import {
   User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, AlertHistory, ExcelImport, PaginatedResponse,
-  TransactionType, TransactionStatus, AlertStatus, ImportStatus,
+  TransactionType, TransactionStatus, AlertStatus, ImportStatus, BrandingKind,
 } from '../types';
 
 // ── Users ─────────────────────────────────────────────────────
@@ -200,6 +200,42 @@ export async function updateShop(id: string, ownerId: string, data: Partial<Pick
   return rows[0] ? mapShop(rows[0]) : null;
 }
 
+/**
+ * Sets (or clears, with null) a shop's logo or signature key. Returns the updated shop and
+ * the key it replaced, so the caller can delete the old file. Null if the shop isn't the
+ * owner's.
+ */
+export async function setShopBranding(
+  shopId: string, ownerId: string, kind: BrandingKind, key: string | null,
+): Promise<{ shop: Shop; previousKey: string | null } | null> {
+  const column = kind === 'logo' ? 'logo_key' : 'signature_key'; // whitelisted, never user text
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    // Lock the row first so two uploads at once can't both see the same "previous" key
+    // (which would leave one file orphaned on disk).
+    const current = await client.query(
+      `SELECT ${column} AS key FROM shops WHERE id = $1 AND owner_id = $2 FOR UPDATE`,
+      [shopId, ownerId],
+    );
+    if (!current.rows[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const { rows } = await client.query(
+      `UPDATE shops SET ${column} = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [key, shopId],
+    );
+    await client.query('COMMIT');
+    return { shop: mapShop(rows[0]), previousKey: (current.rows[0].key as string | null) ?? null };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ── Transactions ──────────────────────────────────────────────
 export async function listTransactions(shopId: string, userId: string, opts: {
   type?: TransactionType; category?: string;
@@ -285,7 +321,7 @@ export async function deleteTransaction(id: string, shopId: string, userId: stri
 
 /** Used by the chat agent's find_transactions tool — free-text search rather than exact filters. */
 export async function searchTransactions(shopId: string, userId: string, opts: {
-  counterparty?: string; description?: string; type?: TransactionType; limit?: number;
+  counterparty?: string; description?: string; type?: TransactionType; unpaidOnly?: boolean; limit?: number;
 }): Promise<Transaction[]> {
   const conditions = ['shop_id = $1', 'user_id = $2'];
   const values: unknown[] = [shopId, userId];
@@ -293,12 +329,29 @@ export async function searchTransactions(shopId: string, userId: string, opts: {
   if (opts.counterparty) { conditions.push(`counterparty ILIKE $${i++}`); values.push(`%${opts.counterparty}%`); }
   if (opts.description)  { conditions.push(`description ILIKE $${i++}`); values.push(`%${opts.description}%`); }
   if (opts.type)          { conditions.push(`type = $${i++}`);            values.push(opts.type); }
+  if (opts.unpaidOnly)    { conditions.push(`status <> 'settled'`); }
   const limit = Math.min(opts.limit ?? 10, 25);
   const { rows } = await db.query(
     `SELECT * FROM transactions WHERE ${conditions.join(' AND ')} ORDER BY date DESC, created_at DESC LIMIT $${i}`,
     [...values, limit],
   );
   return rows.map(mapTransaction);
+}
+
+/**
+ * Marks an unpaid debt (receivable or payable) as paid. Returns null if it doesn't exist
+ * for this shop, isn't a debt, or was already paid — the payment is not a new sale, so
+ * settling never creates a transaction.
+ */
+export async function markDebtPaid(id: string, shopId: string, userId: string): Promise<Transaction | null> {
+  const { rows } = await db.query(
+    `UPDATE transactions SET status = 'settled', updated_at = NOW()
+     WHERE id = $1 AND shop_id = $2 AND user_id = $3
+       AND type IN ('receivable', 'payable') AND status <> 'settled'
+     RETURNING *`,
+    [id, shopId, userId],
+  );
+  return rows[0] ? mapTransaction(rows[0]) : null;
 }
 
 export async function findTransactionsByIds(ids: string[], shopId: string, userId: string): Promise<Transaction[]> {
@@ -338,6 +391,66 @@ export async function getSpendingSummary(shopId: string, userId: string, from: s
     byType: byType.map((r) => ({ type: r['type'], total: parseFloat(r['total']), count: parseInt(r['count'], 10) })),
     byCategory: byCategory.map((r) => ({ type: r['type'], category: r['category'], total: parseFloat(r['total']), count: parseInt(r['count'], 10) })),
   };
+}
+
+// ── Reports (Deliverable 7) ─────────────────────────────────────
+export interface CategoryLine {
+  type: TransactionType;
+  category: string;
+  count: number;
+  total: number;
+  /** Part of `total` not yet settled — only meaningful for receivables/payables. */
+  unpaid: number;
+}
+
+/**
+ * Profit & loss lines for a period, on the accrual basis: every transaction counts on its
+ * own date, including sales and purchases on credit. Grouped by type and category.
+ */
+export async function getProfitAndLossLines(shopId: string, userId: string, from: string, to: string): Promise<CategoryLine[]> {
+  const { rows } = await db.query(
+    `SELECT type,
+            COALESCE(NULLIF(TRIM(category), ''), 'Uncategorised') AS category,
+            COUNT(*) AS count,
+            SUM(amount) AS total,
+            SUM(CASE WHEN status <> 'settled' THEN amount ELSE 0 END) AS unpaid
+     FROM transactions
+     WHERE shop_id = $1 AND user_id = $2 AND date BETWEEN $3 AND $4
+     GROUP BY 1, 2
+     ORDER BY 1, SUM(amount) DESC`,
+    [shopId, userId, from, to],
+  );
+  return rows.map((r) => ({
+    type: r['type'] as TransactionType,
+    category: r['category'] as string,
+    count: parseInt(r['count'] as string, 10),
+    total: parseFloat(r['total'] as string),
+    unpaid: parseFloat(r['unpaid'] as string),
+  }));
+}
+
+/** Unpaid receivables or payables recorded in the period, soonest due first. */
+export async function getOpenDebts(
+  shopId: string, userId: string, type: 'receivable' | 'payable', from: string, to: string,
+): Promise<Transaction[]> {
+  const { rows } = await db.query(
+    `SELECT * FROM transactions
+     WHERE shop_id = $1 AND user_id = $2 AND type = $3 AND status <> 'settled'
+       AND date BETWEEN $4 AND $5
+     ORDER BY due_date NULLS LAST, date, created_at`,
+    [shopId, userId, type, from, to],
+  );
+  return rows.map(mapTransaction);
+}
+
+/** Total still unpaid across all dates — shown beside the period figure for context. */
+export async function getOpenDebtTotal(shopId: string, userId: string, type: 'receivable' | 'payable'): Promise<number> {
+  const { rows } = await db.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
+     WHERE shop_id = $1 AND user_id = $2 AND type = $3 AND status <> 'settled'`,
+    [shopId, userId, type],
+  );
+  return parseFloat(rows[0]['total'] as string);
 }
 
 // ── Chat ──────────────────────────────────────────────────────
@@ -484,6 +597,12 @@ function mapUser(row: Record<string, unknown>): User & { passwordHash: string; l
   };
 }
 
+export const BRANDING_URL_PREFIX = '/api/v1/files/branding/';
+
+function brandingUrl(key: unknown): string | null {
+  return typeof key === 'string' && key ? BRANDING_URL_PREFIX + key : null;
+}
+
 function mapShop(row: Record<string, unknown>): Shop {
   return {
     id: row['id'] as string,
@@ -493,6 +612,8 @@ function mapShop(row: Record<string, unknown>): Shop {
     location: row['location'] as string | undefined,
     currency: row['currency'] as string,
     isActive: row['is_active'] as boolean,
+    logoUrl: brandingUrl(row['logo_key']),
+    signatureUrl: brandingUrl(row['signature_key']),
     createdAt: row['created_at'] as Date,
     updatedAt: row['updated_at'] as Date,
   };
@@ -509,8 +630,8 @@ function mapTransaction(row: Record<string, unknown>): Transaction {
     description: row['description'] as string | undefined,
     category: row['category'] as string | undefined,
     counterparty: row['counterparty'] as string | undefined,
-    date: (row['date'] as Date).toISOString().slice(0, 10),
-    dueDate: row['due_date'] ? (row['due_date'] as Date).toISOString().slice(0, 10) : undefined,
+    date: row['date'] as string,
+    dueDate: (row['due_date'] as string | null) ?? undefined,
     status: row['status'] as Transaction['status'],
     aiCategorized: row['ai_categorized'] as boolean,
     importId: row['import_id'] as string | undefined,

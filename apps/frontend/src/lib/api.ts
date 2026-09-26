@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
   RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
@@ -148,8 +148,29 @@ export const chatApi = {
 // ── Reports ───────────────────────────────────────────────────
 export const reportsApi = {
   generate: (type: ReportType, body: Record<string, unknown>) =>
-    api.post(`/api/v1/reports/${type}`, body, { responseType: 'blob' }),
+    api.post<Blob>(`/api/v1/reports/${type}`, body, { responseType: 'blob' }),
 };
+
+/** The file name the server chose (Content-Disposition), or a fallback. */
+export function downloadName(headers: Record<string, unknown>, fallback: string): string {
+  const cd = String(headers['content-disposition'] ?? '');
+  return /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback;
+}
+
+/**
+ * The server's error message for a request made with responseType 'blob' — the error
+ * body then arrives as a Blob too, so it has to be read as text before parsing.
+ */
+export async function blobErrorMessage(err: unknown, fallback: string): Promise<string> {
+  if (!isAxiosError(err)) return fallback;
+  const data: unknown = err.response?.data;
+  try {
+    const text = data instanceof Blob ? await data.text() : JSON.stringify(data);
+    return (JSON.parse(text) as { message?: string }).message ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 // ── Alerts ────────────────────────────────────────────────────
 export const alertsApi = {

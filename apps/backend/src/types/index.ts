@@ -34,9 +34,14 @@ export interface Shop {
   location?: string;
   currency: string;
   isActive: boolean;
+  /** Receipt branding images, as URLs the browser can load (null when not set). */
+  logoUrl: string | null;
+  signatureUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type BrandingKind = 'logo' | 'signature';
 
 export interface Transaction {
   id: string;

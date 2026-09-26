@@ -5,6 +5,7 @@ import { z } from 'zod';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import type { Transaction } from '@/types';
+import { typeLabel } from '@/lib/utils';
 
 // Blank optional inputs submit as '' — send them as absent instead, since the API
 // rejects an empty dueDate and would store empty strings for category/counterparty.
@@ -45,7 +46,7 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
           <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
           <select {...register('type')} className={selectCls}>
             {['sale', 'expense', 'receivable', 'payable'].map((t) => (
-              <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>
+              <option key={t} value={t} className="bg-ink-900">{typeLabel(t)}</option>
             ))}
           </select>
           {errors.type && <p className="text-xs text-white/45">{errors.type.message}</p>}

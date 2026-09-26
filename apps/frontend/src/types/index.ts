@@ -55,7 +55,8 @@ export interface ChatSession {
   id: string;
   userId: string;
   shopId: string;
-  lastMessageAt: string;
+  /** Null until the first message is sent. */
+  lastMessageAt?: string | null;
   createdAt: string;
 }
 

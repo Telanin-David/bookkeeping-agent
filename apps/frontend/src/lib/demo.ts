@@ -40,6 +40,13 @@ export function findDemoTransaction(id: string): Transaction {
   return found;
 }
 
+/** Demo-mode edit (e.g. "Mark paid"): changed in place so every screen sees it. */
+export function updateDemoTransaction(id: string, changes: Partial<Transaction>): Transaction {
+  const found = findDemoTransaction(id);
+  Object.assign(found, changes, { updatedAt: new Date().toISOString() });
+  return found;
+}
+
 function alert(id: string, hoursAgo: number, type: Alert['type'], status: Alert['status'], message: string): Alert {
   const at = new Date(Date.now() - hoursAgo * HOUR).toISOString();
   return { id, userId: DEMO_USER_ID, shopId: DEMO_SHOP_ID, type, status, message, metadata: {}, createdAt: at, updatedAt: at };

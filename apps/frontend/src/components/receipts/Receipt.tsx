@@ -7,13 +7,17 @@ export function receiptNumber(tx: Transaction) {
 }
 
 export function receiptStatus(tx: Transaction) {
+  if (tx.status === 'settled') return 'Paid';
   if (tx.status === 'overdue') return 'Overdue';
-  if (tx.type === 'receivable' || tx.status === 'pending') return 'Balance due';
-  return 'Paid';
+  return 'Balance due';
 }
 
-const dateFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-const timeFmt = new Intl.DateTimeFormat('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true });
+const lagosDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+// tx.date is a calendar day ('YYYY-MM-DD', parsed as UTC midnight); formatting it in UTC keeps the same day everywhere.
+const dateFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+// Shops are in Nigeria: clock times and "today" are Lagos time, whatever the device is set to.
+const timeFmt = new Intl.DateTimeFormat('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' });
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -52,7 +56,8 @@ export default function Receipt({ tx, shop }: { tx: Transaction; shop: Shop }) {
 
       <div className="mt-3 space-y-1.5">
         <Row label="Date" value={dateFmt.format(new Date(tx.date))} />
-        <Row label="Time" value={timeFmt.format(loggedAt)} />
+        {/* The time is when the sale was typed in — only meaningful for same-day entries. */}
+        {lagosDay.format(loggedAt) === tx.date && <Row label="Time" value={timeFmt.format(loggedAt)} />}
         <Row label="Customer" value={tx.counterparty ?? 'Walk-in customer'} />
         {isInvoice && tx.dueDate && <Row label="Due" value={dateFmt.format(new Date(tx.dueDate))} />}
       </div>
@@ -94,7 +99,7 @@ export default function Receipt({ tx, shop }: { tx: Transaction; shop: Shop }) {
 
       <footer className="text-center">
         <p className="text-[13px] text-black/70">Thank you for your patronage.</p>
-        <p className="mt-1 text-[11px] text-black/35">Issued {dateFmt.format(new Date())} · Bookkeeping AI</p>
+        <p className="mt-1 text-[11px] text-black/35">Issued {dateFmt.format(new Date(lagosDay.format(new Date())))} · Bookkeeping AI</p>
       </footer>
     </article>
   );

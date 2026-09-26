@@ -1,6 +1,10 @@
 'use client';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Printer } from '@phosphor-icons/react';
+import { ArrowLeft, Printer, ShareNetwork } from '@phosphor-icons/react';
+import { reportsApi, downloadName, blobErrorMessage } from '@/lib/api';
+import { isDemoShop } from '@/lib/demo';
+import { shareOrDownload } from '@/lib/share';
 import { useShopsStore } from '@/store/shops';
 import { useTransaction } from '@/hooks/useTransactions';
 import Receipt from '@/components/receipts/Receipt';
@@ -10,6 +14,25 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const shop = useShopsStore((s) => s.activeShop());
   const { data: tx, isLoading, isError } = useTransaction(shop?.id ?? '', params.id);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState('');
+  // The PDF is made by the server; demo mode has none, so it keeps Print only.
+  const canShare = !!tx && !!shop && !isDemoShop(shop.id);
+
+  async function sharePdf() {
+    if (!tx || !shop) return;
+    setSharing(true);
+    setShareError('');
+    try {
+      const res = await reportsApi.generate('receipt', { shopId: shop.id, transactionId: tx.id });
+      const kind = tx.type === 'receivable' ? 'Invoice' : 'Receipt';
+      await shareOrDownload(res.data, downloadName(res.headers, 'receipt.pdf'), `${kind} from ${shop.name}`);
+    } catch (err) {
+      setShareError(await blobErrorMessage(err, "Couldn't make the PDF. Check your connection and try again."));
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto print:overflow-visible">
@@ -21,15 +44,28 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
           <ArrowLeft size={18} />
           Back
         </button>
-        <button
-          onClick={() => window.print()}
-          disabled={!tx}
-          className="flex h-10 items-center gap-2 rounded-full bg-white/90 px-5 text-[15px] font-medium text-ink-950 transition hover:bg-white active:scale-[0.97] disabled:opacity-40"
-        >
-          <Printer size={18} />
-          Print
-        </button>
+        <div className="flex items-center gap-2">
+          {canShare && (
+            <button
+              onClick={sharePdf}
+              disabled={sharing}
+              className="flex h-10 items-center gap-2 rounded-full bg-white/[0.08] px-4 text-[15px] font-medium text-white/85 ring-1 ring-inset ring-white/[0.1] transition hover:bg-white/[0.14] active:scale-[0.97] disabled:opacity-50"
+            >
+              <ShareNetwork size={18} />
+              {sharing ? 'Preparing…' : 'Share PDF'}
+            </button>
+          )}
+          <button
+            onClick={() => window.print()}
+            disabled={!tx}
+            className="flex h-10 items-center gap-2 rounded-full bg-white/90 px-5 text-[15px] font-medium text-ink-950 transition hover:bg-white active:scale-[0.97] disabled:opacity-40"
+          >
+            <Printer size={18} />
+            Print
+          </button>
+        </div>
       </div>
+      {shareError && <p className="mx-auto w-full max-w-[360px] px-4 pb-3 text-[13px] text-white/60 print:hidden">{shareError}</p>}
 
       <div className="px-4 pb-10 print:p-0">
         {isLoading && <div className="flex justify-center py-16"><Spinner className="h-5 w-5 text-white/25" /></div>}

@@ -205,7 +205,7 @@ export default function MobileNav() {
                   active ? 'bg-white/[0.07] text-white' : 'text-white/60 hover:bg-white/[0.05] hover:text-white/90',
                 )}
               >
-                <span className="truncate">{formatDateTime(s.lastMessageAt)}</span>
+                <span className="truncate">{formatDateTime(s.lastMessageAt ?? s.createdAt)}</span>
               </button>
             );
           })}

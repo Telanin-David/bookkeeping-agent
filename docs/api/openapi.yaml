@@ -317,9 +317,11 @@ paths:
       tags: [shops]
       summary: Upload or replace the shop's receipt logo or signature
       description: |
-        Max 2 MB; PNG, JPEG or WebP. The client already converts the image to grayscale and scales it
+        Max 2 MB; PNG or JPEG (checked from the file's bytes, not its name or type) — the formats the
+        PDF generator can embed. The client already converts the image to a grayscale PNG and scales it
         to at most 600×300 px, because receipts are printed in black and white. The server stores the file
-        and sets `logoUrl` or `signatureUrl` to a URL the browser can load.
+        under a new random name on every upload and sets `logoUrl` or `signatureUrl` to
+        `/api/v1/files/branding/{key}` (public, cacheable forever); the replaced file is deleted.
       x-rateLimit: '20 requests per hour'
       requestBody:
         required: true
@@ -667,14 +669,17 @@ paths:
     post:
       tags: [reports]
       summary: Generate a receipt PDF for a transaction
-      x-rateLimit: '30 requests per minute'
+      description: |
+        An 80 mm-wide receipt (or invoice, for a credit sale) with the shop's logo and, on invoices,
+        signature. Sales and credit sales only; an expense or bill returns 422.
+      x-rateLimit: '30 requests per minute per user'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [transactionId]
+              required: [transactionId, shopId]
               properties:
                 transactionId:
                   type: string
@@ -701,6 +706,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -708,7 +715,11 @@ paths:
     post:
       tags: [reports]
       summary: Generate a credit (receivables) report PDF
-      x-rateLimit: '10 requests per minute'
+      description: |
+        Debts recorded in the date range that are still unpaid now: who owes the shop (by customer and
+        itemised, with days late) and the shop's unpaid bills. Paid debts are left out. The app records
+        no payment dates, so this is the current status of those debts, not a historical snapshot.
+      x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
         content:
@@ -734,7 +745,9 @@ paths:
     post:
       tags: [reports]
       summary: Generate a stock/inventory report PDF
-      x-rateLimit: '10 requests per minute'
+      description: |
+        Not available yet — returns 501 until stock tracking (products and quantities) exists.
+      x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
         content:
@@ -753,6 +766,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          description: Stock tracking isn't available yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -760,7 +781,12 @@ paths:
     post:
       tags: [reports]
       summary: Generate a Profit & Loss statement PDF
-      x-rateLimit: '10 requests per minute'
+      description: |
+        Accrual basis: every transaction counts on its own date, so a credit sale is income on the day
+        of the sale and a bill on credit is a cost on the day received. The PDF also shows how much of
+        each is still unpaid. A debt being paid later is recorded by setting its status to `settled`,
+        never as a new sale.
+      x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
         content:

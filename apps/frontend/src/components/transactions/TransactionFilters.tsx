@@ -1,5 +1,6 @@
 'use client';
 import type { TransactionType, TransactionStatus } from '@/types';
+import { typeLabel } from '@/lib/utils';
 
 interface Filters {
   type?: TransactionType;
@@ -15,6 +16,8 @@ interface TransactionFiltersProps {
 
 const TYPES: TransactionType[] = ['sale', 'expense', 'receivable', 'payable'];
 const STATUSES: TransactionStatus[] = ['pending', 'settled', 'overdue'];
+// Same words the transaction list shows.
+const STATUS_LABELS: Record<TransactionStatus, string> = { pending: 'Unpaid', settled: 'Paid', overdue: 'Overdue' };
 
 const selectCls = 'glass-input rounded-xl px-3 py-2 text-sm bg-transparent cursor-pointer';
 
@@ -27,7 +30,7 @@ export default function TransactionFilters({ value, onChange }: TransactionFilte
         className={selectCls}
       >
         <option value="" className="bg-ink-900">All types</option>
-        {TYPES.map((t) => <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>)}
+        {TYPES.map((t) => <option key={t} value={t} className="bg-ink-900">{typeLabel(t)}</option>)}
       </select>
 
       <select
@@ -36,7 +39,7 @@ export default function TransactionFilters({ value, onChange }: TransactionFilte
         className={selectCls}
       >
         <option value="" className="bg-ink-900">All statuses</option>
-        {STATUSES.map((s) => <option key={s} value={s} className="bg-ink-900 capitalize">{s}</option>)}
+        {STATUSES.map((s) => <option key={s} value={s} className="bg-ink-900">{STATUS_LABELS[s]}</option>)}
       </select>
 
       <input

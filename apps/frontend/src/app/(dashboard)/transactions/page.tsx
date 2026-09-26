@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useShopsStore } from '@/store/shops';
-import { useTransactions, useCreateTransaction } from '@/hooks/useTransactions';
+import { useTransactions, useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions';
 import PageWrapper from '@/components/layout/PageWrapper';
 import TransactionTable from '@/components/transactions/TransactionTable';
 import TransactionFilters from '@/components/transactions/TransactionFilters';
@@ -25,6 +25,19 @@ export default function TransactionsPage() {
 
   const { data, isLoading } = useTransactions(activeShop?.id ?? '', filters);
   const createTx = useCreateTransaction(activeShop?.id ?? '');
+  const updateTx = useUpdateTransaction(activeShop?.id ?? '');
+  const [markError, setMarkError] = useState('');
+
+  // A paid debt is marked settled — never recorded again as a new sale, which would
+  // count the same income twice.
+  async function markPaid(tx: Transaction) {
+    setMarkError('');
+    try {
+      await updateTx.mutateAsync({ id: tx.id, status: 'settled' });
+    } catch {
+      setMarkError("Couldn't mark that as paid. Check your connection and try again.");
+    }
+  }
 
   async function handleCreate(values: Omit<Transaction, 'id' | 'shopId' | 'userId' | 'aiCategorized' | 'createdAt' | 'updatedAt'>) {
     await createTx.mutateAsync(values);
@@ -41,7 +54,14 @@ export default function TransactionsPage() {
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-white/30"><Spinner className="h-4 w-4 text-white/20" /> Loading…</div>
         ) : (
-          <TransactionTable data={data?.data ?? []} />
+          <>
+            {markError && <p className="text-[13px] text-white/60">{markError}</p>}
+            <TransactionTable
+              data={data?.data ?? []}
+              onMarkPaid={markPaid}
+              markingPaidId={updateTx.isPending ? updateTx.variables?.id ?? null : null}
+            />
+          </>
         )}
       </div>
 

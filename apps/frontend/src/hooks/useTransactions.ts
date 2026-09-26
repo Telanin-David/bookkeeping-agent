@@ -1,7 +1,7 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { transactionsApi } from '@/lib/api';
-import { DEMO_TRANSACTIONS, findDemoTransaction, isDemoShop } from '@/lib/demo';
+import { DEMO_TRANSACTIONS, findDemoTransaction, isDemoShop, updateDemoTransaction } from '@/lib/demo';
 import type { PaginatedResponse, Transaction } from '@/types';
 
 function demoPage(params?: Parameters<typeof transactionsApi.list>[1]): PaginatedResponse<Transaction> {
@@ -43,9 +43,13 @@ export function useCreateTransaction(shopId: string) {
 export function useUpdateTransaction(shopId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: Partial<Transaction> & { id: string }) =>
-      transactionsApi.update(shopId, id, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions', shopId] }),
+    mutationFn: ({ id, ...body }: Partial<Transaction> & { id: string }) => isDemoShop(shopId)
+      ? Promise.resolve(updateDemoTransaction(id, body))
+      : transactionsApi.update(shopId, id, body).then((r) => r.data),
+    onSuccess: (tx) => {
+      qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['transaction', shopId, tx.id] });
+    },
   });
 }
 

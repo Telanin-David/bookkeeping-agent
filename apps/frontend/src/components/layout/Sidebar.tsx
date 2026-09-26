@@ -103,7 +103,7 @@ export default function Sidebar() {
                   active ? 'bg-white/[0.07] text-white/85' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70',
                 )}
               >
-                {formatDateTime(s.lastMessageAt)}
+                {formatDateTime(s.lastMessageAt ?? s.createdAt)}
               </button>
             );
           })}

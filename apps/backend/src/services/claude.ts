@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import * as db from './db';
+import { todayIso, addDays } from '../utils/dates';
 import { Transaction, TransactionType } from '../types';
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
@@ -32,6 +33,11 @@ After recording, confirm what was recorded in one short, natural sentence — do
 
 ## Answering questions about the shop's money
 Never add up or estimate amounts yourself. For "how much did I make/spend", "what's my biggest expense", or anything needing a real total, call get_spending_summary and report its numbers. For "who owes me", "did I sell to X", or finding a specific past transaction, call find_transactions.
+
+## When a debt is paid
+When the owner says a customer has paid money they owed ("Mama Nkechi has paid", "Musa paid me the 20k"), or that they have paid a supplier they owed, that is NOT a new sale or expense — the income or cost was already counted when the credit sale or bill was recorded, so recording it again would count it twice. Instead, call find_transactions with unpaidOnly set to locate the open debt, then call mark_debt_paid with its id.
+
+Only mark a debt paid when the payment covers the whole amount. If it is a part-payment, or you can't tell which debt they mean, don't guess: say part-payments can't be recorded yet (the debt stays open in full) or ask which debt they mean. If no matching unpaid debt exists, say so and ask whether they want to record it as a new sale instead.
 
 ## Receipts and invoices
 When the owner asks for a receipt or invoice ("give me a receipt for Mama Nkechi", "print an invoice for that credit sale"), first call find_transactions to locate the real transaction — never invent an id. Once you have identified the one transaction they mean, call show_receipt with its id, then briefly confirm what you're showing them.
@@ -67,7 +73,20 @@ const TOOLS: Anthropic.Tool[] = [
         counterparty: { type: 'string', description: 'Customer or supplier name to search for (partial match)' },
         description: { type: 'string', description: 'Keyword to search the item/description for' },
         type: { type: 'string', enum: [...TRANSACTION_TYPES] },
+        unpaidOnly: { type: 'boolean', description: 'Only debts not yet paid — use when looking for a debt someone has just paid' },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'mark_debt_paid',
+    description: 'Mark an unpaid receivable (a customer paid what they owed) or payable (the shop paid a supplier) as fully paid. Use instead of record_transaction when an existing debt is paid. Requires the debt’s real id from find_transactions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        transactionId: { type: 'string', description: 'The unpaid receivable or payable’s id, from a find_transactions result' },
+      },
+      required: ['transactionId'],
       additionalProperties: false,
     },
   },
@@ -113,11 +132,12 @@ export interface ClaudeChatResult {
 
 interface ToolState {
   createdTransactionIds: string[];
+  settledTransactionIds: string[];
   receiptTransactionId?: string;
 }
 
 function dynamicContext(ctx: ChatContext): string {
-  return `Shop: ${ctx.shopName} (${ctx.shopType})\nCurrency: ${ctx.currency}\nToday's date: ${new Date().toISOString().slice(0, 10)}`;
+  return `Shop: ${ctx.shopName} (${ctx.shopType})\nCurrency: ${ctx.currency}\nToday's date: ${todayIso()}`;
 }
 
 function isTransactionType(value: unknown): value is TransactionType {
@@ -156,7 +176,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         description,
         category,
         counterparty: typeof args['counterparty'] === 'string' ? args['counterparty'] : undefined,
-        date: typeof args['date'] === 'string' ? args['date'] : new Date().toISOString().slice(0, 10),
+        date: typeof args['date'] === 'string' ? args['date'] : todayIso(),
         dueDate: typeof args['dueDate'] === 'string' ? args['dueDate'] : undefined,
         aiCategorized,
       });
@@ -169,15 +189,30 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         counterparty: typeof args['counterparty'] === 'string' ? args['counterparty'] : undefined,
         description: typeof args['description'] === 'string' ? args['description'] : undefined,
         type: isTransactionType(args['type']) ? args['type'] : undefined,
+        unpaidOnly: args['unpaidOnly'] === true,
       });
       return { count: results.length, transactions: results };
     }
 
+    case 'mark_debt_paid': {
+      const transactionId = args['transactionId'];
+      if (typeof transactionId !== 'string') throw new Error('transactionId is required');
+      const tx = await db.markDebtPaid(transactionId, ctx.shopId, ctx.userId);
+      if (!tx) {
+        const existing = await db.findTransactionById(transactionId, ctx.shopId, ctx.userId);
+        if (!existing) throw new Error('No transaction with that id exists for this shop');
+        if (existing.status === 'settled') throw new Error('That debt is already marked as paid');
+        throw new Error('Only receivables and payables (debts) can be marked as paid');
+      }
+      state.settledTransactionIds.push(tx.id);
+      return { markedPaid: true, transaction: tx };
+    }
+
     case 'get_spending_summary': {
-      const to = typeof args['to'] === 'string' ? args['to'] : new Date().toISOString().slice(0, 10);
+      const to = typeof args['to'] === 'string' ? args['to'] : todayIso();
       const from = typeof args['from'] === 'string'
         ? args['from']
-        : new Date(new Date(to).getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
+        : addDays(to, -30);
       return db.getSpendingSummary(ctx.shopId, ctx.userId, from, to);
     }
 
@@ -197,7 +232,9 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
 
 export async function sendChatMessage(ctx: ChatContext, history: Anthropic.MessageParam[]): Promise<ClaudeChatResult> {
   const messages: Anthropic.MessageParam[] = [...history];
-  const state: ToolState = { createdTransactionIds: [] };
+  const state: ToolState = { createdTransactionIds: [], settledTransactionIds: [] };
+  // Every transaction this turn created or marked paid; the chat shows each one.
+  const touched = () => [...state.createdTransactionIds, ...state.settledTransactionIds];
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     let response: Anthropic.Message;
@@ -216,10 +253,14 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
     } catch (err) {
       // If a transaction was already saved this turn, surfacing an error would make the
       // owner resend and record it twice — report what was saved instead.
-      if (state.createdTransactionIds.length === 0) throw err;
+      if (touched().length === 0) throw err;
+      const n = touched().length;
+      const what = state.settledTransactionIds.length === 0
+        ? (n === 1 ? 'that transaction' : `${n} transactions`)
+        : (n === 1 ? 'that change' : `${n} changes`);
       return {
-        reply: `I saved ${state.createdTransactionIds.length === 1 ? 'that transaction' : `${state.createdTransactionIds.length} transactions`}, but couldn't finish my reply. Check your transactions list before sending it again.`,
-        extractedTransactionIds: state.createdTransactionIds,
+        reply: `I saved ${what}, but couldn't finish my reply. Check your transactions list before sending it again.`,
+        extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
       };
     }
@@ -227,7 +268,7 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
     if (response.stop_reason === 'refusal') {
       return {
         reply: "I couldn't help with that one — could you rephrase it?",
-        extractedTransactionIds: state.createdTransactionIds,
+        extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
       };
     }
@@ -242,7 +283,7 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
         .trim();
       return {
         reply: reply || "I'm not sure how to respond to that — could you say it differently?",
-        extractedTransactionIds: state.createdTransactionIds,
+        extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
       };
     }
@@ -268,7 +309,7 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
 
   return {
     reply: "That's a lot to work through in one go — could you break it into smaller messages?",
-    extractedTransactionIds: state.createdTransactionIds,
+    extractedTransactionIds: touched(),
     receiptTransactionId: state.receiptTransactionId,
   };
 }
