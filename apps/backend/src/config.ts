@@ -7,6 +7,25 @@ function required(name: string): string {
   return value;
 }
 
+const EXAMPLE_ACCESS_SECRET = 'change-me-to-a-long-random-string'; // the .env.example placeholder
+
+/**
+ * Anyone who knows this secret can forge an access token for any account, so production
+ * refuses to start with a short one or the placeholder from .env.example.
+ * Generate one with: openssl rand -base64 48
+ */
+function accessSecret(): string {
+  const secret = required('JWT_ACCESS_SECRET');
+  const production = (process.env['NODE_ENV'] ?? 'development') === 'production';
+  if (production && (secret.length < 32 || secret === EXAMPLE_ACCESS_SECRET)) {
+    throw new Error(
+      'JWT_ACCESS_SECRET is too weak for production: use at least 32 random characters ' +
+      '(generate one with: openssl rand -base64 48)',
+    );
+  }
+  return secret;
+}
+
 /** Parses durations like '30s', '15m', '12h' or '7d' into milliseconds. */
 function parseDuration(value: string): number {
   const match = /^(\d+)([smhd])$/.exec(value.trim());
@@ -33,7 +52,7 @@ export const config = {
   },
 
   jwt: {
-    accessSecret: required('JWT_ACCESS_SECRET'),
+    accessSecret: accessSecret(),
     accessExpiresIn: process.env['JWT_ACCESS_EXPIRES_IN'] ?? '15m',
     // Refresh tokens are opaque random strings stored hashed (not JWTs), so they need
     // no signing secret — only a lifetime.
