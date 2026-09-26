@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireShopOwnership } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import * as db from '../services/db';
 import { sendReportEmail } from '../services/email';
@@ -17,6 +17,10 @@ const dateRangeSchema = z.object({
   dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   sendEmail: z.boolean().default(false),
 });
+
+// Report routes take the shop in the body; without this, any signed-in user could
+// request (and have emailed to themselves) another owner's reports.
+const ownShop = requireShopOwnership((req) => req.body?.shopId);
 
 const receiptSchema = z.object({
   transactionId: z.string().uuid(),
@@ -49,7 +53,7 @@ router.post('/receipt', validate(receiptSchema), async (req: Request, res: Respo
   } catch (err) { next(err); }
 });
 
-router.post('/credit', validate(dateRangeSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/credit', validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { shopId, dateFrom, dateTo, sendEmail } = req.body;
     const user = await db.findUserById(req.user!.id);
@@ -60,7 +64,7 @@ router.post('/credit', validate(dateRangeSchema), async (req: Request, res: Resp
   } catch (err) { next(err); }
 });
 
-router.post('/stock', validate(dateRangeSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/stock', validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { shopId, dateFrom, dateTo, sendEmail } = req.body;
     const user = await db.findUserById(req.user!.id);
@@ -71,7 +75,7 @@ router.post('/stock', validate(dateRangeSchema), async (req: Request, res: Respo
   } catch (err) { next(err); }
 });
 
-router.post('/pl', validate(dateRangeSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/pl', validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { shopId, dateFrom, dateTo, sendEmail } = req.body;
     const user = await db.findUserById(req.user!.id);

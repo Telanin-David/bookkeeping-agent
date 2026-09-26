@@ -14,7 +14,10 @@ export function useShops() {
     queryFn: async () => {
       const data = await shopsApi.list();
       setShops(data);
-      if (!activeShopId && data.length > 0) setActiveShop(data[0].id);
+      // Also covers an active shop left over from a previous session on this device.
+      if (data.length > 0 && !data.some((s) => s.id === useShopsStore.getState().activeShopId)) {
+        setActiveShop(data[0].id);
+      }
       return data;
     },
     enabled: isAuthenticated && user?.id !== DEMO_USER_ID,

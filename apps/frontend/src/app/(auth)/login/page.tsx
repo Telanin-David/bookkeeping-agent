@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -23,7 +24,12 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [error, setError] = useState('');
   const router = useRouter();
-  const { setAuth } = useAuthStore();
+  const { setAuth, status, user } = useAuthStore();
+
+  // A device that's still signed in (restored on load) skips the login screen.
+  useEffect(() => {
+    if (status === 'authenticated' && user?.id !== DEMO_USER_ID) router.replace('/');
+  }, [status, user, router]);
   const { setShops } = useShopsStore();
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<Form>({
@@ -34,8 +40,11 @@ export default function LoginPage() {
     setError('');
     try {
       await login(email, password);
-    } catch {
-      setError('Invalid email or password.');
+    } catch (err) {
+      const status = isAxiosError(err) ? err.response?.status : undefined;
+      if (status === 401) setError('Invalid email or password.');
+      else if (status === 429) setError(isAxiosError(err) ? err.response?.data?.message : 'Too many attempts. Try again later.');
+      else setError("Couldn't log in. Check your connection and try again.");
     }
   }
 

@@ -36,3 +36,6 @@ Thumbs.db
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Local-driver file uploads (STORAGE_DRIVER=local)
+apps/backend/tmp/

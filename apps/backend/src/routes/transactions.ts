@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireShopOwnership } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
@@ -11,13 +11,7 @@ router.use(requireAuth);
 
 // Every route here is nested under /shops/:shopId — without this check, any signed-in
 // user could write transactions into someone else's shop just by knowing its id.
-router.use(async (req: Request, _res: Response, next: NextFunction) => {
-  try {
-    const shop = await db.findShopById(req.params['shopId']!, req.user!.id);
-    if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
-    next();
-  } catch (err) { next(err); }
-});
+router.use(requireShopOwnership((req) => req.params['shopId']));
 
 const createSchema = z.object({
   type: z.enum(['sale', 'expense', 'receivable', 'payable']),

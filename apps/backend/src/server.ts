@@ -16,6 +16,7 @@ import alertRoutes       from './routes/alerts';
 import importRoutes      from './routes/imports';
 
 const app = express();
+if (config.trustProxyHops > 0) app.set('trust proxy', config.trustProxyHops);
 
 // ── Security middleware ───────────────────────────────────────
 app.use(helmet());

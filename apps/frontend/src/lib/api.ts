@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import type {
-  User, Shop, Transaction, ChatSession, ChatMessage,
+  RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -16,20 +16,39 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Refresh access token on 401, retry once
+// On a 401, get a fresh access token once and retry. Concurrent 401s share one refresh:
+// the server rotates the refresh token on every use, so a second parallel refresh would
+// present an already-used token and be refused.
+let refreshing: Promise<RefreshResult> | null = null;
+
+export function refreshSession(): Promise<RefreshResult> {
+  refreshing ??= api
+    .post<RefreshResult>('/api/v1/auth/refresh')
+    .then((r) => { setAccessToken(r.data.accessToken); return r.data; })
+    .finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+// Set by the auth store: called when the session can't be renewed, so the app signs out.
+let onSessionExpired: () => void = () => {};
+export function setSessionExpiredHandler(fn: () => void) { onSessionExpired = fn; }
+
 api.interceptors.response.use(
   (res) => res,
   async (err: AxiosError) => {
-    const original = err.config as typeof err.config & { _retry?: boolean };
-    if (err.response?.status === 401 && !original?._retry) {
+    const original = err.config as (typeof err.config & { _retry?: boolean }) | undefined;
+    // Auth endpoints answer 401 for bad credentials or a dead session — refreshing
+    // there would loop (the refresh call itself 401s and triggers another refresh).
+    const isAuthCall = original?.url?.startsWith('/api/v1/auth/');
+    if (err.response?.status === 401 && original && !original._retry && !isAuthCall) {
       original._retry = true;
       try {
-        const { data } = await api.post<{ accessToken: string }>('/api/v1/auth/refresh');
-        setAccessToken(data.accessToken);
-        original.headers!['Authorization'] = `Bearer ${data.accessToken}`;
+        const { accessToken } = await refreshSession();
+        original.headers!['Authorization'] = `Bearer ${accessToken}`;
         return api(original);
       } catch {
         clearAccessToken();
+        onSessionExpired();
       }
     }
     return Promise.reject(err);
@@ -50,8 +69,7 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     api.post<{ user: User; accessToken: string }>('/api/v1/auth/login', body),
 
-  refresh: () =>
-    api.post<{ accessToken: string }>('/api/v1/auth/refresh'),
+  refresh: () => refreshSession(),
 
   logout: () =>
     api.post('/api/v1/auth/logout'),

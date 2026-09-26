@@ -13,7 +13,7 @@ export async function findUserByEmail(email: string): Promise<(User & { password
             alert_quiet_start, alert_quiet_end,
             threshold_low_cash, threshold_high_payable, threshold_overdue_days,
             login_attempts, lockout_until, created_at, updated_at
-     FROM users WHERE email = $1`,
+     FROM users WHERE LOWER(email) = LOWER($1)`,
     [email],
   );
   return rows[0] ? mapUser(rows[0]) : null;
@@ -48,10 +48,83 @@ export async function createUser(data: {
   return mapUser(rows[0]);
 }
 
-export async function updateRefreshToken(userId: string, tokenHash: string | null, expiresAt: Date | null): Promise<void> {
+// ── Refresh tokens (one row per issued token; see migration 003) ──
+export async function createRefreshToken(data: {
+  userId: string; familyId: string; tokenHash: string; expiresAt: Date;
+}): Promise<void> {
   await db.query(
-    'UPDATE users SET refresh_token_hash = $1, refresh_token_expires_at = $2 WHERE id = $3',
-    [tokenHash, expiresAt, userId],
+    'INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)',
+    [data.userId, data.familyId, data.tokenHash, data.expiresAt],
+  );
+}
+
+export type RefreshRotation =
+  | { status: 'rotated'; userId: string }
+  // Unknown, expired, or revoked moments ago by a parallel refresh (e.g. two tabs
+  // reloading at once) — reject this request but leave the session alone.
+  | { status: 'invalid' }
+  // A token revoked a while ago was presented again: it was stolen or replayed.
+  // The whole family has been revoked, signing that device out.
+  | { status: 'reused' };
+
+/**
+ * Atomically swaps the refresh token with hash `oldHash` for a new one in the same
+ * family. The row lock serialises concurrent refreshes of the same token.
+ */
+export async function rotateRefreshToken(
+  oldHash: string, newHash: string, newExpiresAt: Date, reuseGraceMs: number,
+): Promise<RefreshRotation> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT user_id, family_id, expires_at, revoked_at
+       FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE`,
+      [oldHash],
+    );
+    const row = rows[0] as { user_id: string; family_id: string; expires_at: Date; revoked_at: Date | null } | undefined;
+
+    let result: RefreshRotation;
+    if (!row) {
+      result = { status: 'invalid' };
+    } else if (row.revoked_at) {
+      if (Date.now() - row.revoked_at.getTime() < reuseGraceMs) {
+        result = { status: 'invalid' };
+      } else {
+        await client.query(
+          'UPDATE refresh_tokens SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL',
+          [row.family_id],
+        );
+        result = { status: 'reused' };
+      }
+    } else if (row.expires_at.getTime() <= Date.now()) {
+      result = { status: 'invalid' };
+    } else {
+      await client.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1', [oldHash]);
+      await client.query(
+        'INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)',
+        [row.user_id, row.family_id, newHash, newExpiresAt],
+      );
+      result = { status: 'rotated', userId: row.user_id };
+    }
+
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Signs out the one device that holds this token (its whole family). */
+export async function revokeRefreshTokenFamily(tokenHash: string): Promise<void> {
+  await db.query(
+    `UPDATE refresh_tokens SET revoked_at = NOW()
+     WHERE revoked_at IS NULL
+       AND family_id = (SELECT family_id FROM refresh_tokens WHERE token_hash = $1)`,
+    [tokenHash],
   );
 }
 

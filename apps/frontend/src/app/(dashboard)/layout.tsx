@@ -10,12 +10,15 @@ import { useAlerts } from '@/hooks/useAlerts';
 import { useAlertsStore } from '@/store/alerts';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
+  const status = useAuthStore((s) => s.status);
+  const isAuthenticated = status === 'authenticated';
   const router = useRouter();
 
+  // Wait for the on-load session check: redirecting while it's 'loading' would send a
+  // signed-in owner to /login on every page reload.
   useEffect(() => {
-    if (!isAuthenticated) router.replace('/login');
-  }, [isAuthenticated, router]);
+    if (status === 'anonymous') router.replace('/login');
+  }, [status, router]);
 
   // A signed-in account with no shop hasn't finished onboarding yet.
   const { fetched } = useShops();

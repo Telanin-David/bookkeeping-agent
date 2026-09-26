@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireShopOwnership } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
@@ -31,11 +31,12 @@ const columnMappingSchema = z.object({
   category: z.string().optional(),
 });
 
-router.post('/upload', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+// shopId arrives as a multipart form field, so the ownership check runs after multer.
+// Without it, confirming the import would write transactions into another owner's shop.
+router.post('/upload', upload.single('file'), requireShopOwnership((req) => req.body?.shopId), async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.file) throw new AppError(400, 'BAD_REQUEST', 'No file provided or unsupported file type');
     const { shopId } = req.body;
-    if (!shopId) throw new AppError(400, 'BAD_REQUEST', 'shopId is required');
 
     const filename = `${Date.now()}-${req.file.originalname}`;
     const filePath = await saveFile(req.file.buffer, filename);

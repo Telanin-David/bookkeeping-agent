@@ -126,17 +126,25 @@ paths:
       tags: [auth]
       summary: Rotate access token using refresh token
       security: []
-      description: Reads the refresh token from the HttpOnly cookie set at login.
+      description: |
+        Reads the refresh token from the HttpOnly `refresh_token` cookie (Path=/api/v1/auth)
+        set at signup/login. Every call rotates it: the presented token is revoked and a new
+        one is set. Presenting an already-rotated token more than 30 seconds after its
+        rotation is treated as theft, and revokes that device's session. The app calls this
+        on every load to restore the session, so the response includes the user.
       responses:
         '200':
-          description: New access token issued
+          description: New access token issued, refresh cookie rotated
           content:
             application/json:
               schema:
                 type: object
+                required: [accessToken, user]
                 properties:
                   accessToken:
                     type: string
+                  user:
+                    $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -146,11 +154,14 @@ paths:
     post:
       tags: [auth]
       summary: Invalidate refresh token and clear cookie
+      security: []
+      description: |
+        Signs out this device only (other devices stay signed in). Identified by the refresh
+        cookie, not the access token, so it works after the access token has expired.
+        Always succeeds, even with no cookie.
       responses:
         '204':
           description: Logged out
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
 
