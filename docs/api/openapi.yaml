@@ -90,7 +90,7 @@ paths:
       tags: [auth]
       summary: Authenticate and receive tokens
       security: []
-      x-rateLimit: '5 attempts per 15 minutes per IP; 15-minute lockout on breach'
+      x-rateLimit: '5 failed attempts per account → 15-minute account lockout; 25 failed attempts per IP per 15 minutes (set high because mobile carriers share one IP across many phones)'
       requestBody:
         required: true
         content:

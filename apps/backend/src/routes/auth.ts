@@ -39,15 +39,19 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-// Limits from docs/api/openapi.yaml. Login counts failed attempts only, so owners
-// sharing a carrier IP aren't blocked by each other's successful logins.
+// Signup limit from docs/api/openapi.yaml. The login limit is per public IP, and
+// Nigerian mobile networks put many phones behind one IP (carrier-grade NAT), so it is
+// set well above one person's typos: it stops mass guessing from one network while
+// strangers sharing that IP don't lock each other out. Guessing a single account is
+// stopped by the per-account lockout (5 wrong passwords → 15 minutes), which doesn't
+// depend on IP. Only failed attempts count.
 const signupLimiter = rateLimit({
   windowMs: 60 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false,
   message: { error: 'TOO_MANY_REQUESTS', message: 'Too many sign-ups from this network. Try again later.' },
 });
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60_000, limit: 5, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false,
-  message: { error: 'TOO_MANY_REQUESTS', message: 'Too many failed logins. Try again in 15 minutes.' },
+  windowMs: 15 * 60_000, limit: 25, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'TOO_MANY_REQUESTS', message: 'Too many failed logins from this network. Try again in 15 minutes.' },
 });
 
 router.post('/signup', signupLimiter, validate(signupSchema), async (req: Request, res: Response, next: NextFunction) => {
@@ -59,8 +63,8 @@ router.post('/signup', signupLimiter, validate(signupSchema), async (req: Reques
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await db.createUser({ name, email, phone, passwordHash });
 
-    await startSession(res, user.id);
-    res.status(201).json({ accessToken: signAccessToken(user.id, user.email), user: publicUser(user) });
+    const sessionId = await startSession(res, user.id);
+    res.status(201).json({ accessToken: signAccessToken(user.id, user.email, sessionId), user: publicUser(user) });
   } catch (err) {
     next(err);
   }
@@ -86,8 +90,8 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req: Request, 
     }
 
     await db.resetLoginAttempts(user.email);
-    await startSession(res, user.id);
-    res.json({ accessToken: signAccessToken(user.id, user.email), user: publicUser(user) });
+    const sessionId = await startSession(res, user.id);
+    res.json({ accessToken: signAccessToken(user.id, user.email, sessionId), user: publicUser(user) });
   } catch (err) {
     next(err);
   }
@@ -112,7 +116,7 @@ router.post('/refresh', async (req: Request, res: Response, next: NextFunction) 
     if (!user) throw new AppError(401, 'UNAUTHORIZED', 'User not found');
 
     setRefreshCookie(res, replacement.token);
-    res.json({ accessToken: signAccessToken(user.id, user.email), user: publicUser(user) });
+    res.json({ accessToken: signAccessToken(user.id, user.email, rotation.familyId), user: publicUser(user) });
   } catch (err) {
     next(err);
   }
@@ -132,8 +136,11 @@ router.post('/logout', async (req: Request, res: Response, next: NextFunction) =
 });
 
 // ── Helpers ──────────────────────────────────────────────────
-function signAccessToken(userId: string, email: string): string {
-  return jwt.sign({ sub: userId, email }, config.jwt.accessSecret, {
+// `sid` is the device's session (its refresh-token family). requireAuth checks it is still
+// active on every request, so signing a device out cuts off its access token immediately
+// rather than when the token expires.
+function signAccessToken(userId: string, email: string, sessionId: string): string {
+  return jwt.sign({ sub: userId, email, sid: sessionId }, config.jwt.accessSecret, {
     expiresIn: config.jwt.accessExpiresIn as jwt.SignOptions['expiresIn'],
   });
 }
@@ -148,11 +155,13 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-/** Starts a new token family — one per login, i.e. one per signed-in device. */
-async function startSession(res: Response, userId: string): Promise<void> {
+/** Starts a new token family — one per login, i.e. one per signed-in device. Returns its id. */
+async function startSession(res: Response, userId: string): Promise<string> {
   const { token, hash, expiresAt } = newRefreshToken();
-  await db.createRefreshToken({ userId, familyId: crypto.randomUUID(), tokenHash: hash, expiresAt });
+  const familyId = crypto.randomUUID();
+  await db.createRefreshToken({ userId, familyId, tokenHash: hash, expiresAt });
   setRefreshCookie(res, token);
+  return familyId;
 }
 
 function refreshCookieOptions(): CookieOptions {
