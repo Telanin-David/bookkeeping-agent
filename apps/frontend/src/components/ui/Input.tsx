@@ -4,10 +4,12 @@ import { cn } from '@/lib/utils';
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /** Guidance shown under the field until there's an error to show instead. */
+  hint?: string;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className, id, ...props }, ref) => (
+  ({ label, error, hint, className, id, ...props }, ref) => (
     <div className="flex flex-col gap-1.5">
       {label && (
         <label htmlFor={id} className="text-xs font-medium uppercase tracking-wide text-white/40">
@@ -24,7 +26,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         {...props}
       />
-      {error && <p className="text-xs text-white/45">{error}</p>}
+      {error
+        ? <p className="text-xs text-white/45">{error}</p>
+        : hint && <p className="text-xs text-white/30">{hint}</p>}
     </div>
   ),
 );

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +13,13 @@ const schema = z.object({
   name:     z.string().min(2),
   email:    z.string().email(),
   phone:    z.string().optional(),
-  password: z.string().min(8),
+  // Same rule the server enforces — checked here so the owner sees what's wrong.
+  password: z.string()
+    .min(8, 'Use at least 8 characters.')
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d])/,
+      'Include a capital letter, a small letter, a number and a symbol (e.g. !).',
+    ),
 });
 
 type Form = z.infer<typeof schema>;
@@ -29,8 +36,11 @@ export default function SignupPage() {
     setError('');
     try {
       await signup(name, email, password, phone);
-    } catch {
-      setError('Registration failed. Email may already be in use.');
+    } catch (err) {
+      const status = isAxiosError(err) ? err.response?.status : undefined;
+      if (status === 409) setError('An account with this email already exists. Try logging in.');
+      else if (status === 429) setError(isAxiosError(err) ? err.response?.data?.message : 'Too many attempts. Try again later.');
+      else setError("Couldn't create your account. Check your connection and try again.");
     }
   }
 
@@ -48,7 +58,7 @@ export default function SignupPage() {
           <Input id="name"     label="Full name"              error={errors.name?.message}     {...register('name')} />
           <Input id="email"    label="Email"  type="email"    error={errors.email?.message}    {...register('email')} />
           <Input id="phone"    label="Phone (optional)"       error={errors.phone?.message}    {...register('phone')} />
-          <Input id="password" label="Password (min 8 chars)" type="password" error={errors.password?.message} {...register('password')} />
+          <Input id="password" label="Password" hint="At least 8 characters, with a capital letter, a number and a symbol." type="password" error={errors.password?.message} {...register('password')} />
           {error && <p className="text-xs text-white/50">{error}</p>}
           <Button type="submit" className="w-full" loading={isSubmitting}>Create account</Button>
         </form>

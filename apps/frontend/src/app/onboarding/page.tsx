@@ -25,7 +25,7 @@ const primaryBtn =
 export default function OnboardingPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, status, user } = useAuthStore();
   const { shops, setShops, setActiveShop } = useShopsStore();
   const isDemo = user?.id === DEMO_USER_ID;
 
@@ -39,8 +39,8 @@ export default function OnboardingPage() {
   const [error, setError]       = useState('');
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace('/login');
-  }, [isAuthenticated, router]);
+    if (status === 'anonymous') router.replace('/login');
+  }, [status, router]);
 
   async function createShop(e: FormEvent) {
     e.preventDefault();

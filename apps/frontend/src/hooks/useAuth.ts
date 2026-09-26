@@ -20,9 +20,11 @@ export function useAuth() {
   }
 
   async function logout() {
+    // Sign out locally even if the server call fails (e.g. offline) — the device must
+    // not stay signed in because the network dropped.
     await authApi.logout().catch(() => {});
     clearAuth();
-    router.push('/login');
+    router.replace('/login');
   }
 
   return { user, isAuthenticated, login, signup, logout };

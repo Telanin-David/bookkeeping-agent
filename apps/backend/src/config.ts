@@ -7,6 +7,14 @@ function required(name: string): string {
   return value;
 }
 
+/** Parses durations like '30s', '15m', '12h' or '7d' into milliseconds. */
+function parseDuration(value: string): number {
+  const match = /^(\d+)([smhd])$/.exec(value.trim());
+  if (!match) throw new Error(`Invalid duration: ${value} (expected e.g. 15m, 12h, 7d)`);
+  const unitMs = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 's' | 'm' | 'h' | 'd'];
+  return parseInt(match[1]!, 10) * unitMs;
+}
+
 export const config = {
   port: parseInt(process.env['PORT'] ?? '4000', 10),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
@@ -18,9 +26,10 @@ export const config = {
 
   jwt: {
     accessSecret: required('JWT_ACCESS_SECRET'),
-    refreshSecret: required('JWT_REFRESH_SECRET'),
     accessExpiresIn: process.env['JWT_ACCESS_EXPIRES_IN'] ?? '15m',
-    refreshExpiresIn: process.env['JWT_REFRESH_EXPIRES_IN'] ?? '7d',
+    // Refresh tokens are opaque random strings stored hashed (not JWTs), so they need
+    // no signing secret — only a lifetime.
+    refreshTtlMs: parseDuration(process.env['JWT_REFRESH_EXPIRES_IN'] ?? '7d'),
   },
 
   anthropic: {

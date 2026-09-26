@@ -6,7 +6,7 @@
     "build": "tsc",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
     "start": "node dist/server.js",
-    "migrate": "psql $DATABASE_URL -f migrations/001_initial.sql && psql $DATABASE_URL -f migrations/002_chat_extraction.sql",
+    "migrate": "psql $DATABASE_URL -f migrations/001_initial.sql && psql $DATABASE_URL -f migrations/002_chat_extraction.sql && psql $DATABASE_URL -f migrations/003_refresh_tokens.sql",
     "seed": "psql $DATABASE_URL -f seed.sql",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",

@@ -5,6 +5,12 @@ export interface User {
   phone?: string;
 }
 
+/** POST /auth/refresh — a new access token and who it belongs to. */
+export interface RefreshResult {
+  accessToken: string;
+  user: User;
+}
+
 export interface Shop {
   id: string;
   ownerId: string;
