@@ -14,6 +14,7 @@
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
+| 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -194,6 +195,40 @@
   - **Usage log:** every owner message logs one line: `chat usage shop=… model=… calls=… input=… cache_write=… cache_read=… output=… cost_usd=…`. Read real costs off it during the live test.
   - **History bug fixed:** the assistant was sent the *first* 30 messages of a chat, not the newest 30, so from the 31st message on it never saw what the owner had just typed. It now gets the newest 30, starting with an owner message. Checked against a local stand-in for the API: at message 20 of 20 (40 stored), the assistant sees message 20 last; the old query stopped at the 15th reply.
 
+- **Business dashboard** (owner's request, before Deliverable 10; migration `009_business_dashboard.sql`; built on `feat/chat-model-haiku`, so that merges first):
+  - **Who can open it:** accounts with `users.is_admin`. It's set on the server only, never from the app: `npm run make-admin -- someone@example.com` (add `--remove` to take it away). In production, where there is no ts-node: `node dist/scripts/makeAdmin.js someone@example.com`. Admins see "Business" in the sidebar and "Business dashboard" in the phone menu.
+  - **Invisible to everyone else** (owner's request): owners shouldn't know it exists.
+    - The page `/admin` shows the same full-page "This page doesn't exist" as any wrong address, signed in or out (the layout throws it, so it doesn't appear inside the app's menus; signed out, it's not a redirect to log in).
+    - `/api/v1/admin/*` answers non-admins, and requests with no or a forged sign-in, with the same 404 as a path that isn't there. An expired sign-in still gets 401, so an admin's app can refresh it; that only tells someone already signed in that the path needs a sign-in.
+    - `isAdmin` is only in the sign-up/login/refresh response for admins.
+    - Still true: the link's label and address are in the app's code, like every page's, so someone who reads the JavaScript could find the word. It gives them nothing: the server checks every request. A separate admin site would remove even that; not worth it now.
+    - New: a "page not found" page in the app's style for every wrong address (it was Next.js's white default).
+  - **What it shows (last 30 days, Lagos days):**
+    - AI spending: today, this month so far, this month at this pace, per message, per owner who chatted, a bar per day (hover or tap for the numbers, or read it as a table), and how often the assistant couldn't answer.
+    - Owners: signed up, email confirmed, used the app today, this week and in 30 days.
+    - Accuracy: of the transactions the assistant recorded, how many an owner later changed or deleted. Under 1 in 20 is the target; above it, try a stronger model. It's a rough measure: some fixes are owners changing their minds.
+    - Coming back: of owners who signed up at least 1, 2 or 4 weeks ago, how many opened the app again at least that long after.
+    - Alert emails sent and failed.
+    - A list of every owner, most AI spending first: signed up, last used, days used, messages, AI cost, and how many of their assistant records they fixed.
+  - **Privacy:** counts and costs only. The dashboard never reads a shop's amounts, customers or descriptions (the end-to-end check searches the responses for them).
+  - **Admins are left out** of the owner, activity, coming-back and accuracy numbers, so your own testing doesn't skew them. AI spending includes everyone, since it's the bill.
+  - **New data:**
+    - `ai_usage`: one row per owner chat message: model, calls, tokens, estimated cost, how many transactions it recorded, and whether it failed. The chat saves it even when the reply fails; if saving fails, the owner still gets their reply.
+    - `user_active_days`: a user is marked active once a day, on their first signed-in request (kept in memory after that, so it costs one write per user per day). The migration fills it from existing sign-ins, chats and transactions.
+    - `transactions.source`: 'chat' for anything the assistant recorded, 'app' otherwise.
+    - `ai_corrections`: an owner edited what the assistant filled in (amount, type, date, who, what, category) or deleted the transaction. Marking paid doesn't count. It keeps no amounts, and survives the transaction's deletion.
+  - **Limits:** the queries scan the tables directly, which is fine for hundreds of owners. Past that they will need summary tables. The user list shows the top 200. The migration's backfill uses Lagos time.
+  - **Checked:** 9 new backend unit tests (usage rows, activity once a day, the admin gate answering like a missing path); 28 end-to-end checks against a local stand-in for the AI (make-admin, 404 for everyone but the admin, costs, messages, failures, accuracy with edits, deletes and form sales, coming back, the user list, and nothing private in the responses); 11 browser checks on desktop and phone with a made-up 10-owner trial; 11 more that an owner and a signed-out visitor see exactly the same page at `/admin` as at a made-up address, that the API answers them like a missing path, and that the admin's dashboard survives an expired sign-in.
+  - **Merge note:** migration 009 skips 008, which is on the unmerged D9 branch. Whichever merges second has to keep both in `npm run migrate`.
+
+- **Daily message limit** (owner's decision; on `feat/business-dashboard`):
+  - Each owner can send the assistant **20 messages a day** (`CHAT_DAILY_LIMIT` in the server's `.env`; 0 turns it off). It resets at midnight Lagos time.
+  - It's per owner account, not per shop or chat. Only answered messages count: a reply that failed doesn't use one up. Admins are never limited.
+  - A message over the limit is refused (429 `DAILY_LIMIT`) before anything is saved, with a plain explanation. Two messages sent at the same instant can both get in at the limit; it's a cent, not worth a lock.
+  - The chat box shows "N of 20 messages left today" and a tip to put several sales in one message (the cheapest way to use the assistant; on screen it's free, in the assistant's replies it would be paid for every time). At the limit, the box switches off and points to the Add transaction form, which never uses the AI.
+  - The business dashboard shows how many times, and by how many owners, the limit was reached in the last 30 days, to tell whether 20 is right.
+  - Checked: 4 unit tests; 15 end-to-end checks with a limit of 3 (counting down, failed replies free, refusal and nothing saved, a new chat doesn't reset it, the form still works, other owners unaffected, the admin unlimited, the dashboard count); 6 browser checks on a phone.
+
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").
   - It runs on the production model, `claude-haiku-4-5`. Watch the `chat usage` log lines for the real cost per message.
@@ -204,6 +239,7 @@
   - Add the provider's SPF and DKIM records to the sending domain's DNS, or alerts land in spam.
   - Send a test by signing up with a real address.
   - Run `npm run migrate` (it includes migration 007).
+- **Upgrade Next.js before hosting.** `npm audit --omit=dev` flags the frontend's `next` 14.2.5 (critical; several of the advisories apply to self-hosted apps) and the `postcss` it brings. This was already true on `main`; it needs its own branch and a full frontend re-test.
 
 ## Voice input (owner's decision)
 - **For now:** owners use their phone keyboard's microphone to dictate into the chat box. The app's own mic button does nothing yet.

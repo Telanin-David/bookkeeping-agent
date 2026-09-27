@@ -12,6 +12,7 @@ import shopRoutes        from './routes/shops';
 import transactionRoutes from './routes/transactions';
 import stockRoutes       from './routes/stock';
 import chatRoutes        from './routes/chat';
+import adminRoutes       from './routes/admin';
 import reportRoutes      from './routes/reports';
 import alertRoutes       from './routes/alerts';
 import importRoutes      from './routes/imports';
@@ -49,6 +50,7 @@ app.use('/api/v1/alerts',                      alertRoutes);
 app.use('/api/v1/imports',                     importRoutes);
 app.use('/api/v1/files',                       fileRoutes);
 app.use('/api/v1/account',                     accountRoutes);
+app.use('/api/v1/admin',                       adminRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'NOT_FOUND', message: 'Endpoint not found' }));

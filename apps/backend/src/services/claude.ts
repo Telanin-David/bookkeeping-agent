@@ -287,6 +287,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         date: typeof args['date'] === 'string' ? args['date'] : todayIso(),
         dueDate: typeof args['dueDate'] === 'string' ? args['dueDate'] : undefined,
         aiCategorized,
+        source: 'chat' as const,
       };
       const tx = items.length ? await stock.createTransactionWithItems(data, items) : await db.createTransaction(data);
       state.createdTransactionIds.push(tx.id);
@@ -417,27 +418,40 @@ export function usageCost(model: string, u: Usage): number | null {
   return (u.input * inPrice + u.cacheWrite * inPrice * 1.25 + u.cacheRead * inPrice * 0.1 + u.output * outPrice) / 1e6;
 }
 
-/** One line per owner message, so real usage (and the monthly bill) can be read off the logs. */
-function logUsage(ctx: ChatContext, u: Usage): void {
-  if (u.calls === 0) return;
+/**
+ * One log line and one ai_usage row per owner message, for the business dashboard. A
+ * message the assistant couldn't answer is saved too (failed), even if it cost nothing.
+ */
+async function saveUsage(ctx: ChatContext, u: Usage, recorded: number, failed: boolean): Promise<void> {
   const cost = usageCost(CHAT_MODEL, u);
-  console.info(`chat usage shop=${ctx.shopId} model=${CHAT_MODEL} calls=${u.calls} input=${u.input} ` +
-    `cache_write=${u.cacheWrite} cache_read=${u.cacheRead} output=${u.output}` +
-    (cost === null ? '' : ` cost_usd=${cost.toFixed(5)}`));
+  if (u.calls > 0) {
+    console.info(`chat usage shop=${ctx.shopId} model=${CHAT_MODEL} calls=${u.calls} input=${u.input} ` +
+      `cache_write=${u.cacheWrite} cache_read=${u.cacheRead} output=${u.output}` +
+      (cost === null ? '' : ` cost_usd=${cost.toFixed(5)}`));
+  }
+  try {
+    await db.recordAiUsage({ userId: ctx.userId, shopId: ctx.shopId, model: CHAT_MODEL, ...u, costUsd: cost, recorded, failed });
+  } catch (err) {
+    // The owner's reply matters more than the dashboard's numbers.
+    console.error('Could not save AI usage:', err instanceof Error ? err.message : err);
+  }
 }
 
 export async function sendChatMessage(ctx: ChatContext, history: Anthropic.MessageParam[]): Promise<ClaudeChatResult> {
   const usage: Usage = { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+  const state: ToolState = { createdTransactionIds: [], paidDebtIds: [] };
+  let failed = true;
   try {
-    return await chatLoop(ctx, history, usage);
+    const result = await chatLoop(ctx, history, usage, state);
+    failed = false;
+    return result;
   } finally {
-    logUsage(ctx, usage);
+    await saveUsage(ctx, usage, state.createdTransactionIds.length, failed);
   }
 }
 
-async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usage: Usage): Promise<ClaudeChatResult> {
+async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usage: Usage, state: ToolState): Promise<ClaudeChatResult> {
   const messages: Anthropic.MessageParam[] = [...history];
-  const state: ToolState = { createdTransactionIds: [], paidDebtIds: [] };
   // Every transaction this turn created or marked paid; the chat shows each one.
   const touched = () => [...new Set([...state.createdTransactionIds, ...state.paidDebtIds])];
 

@@ -8,7 +8,7 @@ import {
 // ── Users ─────────────────────────────────────────────────────
 export async function findUserByEmail(email: string): Promise<(User & { passwordHash: string; loginAttempts: number; lockoutUntil: Date | null }) | null> {
   const { rows } = await db.query(
-    `SELECT id, name, email, phone, password_hash, email_verified,
+    `SELECT id, name, email, phone, password_hash, email_verified, is_admin,
             alert_email, alert_sms, alert_whatsapp,
             alert_quiet_start, alert_quiet_end,
             threshold_low_cash, threshold_high_payable, threshold_overdue_days,
@@ -21,7 +21,7 @@ export async function findUserByEmail(email: string): Promise<(User & { password
 
 export async function findUserById(id: string): Promise<User | null> {
   const { rows } = await db.query(
-    `SELECT id, name, email, phone, email_verified,
+    `SELECT id, name, email, phone, email_verified, is_admin,
             alert_email, alert_sms, alert_whatsapp,
             alert_quiet_start, alert_quiet_end,
             threshold_low_cash, threshold_high_payable, threshold_overdue_days,
@@ -38,7 +38,7 @@ export async function createUser(data: {
   const { rows } = await db.query(
     `INSERT INTO users (name, email, phone, password_hash)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, name, email, phone, email_verified,
+     RETURNING id, name, email, phone, email_verified, is_admin,
                alert_email, alert_sms, alert_whatsapp,
                alert_quiet_start, alert_quiet_end,
                threshold_low_cash, threshold_high_payable, threshold_overdue_days,
@@ -276,6 +276,8 @@ export type NewTransaction = {
   currency?: string; description?: string; category?: string;
   counterparty?: string; date: string; dueDate?: string; aiCategorized?: boolean;
   status?: TransactionStatus;
+  /** 'chat' when the assistant recorded it; the dashboard measures how often owners fix those. */
+  source?: 'app' | 'chat';
 };
 
 export async function createTransaction(data: NewTransaction, client: Queryable = db): Promise<Transaction> {
@@ -284,11 +286,11 @@ export async function createTransaction(data: NewTransaction, client: Queryable 
   const status = data.status ?? (data.type === 'sale' || data.type === 'expense' ? 'settled' : 'pending');
   const { rows } = await client.query(
     `INSERT INTO transactions
-       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status, source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
     [data.shopId, data.userId, data.type, data.amount, data.currency ?? 'NGN',
      data.description ?? null, data.category ?? null, data.counterparty ?? null,
-     data.date, data.dueDate ?? null, data.aiCategorized ?? false, status],
+     data.date, data.dueDate ?? null, data.aiCategorized ?? false, status, data.source ?? 'app'],
   );
   return mapTransaction(rows[0]);
 }
@@ -674,6 +676,52 @@ export async function listRecentChatMessages(sessionId: string, limit: number): 
   return rows.map(mapMessage);
 }
 
+// ── Business dashboard data ───────────────────────────────────
+export interface AiUsageRow {
+  userId: string; shopId: string; model: string; calls: number;
+  input: number; cacheWrite: number; cacheRead: number; output: number;
+  costUsd: number | null; recorded: number; failed: boolean;
+}
+
+export async function recordAiUsage(u: AiUsageRow): Promise<void> {
+  await db.query(
+    `INSERT INTO ai_usage (user_id, shop_id, model, calls, input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, cost_usd, recorded, failed)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [u.userId, u.shopId, u.model, u.calls, u.input, u.cacheWrite, u.cacheRead, u.output, u.costUsd, u.recorded, u.failed],
+  );
+}
+
+/** Notes that the owner edited or deleted a transaction the assistant recorded (no-op for any other). */
+export async function noteAiCorrection(transactionId: string, shopId: string, userId: string, kind: 'edited' | 'deleted'): Promise<void> {
+  await db.query(
+    `INSERT INTO ai_corrections (transaction_id, user_id, kind)
+     SELECT id, user_id, $4 FROM transactions WHERE id = $1 AND shop_id = $2 AND user_id = $3 AND source = 'chat'`,
+    [transactionId, shopId, userId, kind],
+  );
+}
+
+/** Records that the owner used the app on `day` (a Lagos date). Repeat calls do nothing. */
+export async function markActiveDay(userId: string, day: string): Promise<void> {
+  await db.query('INSERT INTO user_active_days (user_id, day) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, day]);
+}
+
+export async function isAdmin(userId: string): Promise<boolean> {
+  const { rows } = await db.query('SELECT is_admin FROM users WHERE id = $1', [userId]);
+  return rows[0]?.['is_admin'] === true;
+}
+
+/** Assistant replies this owner got on `day` (a business-time-zone date); failed ones don't count. */
+export async function countChatMessagesOn(userId: string, day: string, timeZone: string): Promise<number> {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS n FROM ai_usage
+      WHERE user_id = $1 AND NOT failed
+        AND created_at >= ($2::date)::timestamp AT TIME ZONE $3
+        AND created_at < ($2::date + 1)::timestamp AT TIME ZONE $3`,
+    [userId, day, timeZone],
+  );
+  return Number(rows[0]!['n']);
+}
+
 // ── Alerts ────────────────────────────────────────────────────
 export async function listAlerts(userId: string, opts: { shopId?: string; status?: AlertStatus; page: number; limit: number }): Promise<PaginatedResponse<Alert>> {
   const conditions = ['user_id = $1'];
@@ -742,6 +790,7 @@ function mapUser(row: Record<string, unknown>): User & { passwordHash: string; l
     email: row['email'] as string,
     phone: row['phone'] as string | undefined,
     emailVerified: row['email_verified'] as boolean,
+    isAdmin: row['is_admin'] as boolean,
     alertEmail: row['alert_email'] as boolean,
     alertSms: row['alert_sms'] as boolean,
     alertWhatsapp: row['alert_whatsapp'] as boolean,

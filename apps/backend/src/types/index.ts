@@ -15,6 +15,8 @@ export interface User {
   email: string;
   phone?: string;
   emailVerified: boolean;
+  /** Can open the business dashboard. Set on the server only (npm run make-admin). */
+  isAdmin: boolean;
   alertEmail: boolean;
   alertSms: boolean;
   alertWhatsapp: boolean;

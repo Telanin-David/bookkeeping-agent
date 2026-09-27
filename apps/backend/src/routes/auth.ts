@@ -224,8 +224,12 @@ function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE, token, { ...refreshCookieOptions(), maxAge: config.jwt.refreshTtlMs });
 }
 
-function publicUser(user: { id: string; name: string; email: string; phone?: string; emailVerified: boolean }) {
-  return { id: user.id, name: user.name, email: user.email, phone: user.phone, emailVerified: user.emailVerified };
+function publicUser(user: { id: string; name: string; email: string; phone?: string; emailVerified: boolean; isAdmin: boolean }) {
+  // isAdmin is only sent to admins, so owners never see that such a thing exists.
+  return {
+    id: user.id, name: user.name, email: user.email, phone: user.phone, emailVerified: user.emailVerified,
+    ...(user.isAdmin ? { isAdmin: true } : {}),
+  };
 }
 
 export default router;

@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  AlertSettings, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AdminOverview, AdminUser, AlertSettings, DailyUsage, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -89,6 +89,12 @@ export const accountApi = {
 
   updateAlertSettings: (body: Partial<Pick<AlertSettings, 'emailAlerts' | 'quietStart' | 'quietEnd'>>) =>
     api.patch<AlertSettings>('/api/v1/account/alert-settings', body).then((r) => r.data),
+};
+
+// ── Business dashboard (admins only) ──────────────────────────
+export const adminApi = {
+  overview: () => api.get<AdminOverview>('/api/v1/admin/overview').then((r) => r.data),
+  users: () => api.get<{ data: AdminUser[]; total: number; limit: number }>('/api/v1/admin/users').then((r) => r.data),
 };
 
 // ── Shops ─────────────────────────────────────────────────────
@@ -209,8 +215,10 @@ export const chatApi = {
   listMessages: (sessionId: string) =>
     api.get<{ data: ChatMessage[] }>(`/api/v1/chat/sessions/${sessionId}/messages`).then((r) => r.data.data),
 
+  usage: () => api.get<DailyUsage>('/api/v1/chat/usage').then((r) => r.data),
+
   sendMessage: (sessionId: string, content: string) =>
-    api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>(
+    api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; dailyUsage: DailyUsage }>(
       `/api/v1/chat/sessions/${sessionId}/messages`,
       { content },
     ),

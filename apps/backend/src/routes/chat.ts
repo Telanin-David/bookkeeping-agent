@@ -6,6 +6,7 @@ import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import * as claudeService from '../services/claude';
+import { getDailyUsage, limitReachedMessage } from '../services/chatLimit';
 
 const router = Router();
 router.use(requireAuth);
@@ -26,6 +27,13 @@ router.get('/sessions', async (req: Request, res: Response, next: NextFunction) 
     const limit = Math.min(parseInt(req.query['limit'] as string ?? '20', 10), 50);
     const result = await db.listChatSessions(req.user!.id, req.query['shopId'] as string | undefined, page, limit);
     res.json(result);
+  } catch (err) { next(err); }
+});
+
+// How many messages the owner has left today, for the chat box.
+router.get('/usage', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(await getDailyUsage(req.user!.id));
   } catch (err) { next(err); }
 });
 
@@ -70,6 +78,13 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
 
     const shop = await db.findShopById(session.shopId, req.user!.id);
     if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
+
+    // Checked before anything is saved, so a refused message leaves no trace. Two messages
+    // sent at the same moment can both get in at the limit; that costs a cent, not worth a lock.
+    const usage = await getDailyUsage(req.user!.id);
+    if (usage.remaining === 0) {
+      throw new AppError(429, 'DAILY_LIMIT', limitReachedMessage(usage.limit!));
+    }
 
     const { content, type, mediaUrl } = req.body;
     const userMsg = await db.addChatMessage(session.id, 'user', content, type, mediaUrl);
@@ -117,6 +132,7 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
     res.json({
       userMessage: userMsg,
       assistantMessage: { ...assistantMsg, extractedTransactions },
+      dailyUsage: await getDailyUsage(req.user!.id),
     });
   } catch (err) { next(err); }
 });
