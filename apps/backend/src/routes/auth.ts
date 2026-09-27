@@ -9,7 +9,7 @@ import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import { requireAuth } from '../middleware/auth';
-import { sendVerificationEmail } from '../services/email';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email';
 
 const router = Router();
 
@@ -26,14 +26,16 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-a-real-password', 12);
 
 const email = z.string().trim().toLowerCase().email();
 
+const newPassword = z.string().min(8).max(200).regex(
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d])/,
+  'Password must contain uppercase, lowercase, digit, and special character',
+);
+
 const signupSchema = z.object({
   name: z.string().trim().min(2).max(100),
   email,
   phone: z.string().optional(),
-  password: z.string().min(8).regex(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d])/,
-    'Password must contain uppercase, lowercase, digit, and special character',
-  ),
+  password: newPassword,
 });
 
 const loginSchema = z.object({
@@ -182,6 +184,65 @@ router.post('/resend-verification', requireAuth, resendLimiter, async (req: Requ
     if (user.emailVerified) { res.json({ alreadyVerified: true }); return; }
     await sendVerification(user);
     res.json({ sent: true, email: user.email });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Forgot password ──────────────────────────────────────────
+// The link opens the app's /reset-password page, which posts the token and the new
+// password here. The request always gets the same answer, whether or not an account uses
+// that email, so the form can't be used to find out who has an account.
+const RESET_TTL_MS = 60 * 60_000;
+
+// Generous per network, like the login limit: many phones share one mobile-network IP.
+const forgotNetworkLimiter = rateLimit({
+  windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'TOO_MANY_REQUESTS', message: 'Too many requests from this network. Try again in 15 minutes.' },
+});
+// Per address, whether or not it has an account, so nobody can flood someone's inbox.
+const forgotAddressLimiter = rateLimit({
+  windowMs: 60 * 60_000, limit: 3, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => `reset:${String(req.body?.email ?? '')}`,
+  message: { error: 'TOO_MANY_REQUESTS', message: 'We’ve sent several links to that email already. Check the inbox and spam folder, or try again in an hour.' },
+});
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again in 15 minutes.' },
+});
+
+router.post('/forgot-password', forgotNetworkLimiter, validate(z.object({ email })), forgotAddressLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.findUserByEmail(req.body.email);
+    if (user) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      await db.createPasswordReset(user.id, user.email, hashToken(token), new Date(Date.now() + RESET_TTL_MS));
+      // Not awaited: waiting for the mail server would make known emails answer slower.
+      sendPasswordResetEmail(user.email, user.name, token)
+        .catch((err) => console.error('Password reset email failed:', err instanceof Error ? err.message : err));
+    }
+    res.json({ sent: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const resetSchema = z.object({ token: z.string().min(20).max(200), password: newPassword });
+
+router.post('/reset-password', resetLimiter, validate(resetSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const passwordHash = await bcrypt.hash(req.body.password, 12);
+    const result = await db.resetPassword(hashToken(req.body.token), passwordHash);
+    switch (result.status) {
+      case 'reset':
+        // Every device was signed out; this one's cookie is dead too, so drop it.
+        res.clearCookie(REFRESH_COOKIE, refreshCookieOptions());
+        res.json({ reset: true });
+        return;
+      case 'used': throw new AppError(400, 'BAD_REQUEST', 'This link has already been used. If you still can’t log in, ask for a new one.');
+      case 'expired': throw new AppError(400, 'BAD_REQUEST', 'This link has expired: they work for 1 hour. Ask for a new one.');
+      default: throw new AppError(400, 'BAD_REQUEST', 'This link isn’t valid. Ask for a new one.');
+    }
   } catch (err) {
     next(err);
   }

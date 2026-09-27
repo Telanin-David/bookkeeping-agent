@@ -63,13 +63,18 @@ export default function LoginPage() {
       <div className="glass-card relative w-full max-w-sm rounded-2xl p-8">
         {/* Wordmark */}
         <div className="mb-7">
-          <p className="text-lg font-bold tracking-tight text-white/85">Bookkeeping Agent</p>
+          <p className="text-lg font-bold tracking-tight text-white/85">Bookkeeping AI</p>
           <p className="mt-0.5 text-xs text-white/30 tracking-wide">Sign in to continue</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input id="email"    label="Email"    type="email"    error={errors.email?.message}    {...register('email')} />
-          <Input id="password" label="Password" type="password" error={errors.password?.message} {...register('password')} />
+          <div>
+            <Input id="password" label="Password" type="password" autoComplete="current-password" error={errors.password?.message} {...register('password')} />
+            <div className="mt-1.5 flex justify-end">
+              <Link href="/forgot-password" className="py-1 text-[13px] text-white/50 underline-offset-2 hover:text-white/85 hover:underline">Forgot password?</Link>
+            </div>
+          </div>
           {error && <p className="text-xs text-white/50">{error}</p>}
           <Button type="submit" className="w-full" loading={isSubmitting}>Sign in</Button>
         </form>

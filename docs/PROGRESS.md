@@ -257,6 +257,25 @@
     - All browser suites: login 11/11, payments 18/18, part-paid 5/5, stock 16/16, alerts 10/10, import 11/11, daily limit 6/6, business dashboard 11/11, hidden from owners 11/11. Selectors were updated where buttons moved on phones.
   - **Not changed:** how a date is written inside the date field follows the phone's own language setting (a Nigerian phone shows day/month/year; the test browser was set to US English).
 
+- **Forgot password** (`feat/forgot-password`; migration `010_password_reset.sql`):
+  - **Asking for a link:** "Forgot password?" on the sign-in page leads to `/forgot-password`, where the owner enters their email.
+    - The answer is always the same ("if an account uses that email, we've sent a link"), so the form can't reveal who has an account.
+    - The email is sent without waiting for it, so known emails don't answer slower.
+  - **The link** (`/reset-password?token=…`) works once, for 1 hour, and only for the address it was sent to. A newer link retires older ones. Only a hash of the token is stored.
+  - **Setting the password:** the page has one field with a Show/Hide button instead of a "confirm" box, and the rules shown up front. Saving it:
+    - signs out every device (someone else may have had the password);
+    - clears the lockout from wrong guesses;
+    - marks the email confirmed, since the owner proved they read it.
+
+    A used, expired or broken link says so, with "Get a new link".
+  - **Limits:** 30 requests per network per 15 minutes (generous, because phones share mobile-network IPs) and 3 per email address per hour, so nobody can flood an inbox. Checking links: 20 per network per 15 minutes.
+  - The sign-in and sign-up pages and the browser tab now say "Bookkeeping AI", like the rest of the app, not "Bookkeeping Agent".
+  - **Checked:**
+    - 8 unit tests.
+    - 22 end-to-end checks against the real database: the same answer for known and unknown emails; a link only for the known one; weak password refused; old password stops working and the new one works; devices signed out; email confirmed; a link works once; a newer link retires older ones; expired links; lockout lifted; the per-address limit, while other emails still work.
+    - 10 browser checks on a phone.
+    - The earlier login walkthrough, 11/11.
+
 - **Running costs, staff and profit** (owner's request; `feat/running-costs-profit`). The app now says whether the business is making money, and how it's going, in plain sentences. Everything about staff is optional and invisible until used.
   - **Why the old sum was wrong:** "income − all expenses" counted stock bought to resell as lost money. A shop that restocks ₦600,000 of rice and sells half of it that month isn't ₦300,000 down.
   - **Every expense and bill now says what it was for** (`transactions.cost_kind`, migration 011):
@@ -324,7 +343,7 @@
       | browser: stock | 16/16 |
       | browser: alerts | 10/10 |
       | browser: import | 11/11 |
-  - **Merge note:** migration 011 skips 010, which belongs to the unmerged forgot-password branch. Whichever merges second keeps both in `npm run migrate`, 010 before 011. Run `npm run migrate` on the server after merging.
+  - After merging, run `npm run migrate` on the server (it runs 010, then 011).
 
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").

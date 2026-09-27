@@ -195,6 +195,64 @@ paths:
         '400':
           description: Link invalid, expired or already used (plain-English message)
 
+  /auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Email a link to choose a new password
+      description: |
+        Always answers 200 {sent: true}, whether or not an account uses the email, so the form
+        can't reveal who has an account. If one does, a link to /reset-password?token=… is
+        emailed (not awaited, so known emails don't answer slower). It works once, for 1 hour,
+        and a newer link retires older ones. Limits: 30 requests per network per 15 minutes,
+        and 3 per email address per hour.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Same answer for every email
+          content:
+            application/json:
+              schema: { type: object, properties: { sent: { type: boolean, example: true } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { description: Too many requests for this network or this email }
+
+  /auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Set a new password with a link from the email
+      description: |
+        The password follows the sign-up rules. On success, every signed-in device is signed out,
+        the lockout from wrong guesses is cleared, other reset links stop working, the email
+        counts as confirmed, and this device's refresh cookie is cleared. A used, expired or
+        unknown link gets 400 with a plain explanation.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, minLength: 20, maxLength: 200 }
+                password: { type: string, minLength: 8, description: 'Upper and lower case, a digit and a symbol' }
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema: { type: object, properties: { reset: { type: boolean, example: true } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { description: Too many attempts }
+
   /auth/resend-verification:
     post:
       tags: [auth]

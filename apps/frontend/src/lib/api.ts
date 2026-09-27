@@ -78,6 +78,13 @@ export const authApi = {
   verifyEmail: (token: string) =>
     api.post<{ verified: true }>('/api/v1/auth/verify-email', { token }),
 
+  // Always answers the same, whether or not an account uses the email.
+  forgotPassword: (email: string) =>
+    api.post<{ sent: true }>('/api/v1/auth/forgot-password', { email }).then((r) => r.data),
+
+  resetPassword: (token: string, password: string) =>
+    api.post<{ reset: true }>('/api/v1/auth/reset-password', { token, password }).then((r) => r.data),
+
   resendVerification: () =>
     api.post<{ sent?: true; email?: string; alreadyVerified?: true }>('/api/v1/auth/resend-verification').then((r) => r.data),
 };
