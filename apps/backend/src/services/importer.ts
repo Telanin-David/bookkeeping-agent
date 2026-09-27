@@ -16,7 +16,12 @@ import type { ExcelImport, TransactionType } from '../types';
 const SAMPLE_ROWS = 5;
 const MAX_PROBLEMS_SHOWN = 100;
 
-const show = (c: Cell): string => (c === null ? '' : c instanceof Date ? c.toISOString().slice(0, 10) : String(c));
+/** Preview text. Excel date cells are shown day first, like dates typed into the sheet. */
+const show = (c: Cell): string => {
+  if (c === null) return '';
+  if (c instanceof Date) { const [y, m, d] = c.toISOString().slice(0, 10).split('-'); return `${d}/${m}/${y}`; }
+  return String(c);
+};
 
 export interface Preview {
   importId: string;

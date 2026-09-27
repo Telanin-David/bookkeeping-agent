@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   X, SquaresFour, ArrowsLeftRight, ChartBar, Bell,
-  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging,
+  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging, UploadSimple,
 } from '@phosphor-icons/react';
 import { MenuIcon } from '@/components/ui/icons';
 import { cn, formatDateTime } from '@/lib/utils';
@@ -21,6 +21,7 @@ const PAGES = [
   { href: '/stock',        label: 'Stock',        Icon: Package },
   { href: '/reports',      label: 'Reports',      Icon: ChartBar },
   { href: '/alerts',       label: 'Alerts',       Icon: Bell },
+  { href: '/imports',      label: 'Import',       Icon: UploadSimple },
 ];
 
 const circleBtn =
