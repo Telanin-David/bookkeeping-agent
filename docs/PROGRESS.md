@@ -15,6 +15,7 @@
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
 | 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
+| 9c | Running costs, staff & profit (owner's request) | ✅ Done | `feat/running-costs-profit` | merged to main (#30) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -274,6 +275,75 @@
     - 22 end-to-end checks against the real database: the same answer for known and unknown emails; a link only for the known one; weak password refused; old password stops working and the new one works; devices signed out; email confirmed; a link works once; a newer link retires older ones; expired links; lockout lifted; the per-address limit, while other emails still work.
     - 10 browser checks on a phone.
     - The earlier login walkthrough, 11/11.
+
+- **Running costs, staff and profit** (owner's request; `feat/running-costs-profit`). The app now says whether the business is making money, and how it's going, in plain sentences. Everything about staff is optional and invisible until used.
+  - **Why the old sum was wrong:** "income − all expenses" counted stock bought to resell as lost money. A shop that restocks ₦600,000 of rice and sells half of it that month isn't ₦300,000 down.
+  - **Every expense and bill now says what it was for** (`transactions.cost_kind`, migration 011):
+    - **Stock to resell:** always when products are put on the shelf with it.
+    - **Running the business:** rent, salaries, electricity, fuel, transport, phone, repairs…
+    - The form asks ("Kind of spending") and offers one-tap categories: Salaries, Rent, Electricity, Fuel & generator, Transport, Phone & data, Repairs.
+    - The assistant sets it on every expense (and asks when it can't tell).
+    - Imports guess from the words (stock, goods, inventory, restock…), otherwise running cost.
+    - Existing records were sorted the same way: 67 of 117 test-database costs came out as running, 50 as stock.
+    - In Transactions, every expense shows "Running cost ▾" or "Stock ▾"; tapping it switches the kind. There was no way to edit a transaction before, and this is the one field profit depends on. A purchase that put products on the shelf can't be switched to a running cost.
+  - **Profit page** (`/profit`, in the menu):
+    - Month by month, back through past months: "Profit so far".
+    - **"How it's going":** short sentences, only the ones with something to say:
+      - better or worse than last month at the same point;
+      - how much of every ₦1,000 of sales is kept;
+      - the biggest running cost;
+      - a running cost that has shot up (only one that existed last month, so a once-a-month bill paid on a different day isn't flagged);
+      - stock bought but still on the shelf;
+      - salaries still to pay and what profit would be after them;
+      - a nudge to record running costs when there are sales and none at all.
+    - **"How it's worked out":** sales, less goods or stock, less running costs by kind, then profit.
+    - No AI is involved, so it costs nothing to open.
+  - **Two ways of counting, and the page says which:**
+    - **On what was sold:** sales − (quantity sold × each product's cost price) − running costs. Used when at least 90% of sales were recorded with products that have cost prices. The rest is costed at the same ratio, and the page says so.
+    - **Otherwise sales − all spending,** with a note that stock on the shelf is counted as a cost and how to get the better figure.
+    - A shop that doesn't sell goods has no stock bought, so both come to the same thing.
+  - **Dashboard:** a "Profit this month" card with the top line of feedback, and "Sales this month". This replaces "Recent income/expenses", which only added up the last five transactions.
+  - **Profit & Loss PDF:** the same figures and method as the page, with running costs and stock bought listed separately.
+  - **Assistant:**
+    - `get_business_summary` answers "how is my business doing?" from the same figures.
+    - `list_staff` lists the staff.
+    - `record_transaction` takes `costKind`, and `staff` for a salary.
+  - **Staff (optional):**
+    - A shop without staff sees one line on the Profit page: "Do you pay staff?".
+    - Once someone is added: name, job, monthly pay, pay day, and whether this month's salary is paid, due or next.
+    - **"Pay salaries":** everyone unpaid ticked at their usual pay, amounts editable, one expense each (running cost, category Salaries).
+    - **Pay-day reminder** (alert "Pay day", emailed like the others): from the day before the pay day until their salary is recorded. A salary paid up to 7 days early counts.
+    - Someone who leaves goes off the list; their past salaries stay.
+  - **Limits, on purpose:**
+    - Cost prices are the products' current ones; there is no price history. Changing a cost price changes past months' figures.
+    - A salary paid more than about three weeks late can be taken as the next month's, costing one reminder.
+    - Last month's unpaid reminder closes when the next pay date's reminder starts.
+    - No recurring bills, payslips, PAYE or pension.
+  - **Checked:**
+    - 109 backend unit tests, including 12 new ones for feedback and pay dates, and 4 for the assistant's new tools.
+    - 44 end-to-end checks against Postgres:
+      - a services shop with no staff (no salary talk anywhere);
+      - a stock shop: profit on what was sold, then falling back under 90% and back over it, with the estimate checked to the kobo;
+      - the P&L PDF;
+      - staff: reminders on the day, none three days early, none without a pay day, one-tap pay, reminder closes and reopens when the salary is deleted;
+      - other owners locked out.
+    - 26 browser checks on a phone and desktop.
+    - Earlier suites still pass:
+
+      | Suite | Result |
+      |---|---|
+      | import | 38/38 |
+      | stock | 36/36 |
+      | payments | 26/26 |
+      | reports | 30/30 (label now "Loss" instead of "Net loss") |
+      | alerts with the worker and email | 31/31 |
+      | business dashboard | 0 failures |
+      | browser: payments | 18/18 |
+      | browser: part-paid | 5/5 |
+      | browser: stock | 16/16 |
+      | browser: alerts | 10/10 |
+      | browser: import | 11/11 |
+  - After merging, run `npm run migrate` on the server (it runs 010, then 011).
 
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").

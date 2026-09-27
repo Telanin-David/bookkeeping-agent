@@ -127,6 +127,10 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
         ...old, data.userMessage, data.assistantMessage,
       ]);
       qc.setQueryData<DailyUsage>(['chat-usage'], data.dailyUsage);
+      // The assistant may have recorded a sale, a payment or a stock change: other screens refetch when next shown.
+      for (const key of ['transactions', 'transaction', 'payments', 'profit', 'staff', 'products', 'movements', 'alerts']) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
     } catch (err) {
       setOptimistic((prev) => prev.filter((m) => m.id !== tempId));
       // The server may have saved the message before failing (e.g. assistant unavailable) —

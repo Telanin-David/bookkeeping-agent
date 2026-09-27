@@ -2,7 +2,7 @@ import { db } from '../config';
 import {
   User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, AlertHistory, ExcelImport, PaginatedResponse,
-  TransactionType, TransactionStatus, AlertStatus, ImportStatus, BrandingKind, DebtPayment,
+  TransactionType, TransactionStatus, AlertStatus, ImportStatus, BrandingKind, DebtPayment, CostKind,
 } from '../types';
 
 // ── Users ─────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ export async function setShopBranding(
 
 // ── Transactions ──────────────────────────────────────────────
 export async function listTransactions(shopId: string, userId: string, opts: {
-  type?: TransactionType; status?: TransactionStatus; category?: string;
+  type?: TransactionType; status?: TransactionStatus; category?: string; costKind?: CostKind;
   dateFrom?: string; dateTo?: string;
   page: number; limit: number;
 }): Promise<PaginatedResponse<Transaction>> {
@@ -248,6 +248,7 @@ export async function listTransactions(shopId: string, userId: string, opts: {
   if (opts.type)     { conditions.push(`type = $${i++}`);                    values.push(opts.type); }
   if (opts.status)   { conditions.push(`status = $${i++}`);                  values.push(opts.status); }
   if (opts.category) { conditions.push(`category ILIKE $${i++}`);            values.push(`%${opts.category}%`); }
+  if (opts.costKind) { conditions.push(`cost_kind = $${i++}`);               values.push(opts.costKind); }
   if (opts.dateFrom) { conditions.push(`date >= $${i++}`);                   values.push(opts.dateFrom); }
   if (opts.dateTo)   { conditions.push(`date <= $${i++}`);                   values.push(opts.dateTo); }
 
@@ -278,6 +279,9 @@ export type NewTransaction = {
   status?: TransactionStatus;
   /** 'chat' when the assistant recorded it; the dashboard measures how often owners fix those. */
   source?: 'app' | 'chat';
+  /** Expenses and bills: stock to resell or a running cost. The database makes an unsaid one 'running'. */
+  costKind?: CostKind;
+  staffId?: string;
 };
 
 export async function createTransaction(data: NewTransaction, client: Queryable = db): Promise<Transaction> {
@@ -286,18 +290,20 @@ export async function createTransaction(data: NewTransaction, client: Queryable 
   const status = data.status ?? (data.type === 'sale' || data.type === 'expense' ? 'settled' : 'pending');
   const { rows } = await client.query(
     `INSERT INTO transactions
-       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status, source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+       (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status, source,
+        cost_kind, staff_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
     [data.shopId, data.userId, data.type, data.amount, data.currency ?? 'NGN',
      data.description ?? null, data.category ?? null, data.counterparty ?? null,
-     data.date, data.dueDate ?? null, data.aiCategorized ?? false, status, data.source ?? 'app'],
+     data.date, data.dueDate ?? null, data.aiCategorized ?? false, status, data.source ?? 'app',
+     data.costKind ?? null, data.staffId ?? null],
   );
   return mapTransaction(rows[0]);
 }
 
 export async function updateTransaction(id: string, shopId: string, userId: string, data: {
   type?: TransactionType; amount?: number; description?: string; category?: string;
-  counterparty?: string; date?: string; dueDate?: string; status?: TransactionStatus;
+  counterparty?: string; date?: string; dueDate?: string; status?: TransactionStatus; costKind?: CostKind;
 }): Promise<Transaction | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -310,6 +316,7 @@ export async function updateTransaction(id: string, shopId: string, userId: stri
   if (data.date !== undefined)        { sets.push(`date = $${i++}`);         values.push(data.date); }
   if (data.dueDate !== undefined)     { sets.push(`due_date = $${i++}`);     values.push(data.dueDate); }
   if (data.status !== undefined)      { sets.push(`status = $${i++}`);       values.push(data.status); }
+  if (data.costKind !== undefined)    { sets.push(`cost_kind = $${i++}`);    values.push(data.costKind); }
   if (sets.length === 0) return findTransactionById(id, shopId, userId);
   values.push(id, shopId, userId);
   const { rowCount } = await db.query(
@@ -505,6 +512,8 @@ export async function getSpendingSummary(shopId: string, userId: string, from: s
 export interface CategoryLine {
   type: TransactionType;
   category: string;
+  /** Expenses and bills: goods to resell or a running cost. */
+  costKind?: CostKind;
   count: number;
   total: number;
   /** Part of `total` not yet settled — only meaningful for receivables/payables. */
@@ -518,7 +527,7 @@ export interface CategoryLine {
  */
 export async function getProfitAndLossLines(shopId: string, userId: string, from: string, to: string): Promise<CategoryLine[]> {
   const { rows } = await db.query(
-    `SELECT t.type,
+    `SELECT t.type, t.cost_kind,
             COALESCE(NULLIF(TRIM(t.category), ''), 'Uncategorised') AS category,
             COUNT(*) AS count,
             SUM(t.amount) AS total,
@@ -528,13 +537,14 @@ export async function getProfitAndLossLines(shopId: string, userId: string, from
        SELECT transaction_id, SUM(amount) AS paid FROM debt_payments WHERE paid_on <= $4 GROUP BY transaction_id
      ) p ON p.transaction_id = t.id
      WHERE t.shop_id = $1 AND t.user_id = $2 AND t.date BETWEEN $3 AND $4
-     GROUP BY 1, 2
+     GROUP BY 1, 2, 3
      ORDER BY 1, SUM(t.amount) DESC`,
     [shopId, userId, from, to],
   );
   return rows.map((r) => ({
     type: r['type'] as TransactionType,
     category: r['category'] as string,
+    ...(r['cost_kind'] ? { costKind: r['cost_kind'] as CostKind } : {}),
     count: parseInt(r['count'] as string, 10),
     total: parseFloat(r['total'] as string),
     unpaid: parseFloat(r['unpaid'] as string),
@@ -857,6 +867,8 @@ function mapTransaction(row: Record<string, unknown>): Transaction {
     ...paidAndBalance(row),
     aiCategorized: row['ai_categorized'] as boolean,
     importId: row['import_id'] as string | undefined,
+    ...(row['cost_kind'] ? { costKind: row['cost_kind'] as CostKind } : {}),
+    ...(row['staff_id'] ? { staffId: row['staff_id'] as string } : {}),
     createdAt: row['created_at'] as Date,
     updatedAt: row['updated_at'] as Date,
   };

@@ -9,7 +9,7 @@ import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import FormActions from '@/components/ui/FormActions';
 import type { TransactionItemInput } from '@/types';
-import { typeLabel, todayInLagos } from '@/lib/utils';
+import { cn, typeLabel, todayInLagos } from '@/lib/utils';
 import { useProducts } from '@/hooks/useStock';
 import { useShopsStore } from '@/store/shops';
 import { formatQuantity, quantityText } from '@/lib/quantity';
@@ -28,7 +28,11 @@ const schema = z.object({
   dueDate:      optionalText,
   status:       z.enum(['pending', 'settled', 'overdue']).default('pending'),
   currency:     z.string().default('NGN'),
+  costKind:     z.enum(['stock', 'running']).optional(),
 });
+
+// Everyday running costs, one tap each. Anything else can be typed.
+export const RUNNING_COST_CATEGORIES = ['Salaries', 'Rent', 'Electricity', 'Fuel & generator', 'Transport', 'Phone & data', 'Repairs'];
 
 type FormValues = z.infer<typeof schema>;
 type ItemRow = { productId: string; quantity: string };
@@ -51,7 +55,10 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
   const { data: products = [] } = useProducts(shopId);
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [itemError, setItemError] = useState('');
+  const [kindError, setKindError] = useState('');
   const type = watch('type');
+  const costKind = watch('costKind');
+  const category = watch('category');
   const isSale = type === 'sale' || type === 'receivable';
   const isDebt = type === 'receivable' || type === 'payable';
   // A cash sale or expense has no due date; drop one left over from switching the type.
@@ -85,8 +92,20 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
       setItemError('Pick a product and how many for each line, or remove the line.');
       return;
     }
-    await onSubmit({ ...values, items: filled.length ? filled.map((r) => ({ productId: r.productId, quantity: Number(r.quantity) })) : undefined });
+    // Profit depends on it: goods to resell come back as sales, rent doesn't.
+    const kind = isSale ? undefined : filled.length ? 'stock' : values.costKind;
+    if (!isSale && !kind) {
+      setKindError('Choose running the business or stock to resell.');
+      return;
+    }
+    await onSubmit({
+      ...values,
+      costKind: kind,
+      items: filled.length ? filled.map((r) => ({ productId: r.productId, quantity: Number(r.quantity) })) : undefined,
+    });
   }
+
+  const boughtStock = !isSale && rows.some((r) => r.productId);
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
@@ -141,9 +160,52 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
         </div>
       )}
 
-      <Input id="description"  label={isSale ? 'What was sold' : 'What it was for'} error={errors.description?.message} {...register('description')} />
+      {!isSale && (
+        <fieldset className="space-y-2">
+          <legend className="mb-1.5 text-xs font-medium uppercase tracking-wide text-white/40">Kind of spending</legend>
+          {boughtStock ? (
+            <p className="text-[14px] text-white/60">Stock to resell: the products above go on your shelf.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Kind of spending">
+              {([['running', 'Running the business', 'Rent, salaries, fuel…'], ['stock', 'Stock to resell', 'Goods you’ll sell']] as const).map(([value, label, note]) => (
+                <button
+                  key={value} type="button" role="radio" aria-checked={costKind === value}
+                  onClick={() => { setValue('costKind', value); setKindError(''); }}
+                  className={cn(
+                    'min-h-[3.5rem] rounded-xl px-3 py-2.5 text-left ring-1 ring-inset transition active:scale-[0.98]',
+                    costKind === value ? 'bg-white/[0.12] text-white ring-white/25' : 'text-white/60 ring-white/[0.1] hover:bg-white/[0.05] hover:text-white/85',
+                  )}
+                >
+                  <span className="block text-[14px] font-medium leading-tight">{label}</span>
+                  <span className="mt-0.5 block text-[12px] text-white/40">{note}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {kindError && !boughtStock && <p className="text-xs text-white/60" role="alert">{kindError}</p>}
+        </fieldset>
+      )}
+
+      <Input id="description"  label={isSale ? 'What was sold' : 'What you paid for'} error={errors.description?.message} {...register('description')} />
       <Input id="counterparty" label={isSale ? 'Customer (optional)' : 'Paid to (optional)'} error={errors.counterparty?.message} {...register('counterparty')} />
-      <Input id="category"     label="Category (optional)" error={errors.category?.message} {...register('category')} />
+      <div className="space-y-2">
+        <Input id="category" label="Category (optional)" error={errors.category?.message} {...register('category')} />
+        {!isSale && costKind === 'running' && !boughtStock && (
+          <div className="flex flex-wrap gap-1.5" aria-label="Common running costs">
+            {RUNNING_COST_CATEGORIES.map((c) => (
+              <button
+                key={c} type="button" onClick={() => setValue('category', c)}
+                className={cn(
+                  'h-8 rounded-full px-3 text-[13px] ring-1 ring-inset transition',
+                  category === c ? 'bg-white/[0.14] text-white ring-white/25' : 'text-white/55 ring-white/[0.1] hover:text-white/85',
+                )}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
         <Input id="date" label="Date" type="date" error={errors.date?.message} {...register('date')} />

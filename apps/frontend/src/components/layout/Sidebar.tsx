@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   SquaresFour, ArrowsLeftRight, ChatCircle,
-  ChartBar, Bell, UploadSimple, Storefront, NotePencil, Package, Gauge,
+  ChartBar, Bell, UploadSimple, Storefront, NotePencil, Package, Gauge, ChartLineUp,
 } from '@phosphor-icons/react';
 import { cn, formatDateTime } from '@/lib/utils';
 import { useAlertsStore } from '@/store/alerts';
@@ -14,6 +14,7 @@ import { useChatSessions } from '@/hooks/useChatSessions';
 const NAV = [
   { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
   { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
+  { href: '/profit',       label: 'Profit',        Icon: ChartLineUp },
   { href: '/stock',        label: 'Stock',         Icon: Package },
   { href: '/chat',         label: 'Chat',          Icon: ChatCircle },
   { href: '/reports',      label: 'Reports',       Icon: ChartBar },

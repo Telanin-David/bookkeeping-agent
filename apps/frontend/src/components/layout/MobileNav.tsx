@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   X, SquaresFour, ArrowsLeftRight, ChartBar, Bell,
-  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging, UploadSimple, Gauge,
+  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging, UploadSimple, Gauge, ChartLineUp,
 } from '@phosphor-icons/react';
 import { MenuIcon } from '@/components/ui/icons';
 import { cn, formatDateTime } from '@/lib/utils';
@@ -18,6 +18,7 @@ import { useChatStore } from '@/store/chat';
 const PAGES = [
   { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
   { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
+  { href: '/profit',       label: 'Profit',       Icon: ChartLineUp },
   { href: '/stock',        label: 'Stock',        Icon: Package },
   { href: '/reports',      label: 'Reports',      Icon: ChartBar },
   { href: '/alerts',       label: 'Alerts',       Icon: Bell },

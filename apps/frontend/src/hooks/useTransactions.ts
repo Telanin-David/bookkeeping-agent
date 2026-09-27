@@ -41,6 +41,8 @@ export function useCreateTransaction(shopId: string) {
       transactionsApi.create(shopId, body).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['profit', shopId] });
+      qc.invalidateQueries({ queryKey: ['staff', shopId] });
       // A sale or purchase with products moves stock, which can raise or clear a low-stock alert.
       qc.invalidateQueries({ queryKey: ['products', shopId] });
       qc.invalidateQueries({ queryKey: ['movements', shopId] });
@@ -57,6 +59,8 @@ export function useUpdateTransaction(shopId: string) {
       : transactionsApi.update(shopId, id, body).then((r) => r.data),
     onSuccess: (tx) => {
       qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['profit', shopId] });
+      qc.invalidateQueries({ queryKey: ['staff', shopId] });
       qc.invalidateQueries({ queryKey: ['transaction', shopId, tx.id] });
     },
   });
@@ -68,6 +72,8 @@ export function useDeleteTransaction(shopId: string) {
     mutationFn: (txId: string) => transactionsApi.delete(shopId, txId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['profit', shopId] });
+      qc.invalidateQueries({ queryKey: ['staff', shopId] });
       qc.invalidateQueries({ queryKey: ['products', shopId] });
       qc.invalidateQueries({ queryKey: ['movements', shopId] });
       qc.invalidateQueries({ queryKey: ['alerts'] });
@@ -90,6 +96,8 @@ export function usePayments(shopId: string, txId: string | null) {
 /** After a payment changes, the debt's status and balance change everywhere it's shown. */
 function refreshDebt(qc: QueryClient, shopId: string, txId: string) {
   qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+  qc.invalidateQueries({ queryKey: ['profit', shopId] });
+  qc.invalidateQueries({ queryKey: ['staff', shopId] });
   qc.invalidateQueries({ queryKey: ['transaction', shopId, txId] });
   qc.invalidateQueries({ queryKey: ['payments', shopId, txId] });
 }

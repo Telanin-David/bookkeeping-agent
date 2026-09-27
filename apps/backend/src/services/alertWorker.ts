@@ -5,12 +5,13 @@
 
 import { config, db } from '../config';
 import { scanDebts } from './alerts';
+import { scanSalaries } from './staff';
 import { sendAlertDigest, type DigestAlert } from './email';
 import { todayIso } from '../utils/dates';
 import type { Alert } from '../types';
 
 /** Worth an email. Duplicates are only useful in the moment, so they stay in the app. */
-export const EMAILED_TYPES: Alert['type'][] = ['overdue_receivable', 'bill_due', 'low_stock'];
+export const EMAILED_TYPES: Alert['type'][] = ['overdue_receivable', 'bill_due', 'low_stock', 'salary_due'];
 const MAX_EMAIL_ATTEMPTS = 3;
 /** An alert this old that was never emailed (e.g. the address was confirmed later) stays in the app only. */
 const MAX_AGE_DAYS = 7;
@@ -114,7 +115,9 @@ export async function runAlertCycle(now = new Date()): Promise<{ ran: boolean; r
     const { rows } = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [WORKER_LOCK_ID]);
     if (!rows[0]?.['locked']) return { ran: false };
     try {
-      const { raised, resolved } = await scanDebts(todayIso(now));
+      const debts = await scanDebts(todayIso(now));
+      const salaries = await scanSalaries(todayIso(now));
+      const [raised, resolved] = [debts.raised + salaries.raised, debts.resolved + salaries.resolved];
       const delivery = await deliverAlertEmails(now);
       return { ran: true, raised, resolved, delivery };
     } finally {

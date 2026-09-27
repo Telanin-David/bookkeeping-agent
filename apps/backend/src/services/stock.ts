@@ -308,7 +308,8 @@ function mergeItems(items: TransactionItem[]): TransactionItem[] {
 export async function createTransactionWithItems(data: NewTransaction, items: TransactionItem[]): Promise<Transaction> {
   const lines = mergeItems(items);
   const id = await inTransaction(async (c) => {
-    const tx = await createTransaction(data, c);
+    // Goods put on the shelf are stock bought to resell, whatever else was said.
+    const tx = await createTransaction(stockDirection(data.type) > 0 ? { ...data, costKind: 'stock' } : data, c);
     await lockProducts(c, lines.map((l) => l.productId), data.shopId, data.userId);
     const direction = stockDirection(data.type);
     for (const line of lines) {
@@ -339,6 +340,12 @@ export async function getTransactionItems(transactionId: string): Promise<Transa
 /** True when changing a transaction's type would flip its stock the wrong way (a sale with items becoming an expense). */
 export async function wouldFlipStock(transactionId: string, currentType: TransactionType, newType: TransactionType): Promise<boolean> {
   if (stockDirection(currentType) === stockDirection(newType)) return false;
+  const { rows } = await db.query('SELECT 1 FROM stock_movements WHERE transaction_id = $1 LIMIT 1', [transactionId]);
+  return rows.length > 0;
+}
+
+/** True when the transaction put products on the shelf or took them off. */
+export async function hasItems(transactionId: string): Promise<boolean> {
   const { rows } = await db.query('SELECT 1 FROM stock_movements WHERE transaction_id = $1 LIMIT 1', [transactionId]);
   return rows.length > 0;
 }

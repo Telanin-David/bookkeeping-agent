@@ -2,9 +2,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import * as db from './db';
 import * as stock from './stock';
+import * as staff from './staff';
+import { getMonthlyProfit, isMonth } from './profit';
 import { checkDuplicateSafely, refreshDebtAlerts } from './alerts';
 import { todayIso, addDays } from '../utils/dates';
-import { Transaction, TransactionType } from '../types';
+import { CostKind, Transaction, TransactionType } from '../types';
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
@@ -37,8 +39,13 @@ Never guess an amount or what was sold. If either is unclear, ask a short clarif
 
 After recording, confirm what was recorded in one short, natural sentence — don't recite every field back like a form.
 
+For every expense or payable, set costKind: "stock" when they bought goods to resell, "running" for what it costs to run the business (salaries, rent, electricity, fuel and generator, transport, phone and data, repairs, and the like). This is what lets profit be worked out correctly. If you can't tell whether something bought was for resale, ask. For a salary paid to someone on the shop's staff list, also pass their name as staff; list_staff shows the names.
+
 ## Answering questions about the shop's money
 Never add up or estimate amounts yourself. For "how much did I make/spend", "what's my biggest expense", or anything needing a real total, call get_spending_summary and report its numbers. For "who owes me", "did I sell to X", or finding a specific past transaction, call find_transactions.
+
+## How the business is doing
+For "am I making profit?", "how is my business doing?", "how much did I make this month?", call get_business_summary and explain its profit and feedback in plain words. Say which way it counted profit if the method note is present. Never work out profit yourself.
 
 ## When a debt is paid
 When the owner says a customer has paid money they owed ("Mama Nkechi has paid", "Musa paid 5k of what he owes"), or that they have paid a supplier they owed, that is NOT a new sale or expense — the income or cost was already counted when the credit sale or bill was recorded, so recording it again would count it twice. Instead, call find_transactions with unpaidOnly set to locate the open debt, then call record_debt_payment with its id.
@@ -70,6 +77,8 @@ const TOOLS: Anthropic.Tool[] = [
         counterparty: { type: 'string', description: 'Customer or supplier name, only if the owner actually named one' },
         date: { type: 'string', description: 'YYYY-MM-DD, resolved from any relative date the owner used. Omit to use today.' },
         dueDate: { type: 'string', description: 'YYYY-MM-DD. Only for receivable/payable, and only if a due date was mentioned or implied.' },
+        costKind: { type: 'string', enum: ['stock', 'running'], description: 'Expense/payable only. stock = goods bought to resell; running = running the business (salaries, rent, electricity, fuel, transport, phone, repairs…)' },
+        staff: { type: 'string', description: 'For a salary: the staff member’s name as on the staff list. Omit otherwise.' },
         items: {
           type: 'array',
           description: 'Products from the stock list that were sold (sale/receivable: taken off the shelf) or bought (expense/payable: put on the shelf), with how many. Only for products on the stock list.',
@@ -127,6 +136,22 @@ const TOOLS: Anthropic.Tool[] = [
       },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'get_business_summary',
+    description: 'How the business is doing in a month: sales, costs split into stock and running costs, profit, comparison with last month, and short feedback. Use for any question about profit or how the business is going.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        month: { type: 'string', description: 'YYYY-MM. Omit for this month.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_staff',
+    description: 'The shop’s staff list, if it keeps one: names, monthly pay, pay day and whether this pay date’s salary has been recorded.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'check_stock',
@@ -240,6 +265,19 @@ async function resolveProduct(ctx: ChatContext, name: unknown): Promise<{ id: st
     : `No product called "${name}" is on the stock list. Products: ${names.slice(0, 50).join(', ')}`);
 }
 
+async function resolveStaff(ctx: ChatContext, name: string): Promise<{ id: string; name: string }> {
+  const list = await staff.listStaff(ctx.shopId, ctx.userId);
+  const wanted = name.trim().toLowerCase();
+  const exact = list.find((s) => s.name.toLowerCase() === wanted);
+  if (exact) return exact;
+  const partial = list.filter((s) => s.name.toLowerCase().includes(wanted));
+  if (partial.length === 1) return partial[0]!;
+  if (list.length === 0) throw new Error('This shop has no staff list. Record the salary without staff.');
+  throw new Error(partial.length > 1
+    ? `"${name}" matches several staff: ${partial.map((s) => s.name).join(', ')}. Ask which one.`
+    : `No one called "${name}" is on the staff list. Staff: ${list.map((s) => s.name).join(', ')}. Record without staff if they aren't on it.`);
+}
+
 function isPositive(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
@@ -275,10 +313,19 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         items.push({ productId: (await resolveProduct(ctx, item['product'])).id, quantity: item['quantity'] });
       }
 
+      const isCost = type === 'expense' || type === 'payable';
+      const costKind: CostKind | undefined = isCost && (args['costKind'] === 'stock' || args['costKind'] === 'running') ? args['costKind'] : undefined;
+      let staffId: string | undefined;
+      if (isCost && typeof args['staff'] === 'string' && args['staff'].trim()) {
+        staffId = (await resolveStaff(ctx, args['staff'])).id;
+      }
+
       const data = {
         shopId: ctx.shopId,
         userId: ctx.userId,
         type,
+        costKind: staffId ? 'running' as const : costKind,
+        staffId,
         amount,
         currency: ctx.currency,
         description,
@@ -293,6 +340,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
       state.createdTransactionIds.push(tx.id);
       await checkDuplicateSafely(tx);
       if (tx.dueDate) await refreshDebtAlerts(tx.id);
+      if (tx.staffId) await staff.refreshSalaryAlerts(tx.shopId);
       return items.length ? { ...tx, items: await stock.getTransactionItems(tx.id) } : tx;
     }
 
@@ -336,6 +384,31 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         ? args['from']
         : addDays(to, -30);
       return db.getSpendingSummary(ctx.shopId, ctx.userId, from, to);
+    }
+
+    case 'get_business_summary': {
+      const today = todayIso();
+      const month = typeof args['month'] === 'string' && isMonth(args['month']) ? args['month'] : today.slice(0, 7);
+      if (month > today.slice(0, 7)) throw new Error('That month hasn’t started yet');
+      const p = await getMonthlyProfit(ctx.shopId, ctx.userId, month, today, ctx.currency);
+      return {
+        month: p.month, from: p.from, to: p.to, monthInProgress: p.inProgress,
+        method: p.method === 'sold' ? 'profit on what was sold (sales − cost of goods sold − running costs)' : 'sales minus all spending',
+        sales: p.sales, costOfGoodsSold: p.method === 'sold' ? p.costOfGoodsSold : undefined,
+        stockBought: p.stockBought, runningCosts: p.runningCosts, runningCostsByCategory: p.running,
+        profit: p.profit, lastMonthSamePoint: p.previous?.profit,
+        salariesStillToPay: p.salariesDue?.total,
+        feedback: p.insights.map((i) => i.text),
+        methodNote: p.methodNote ?? undefined,
+      };
+    }
+
+    case 'list_staff': {
+      const list = await staff.listStaff(ctx.shopId, ctx.userId);
+      return {
+        count: list.length,
+        staff: list.map((s) => ({ name: s.name, role: s.role, monthlyPay: s.monthlyPay, payDay: s.payDay, payDate: s.payDate, paidForPayDate: s.paid })),
+      };
     }
 
     case 'check_stock': {

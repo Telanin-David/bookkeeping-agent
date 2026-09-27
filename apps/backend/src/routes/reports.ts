@@ -8,6 +8,7 @@ import * as db from '../services/db';
 import { sendReportEmail } from '../services/email';
 import { loadBrandingImage } from '../services/storage';
 import * as stock from '../services/stock';
+import { getProfitFigures } from '../services/profit';
 import { renderReceipt, renderProfitAndLoss, renderCreditReport, renderStockReport, receiptNumber } from '../services/pdf';
 import { todayIso } from '../utils/dates';
 import type { Shop } from '../types';
@@ -82,11 +83,12 @@ router.post('/pl', limiter(10), validate(dateRangeSchema), ownShop, async (req: 
   try {
     const shop = await loadShop(req);
     const { dateFrom, dateTo } = req.body;
-    const [lines, logo] = await Promise.all([
+    const [lines, profit, logo] = await Promise.all([
       db.getProfitAndLossLines(shop.id, req.user!.id, dateFrom, dateTo),
+      getProfitFigures(shop.id, req.user!.id, dateFrom, dateTo),
       loadBrandingImage(shop.logoUrl),
     ]);
-    const pdf = await renderProfitAndLoss({ shop, logo, from: dateFrom, to: dateTo, lines });
+    const pdf = await renderProfitAndLoss({ shop, logo, from: dateFrom, to: dateTo, lines, profit });
     await sendPdf(res, `${safeFilename(shop.name)}-profit-and-loss-${dateFrom}-to-${dateTo}.pdf`, pdf, await emailFor(req), 'Profit & Loss');
   } catch (err) { next(err); }
 });

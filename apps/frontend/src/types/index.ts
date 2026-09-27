@@ -76,6 +76,7 @@ export type TransactionType =
   | 'payable';
 
 export type TransactionStatus = 'pending' | 'settled' | 'overdue';
+export type CostKind = 'stock' | 'running';
 
 export interface Transaction {
   id: string;
@@ -95,6 +96,10 @@ export interface Transaction {
   /** Still owed (0 for cash sales/expenses and paid debts). */
   balance: number;
   aiCategorized: boolean;
+  /** Expenses and bills: goods bought to resell, or a running cost (rent, salaries, fuel…). */
+  costKind?: CostKind;
+  /** A salary payment: who it was for. */
+  staffId?: string;
   /** Products sold or bought, when the transaction was recorded with them. */
   items?: TransactionItem[];
   createdAt: string;
@@ -195,7 +200,8 @@ export type AlertType =
   | 'duplicate'
   | 'anomaly'
   | 'low_stock'
-  | 'bill_due';
+  | 'bill_due'
+  | 'salary_due';
 
 /** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
 export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';
@@ -288,3 +294,46 @@ export interface ApiError {
 }
 
 export type ReportType = 'receipt' | 'credit' | 'stock' | 'pl';
+
+// ── Profit and staff ──────────────────────────────────────────
+export interface CostLine { category: string; total: number; count: number }
+export interface Insight { kind: string; tone: 'good' | 'bad' | 'neutral'; text: string }
+
+/** One month's profit. 'sold': sales − cost of the goods sold − running costs; 'spent': sales − all spending. */
+export interface MonthlyProfit {
+  month: string;
+  from: string;
+  to: string;
+  inProgress: boolean;
+  sales: number;
+  salesCount: number;
+  coverage: number | null;
+  costOfGoodsSold: number | null;
+  stockBought: number;
+  runningCosts: number;
+  running: CostLine[];
+  method: 'sold' | 'spent';
+  profit: number;
+  previous: { month: string; from: string; to: string; profit: number; sales: number; runningCosts: number } | null;
+  salariesDue: { total: number; people: { name: string; amount: number; payDate: string }[] } | null;
+  insights: Insight[];
+  methodNote: string | null;
+}
+
+export interface StaffMember {
+  id: string;
+  shopId: string;
+  name: string;
+  role: string | null;
+  monthlyPay: number | null;
+  /** Day of the month they're paid; 29–31 mean the last day in shorter months. */
+  payDay: number | null;
+  /** The pay date that matters now; null without a pay day. */
+  payDate: string | null;
+  paid: boolean;
+  /** Pay date is tomorrow, today or past, and not paid. */
+  due: boolean;
+  lastPaidOn: string | null;
+}
+
+export type StaffFields = { name: string; role?: string | null; monthlyPay?: number | null; payDay?: number | null };

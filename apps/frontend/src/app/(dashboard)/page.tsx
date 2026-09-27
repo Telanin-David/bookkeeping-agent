@@ -1,16 +1,18 @@
 'use client';
-import { TrendUp, TrendDown, Bell } from '@phosphor-icons/react';
+import { TrendUp, TrendDown, Bell, ChartLineUp, CaretRight } from '@phosphor-icons/react';
 import { useShopsStore } from '@/store/shops';
 import { useShops } from '@/hooks/useShops';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useProducts } from '@/hooks/useStock';
+import { useProfit } from '@/hooks/useProfit';
+import { isDemoShop } from '@/lib/demo';
 import Link from 'next/link';
 import { quantityText } from '@/lib/quantity';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Badge from '@/components/ui/Badge';
-import { formatCurrency, formatDate, typeLabel } from '@/lib/utils';
+import { formatCurrency, formatDate, formatWhole, typeLabel } from '@/lib/utils';
 
 export default function DashboardPage() {
   useShops();
@@ -20,22 +22,50 @@ export default function DashboardPage() {
   const { data: alertData } = useAlerts('active');
   const { data: products = [] } = useProducts(activeShop?.id ?? '');
   const low = products.filter((p) => p.isLow);
+  const { data: profit, isLoading: profitLoading } = useProfit(activeShop?.id ?? '');
+  const demo = isDemoShop(activeShop?.id);
 
   // Accrual, like the reports: a credit sale is income and a bill on credit is a cost when recorded.
   const isCost  = (type: string) => type === 'expense' || type === 'payable';
   const income  = txData?.data.filter((t) => !isCost(t.type)).reduce((s, t) => s + t.amount, 0) ?? 0;
   const expense = txData?.data.filter((t) => isCost(t.type)).reduce((s, t) => s + t.amount, 0) ?? 0;
 
-  const stats = [
+  // The demo shop has no server records to work profit out from, so it keeps the simple sums.
+  const stats = demo ? [
     { label: 'Recent Income',   value: formatCurrency(income),          Icon: TrendUp },
     { label: 'Recent Expenses', value: formatCurrency(expense),          Icon: TrendDown },
     { label: 'Active Alerts',   value: String(alertData?.total ?? 0),   Icon: Bell },
+  ] : [
+    { label: 'Sales this month', value: profit ? formatWhole(profit.sales, activeShop?.currency) : '—', Icon: TrendUp },
+    { label: 'Active Alerts',    value: String(alertData?.total ?? 0), Icon: Bell },
   ];
+  const headline = profit?.insights.find((i) => i.kind !== 'empty');
 
   return (
     <PageWrapper title="Dashboard">
+      {/* How the month is going, in one card: the Profit page has the rest. */}
+      {!demo && (
+        <Link href="/profit" className="glass-card group mb-4 block rounded-2xl p-5 transition hover:bg-white/[0.06]">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wider text-white/35">{profit && profit.profit < 0 ? 'Loss' : 'Profit'} this month</p>
+            <ChartLineUp size={17} className="text-white/30" />
+          </div>
+          {profitLoading || !profit ? (
+            <Skeleton className="h-8 w-40" />
+          ) : (
+            <>
+              <p className="text-2xl font-bold tabular-nums text-white/85">{profit.profit < 0 && '−'}{formatWhole(Math.abs(profit.profit), activeShop?.currency)}</p>
+              <p className="mt-1.5 flex items-center justify-between gap-3 text-[14px] text-white/50 sm:text-[13px]">
+                <span>{headline?.text ?? 'Nothing recorded this month yet.'}</span>
+                <CaretRight size={14} className="shrink-0 text-white/30 transition group-hover:text-white/60" />
+              </p>
+            </>
+          )}
+        </Link>
+      )}
+
       {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+      <div className={`mb-6 grid grid-cols-1 gap-4 ${demo ? 'sm:grid-cols-3' : 'grid-cols-2'}`}>
         {stats.map(({ label, value, Icon }) => (
           <div key={label} className="glass-card rounded-2xl p-5">
             <div className="mb-3 flex items-center justify-between">

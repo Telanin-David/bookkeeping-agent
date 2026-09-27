@@ -8,15 +8,21 @@ jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
 jest.mock('./db');
 jest.mock('./stock');
 jest.mock('./alerts');
+jest.mock('./staff');
+jest.mock('./profit', () => ({ ...jest.requireActual('./profit'), getMonthlyProfit: jest.fn() }));
 
 // Imported after the mocks above so the mocked modules are what claude.ts actually gets.
 import * as db from './db';
 import * as stock from './stock';
+import * as staff from './staff';
+import * as profit from './profit';
 import { sendChatMessage, categorizeTransaction, usageCost, type ChatContext } from './claude';
 import type { Product, Transaction } from '../types';
 
 const mockDb = db as jest.Mocked<typeof db>;
 const mockStock = stock as jest.Mocked<typeof stock>;
+const mockStaff = staff as jest.Mocked<typeof staff>;
+const mockProfit = profit as jest.Mocked<typeof profit>;
 
 function fakeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -399,5 +405,68 @@ describe('usageCost', () => {
 
   it('gives no figure for a model it has no price for', () => {
     expect(usageCost('some-other-model', { calls: 1, input: 1, cacheWrite: 0, cacheRead: 0, output: 1 })).toBeNull();
+  });
+});
+
+describe('running costs and profit', () => {
+  const toolResult = () => {
+    const msgs = mockCreate.mock.calls[1][0].messages as { role: string; content: unknown }[];
+    const block = (msgs.find((m) => m.role === 'user' && Array.isArray(m.content)))!.content as { content: string; is_error?: boolean }[];
+    return block[0]!;
+  };
+
+  it('passes what the money was for, and ignores it on a sale', async () => {
+    mockDb.createTransaction.mockResolvedValue(fakeTransaction({ type: 'expense', costKind: 'running' }));
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', { type: 'expense', amount: 8000, description: 'Diesel', category: 'Fuel', costKind: 'running' }))
+      .mockResolvedValueOnce(textResponse('Recorded.'));
+    await sendChatMessage(ctx, [{ role: 'user', content: 'bought diesel 8k' }]);
+    expect(mockDb.createTransaction).toHaveBeenCalledWith(expect.objectContaining({ type: 'expense', costKind: 'running', staffId: undefined }));
+
+    mockCreate.mockReset();
+    mockDb.createTransaction.mockClear();
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', { type: 'sale', amount: 8000, description: 'Rice', category: 'Food', costKind: 'stock' }))
+      .mockResolvedValueOnce(textResponse('Recorded.'));
+    await sendChatMessage(ctx, [{ role: 'user', content: 'sold rice 8k' }]);
+    expect(mockDb.createTransaction).toHaveBeenCalledWith(expect.objectContaining({ type: 'sale', costKind: undefined }));
+  });
+
+  it("links a salary to the staff member and counts it as a running cost", async () => {
+    mockStaff.listStaff.mockResolvedValue([{ id: 'staff-ada', name: 'Ada Obi' } as staff.StaffWithPay]);
+    mockDb.createTransaction.mockResolvedValue(fakeTransaction({ type: 'expense', staffId: 'staff-ada', costKind: 'running' }));
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', { type: 'expense', amount: 40000, description: 'Salary', category: 'Salaries', staff: 'ada' }))
+      .mockResolvedValueOnce(textResponse('Recorded.'));
+    await sendChatMessage(ctx, [{ role: 'user', content: 'paid Ada her salary 40k' }]);
+    expect(mockDb.createTransaction).toHaveBeenCalledWith(expect.objectContaining({ staffId: 'staff-ada', costKind: 'running' }));
+    expect(mockStaff.refreshSalaryAlerts).toHaveBeenCalledWith('shop-1');
+  });
+
+  it('records nothing for a staff name that is not on the list', async () => {
+    mockStaff.listStaff.mockResolvedValue([{ id: 'staff-ada', name: 'Ada Obi' } as staff.StaffWithPay]);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', { type: 'expense', amount: 40000, description: 'Salary', category: 'Salaries', staff: 'Musa' }))
+      .mockResolvedValueOnce(textResponse('Who is Musa?'));
+    await sendChatMessage(ctx, [{ role: 'user', content: 'paid Musa 40k' }]);
+    expect(mockDb.createTransaction).not.toHaveBeenCalled();
+    expect(toolResult().is_error).toBe(true);
+    expect(toolResult().content).toContain('Ada Obi');
+  });
+
+  it('answers "how is my business doing" from the real figures', async () => {
+    mockProfit.getMonthlyProfit.mockResolvedValue({
+      month: '2026-09', from: '2026-09-01', to: '2026-09-25', inProgress: true, method: 'spent',
+      sales: 300000, costOfGoodsSold: null, stockBought: 100000, runningCosts: 80000, running: [], profit: 120000,
+      previous: { profit: 90000 }, salariesDue: null, methodNote: 'note',
+      insights: [{ kind: 'vs_last_month', tone: 'good', text: '₦30,000 better than at this point last month.' }],
+    } as unknown as profit.MonthlyProfit);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('get_business_summary', {}))
+      .mockResolvedValueOnce(textResponse('You made ₦120,000 so far.'));
+    await sendChatMessage(ctx, [{ role: 'user', content: 'how is my business doing?' }]);
+    expect(mockProfit.getMonthlyProfit).toHaveBeenCalledWith('shop-1', 'user-1', expect.stringMatching(/^\d{4}-\d{2}$/), expect.any(String), 'NGN');
+    const result = JSON.parse(toolResult().content);
+    expect(result).toMatchObject({ profit: 120000, lastMonthSamePoint: 90000, feedback: ['₦30,000 better than at this point last month.'], methodNote: 'note' });
   });
 });

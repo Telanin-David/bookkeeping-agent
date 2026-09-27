@@ -1,4 +1,10 @@
 import { renderReceipt, renderProfitAndLoss, receiptStatus } from '.';
+import type { ProfitFigures } from '../profit';
+
+const figures = (f: Partial<ProfitFigures>): ProfitFigures => ({
+  from: '2026-09-01', to: '2026-09-30', sales: 0, salesCount: 0, coverage: null, costOfGoodsSold: null,
+  stockBought: 0, runningCosts: 0, running: [], method: 'spent', profit: 0, profitSold: null, profitSpent: 0, ...f,
+});
 import type { Shop, Transaction } from '../../types';
 
 const shop: Shop = {
@@ -34,10 +40,18 @@ describe('PDF rendering', () => {
       lines: [
         { type: 'sale', category: 'Groceries', count: 3, total: 95000, unpaid: 0 },
         { type: 'receivable', category: 'Groceries', count: 1, total: 20000, unpaid: 20000 },
-        { type: 'expense', category: 'Rent', count: 1, total: 25000, unpaid: 0 },
+        { type: 'expense', category: 'Rent', costKind: 'running', count: 1, total: 25000, unpaid: 0 },
+        { type: 'payable', category: 'Stock', costKind: 'stock', count: 1, total: 40000, unpaid: 40000 },
       ],
+      profit: figures({ sales: 115000, stockBought: 40000, runningCosts: 25000, method: 'sold', costOfGoodsSold: 30000, coverage: 0.95, profit: 60000 }),
     });
-    const empty = await renderProfitAndLoss({ shop, logo: null, from: '2025-01-01', to: '2025-01-31', lines: [] });
+    const bySpending = await renderProfitAndLoss({
+      shop, logo: null, from: '2026-09-01', to: '2026-09-30',
+      lines: [{ type: 'expense', category: 'Stock', costKind: 'stock', count: 1, total: 40000, unpaid: 0 }],
+      profit: figures({ stockBought: 40000, profit: -40000 }),
+    });
+    const empty = await renderProfitAndLoss({ shop, logo: null, from: '2025-01-01', to: '2025-01-31', lines: [], profit: figures({}) });
+    expect(bySpending.subarray(0, 5).toString()).toBe('%PDF-');
     expect(full.subarray(0, 5).toString()).toBe('%PDF-');
     expect(empty.subarray(0, 5).toString()).toBe('%PDF-');
   });

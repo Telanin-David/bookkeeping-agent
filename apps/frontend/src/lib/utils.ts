@@ -9,6 +9,11 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(amount);
 }
 
+/** Whole naira (₦45,000), for figures read at a glance where kobo only get in the way. */
+export function formatWhole(amount: number, currency = 'NGN'): string {
+  return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(Math.round(amount));
+}
+
 export function formatDate(dateStr: string): string {
   return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(new Date(dateStr));
 }
