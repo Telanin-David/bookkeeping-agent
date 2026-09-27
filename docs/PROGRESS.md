@@ -13,7 +13,7 @@
 | 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | merged to main (#20) |
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
-| 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
+| 9 | Excel Import & Validation Pipeline | 🟡 In review | `feat/deliverable-9-import` | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -151,7 +151,41 @@
     - A banner asking the owner to confirm their email.
     - The Alerts page links to email settings and uses everyday labels ("Customer owes you", "Bill due", "Low stock", "Recorded twice?").
   - **Known limit:** a low-stock alert that was already emailed as "running low" is not emailed again when the product runs out. The app does re-show it as active.
-  - **Not fixed here, pre-existing:** `npm audit` flags `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp`. The risk is when installing packages, not while the app runs. The fix is bcrypt 6, which is a separate change to test on its own.
+  - **Fixed afterwards (`fix/bcrypt-6`):** `npm audit` flagged `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp` (an install-time risk). bcrypt is now 6; `npm audit` reports 0 vulnerabilities. Passwords hashed by bcrypt 5 still verify: an account created before the upgrade logs in, and a wrong password is refused.
+
+- **Deliverable 9: spreadsheet import.** Before this, only the upload worked; preview, check and import were placeholders that saved nothing. Migration `008_import_undo.sql`.
+  - **Flow:**
+    1. Upload an `.xlsx` or `.csv` file and see a preview with the columns guessed from their names.
+    2. Adjust the columns if needed.
+    3. Check every row: problems are listed with their spreadsheet row number and a plain reason.
+    4. Import, all or nothing.
+    5. Undo, from the done screen or from "Past imports".
+  - **Reading (`services/importParse.ts`, pure and unit-tested):**
+    - Only the first sheet with data is read. The header row is found among the first 10 rows, so a title above it is fine.
+    - Blank lines and lines without an amount (subtotals, notes) are skipped.
+    - Dates are day first (25/09/2026); a column is read month first only if its values clearly are. Excel date cells and serials, ISO dates and month names ("25 Sept 2026") also work.
+    - Amounts: `5,000`, `₦5,000`, `NGN 5000`, `5k`, `(1,000)`.
+    - Types in everyday words: sale, sold, expense, bought, credit sale, owed, bill.
+    - Without a Type column, the owner picks what the rows are, or uses Money in / Money out columns, or "positive in, negative out". Semicolon CSVs work.
+    - An optional **Paid?** column (yes / no / amount) records what was already paid on credit sales and bills, so old paid debts don't import as overdue. That payment is dated the day of the sale, because the sheet doesn't say when.
+  - **Safety:**
+    - Rows already in the shop (same date, amount, type and description) are left out by default, so re-uploading the same book adds nothing. The owner can include them.
+    - Confirm claims the import first, so a double tap can't import twice.
+    - Undo deletes the import's transactions, and any payments recorded against them.
+  - **Security:**
+    - The file type is decided from its bytes. Old `.xls` files get a "save as .xlsx" message.
+    - Files are limited to 5 MB and 5,000 rows, and uploads to 30 an hour.
+    - **Fixed a path-traversal bug:** the upload used to be saved under the name the browser sent, so a name like `../../x` could write outside the upload folder. Stored names are now chosen by the server, and the file is deleted once imported.
+  - **Libraries:**
+    - `exceljs`. The npm `xlsx` package has unfixed high-severity advisories.
+    - Its `uuid` dependency is forced to 11 through a root `overrides` entry plus an explicit dependency, which clears a moderate advisory.
+  - **Imported debts:** those past due are marked overdue and raise alerts straight away. Alert emails list at most 10 alerts, then "…and N more in the app".
+  - **Frontend:** the Import page was rebuilt (upload, match columns, check, done, past imports with Undo) with a downloadable template, and Import was added to the phone menu.
+  - **Not done:**
+    - No AI categorisation on import (cost at scale): a Category column is used if present.
+    - No product/stock lines.
+    - Only the first sheet is read.
+    - Uploads that are never imported stay on disk until a clean-up job exists.
 
 - **Chat model: Claude Haiku 4.5** (owner's decision, on cost):
   - The chat assistant now uses `claude-haiku-4-5` ($1 in / $5 out per million tokens) instead of `claude-opus-5` ($5 / $25). Set `CHAT_MODEL` in the server's `.env` to try another model; empty means Haiku.
