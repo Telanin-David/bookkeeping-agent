@@ -86,6 +86,12 @@
     - The shared `Table` component's typing is fixed, so frontend `tsc` is now clean with 0 errors.
   - **Refusal fallbacks:** the chat loop calls `client.beta.messages.create` with the `server-side-fallback-2026-07-01` beta and `fallbacks: "default"`, so if `claude-opus-5` declines a turn, the API retries it on the fallback model instead of returning a refusal. `afterFallback()` drops any text from before the switch. Categorisation still uses the regular endpoint with `claude-haiku-4-5`.
 
+## Before hosting (owner's decision)
+- **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday"), and the refusal fallback.
+  - To keep it cheap, run most of it on the cheapest model (`claude-haiku-4-5`). The chat model will need to be configurable by an environment variable for this.
+  - Haiku checks the wiring, but not how the production model (`claude-opus-5`) behaves, and the fallback beta may not apply to Haiku. So finish with a few messages on the production model.
+- The key goes in the server's environment, never in the repo or in chat.
+
 ## Rules
 - Never commit/push to `main` directly.
 - One deliverable per branch. Create feature branch → do work → push → open PR → wait for merge.
