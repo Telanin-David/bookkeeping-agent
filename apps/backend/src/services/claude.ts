@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import * as db from './db';
+import { todayIso, addDays } from '../utils/dates';
 import { Transaction, TransactionType } from '../types';
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
@@ -11,7 +12,13 @@ const CHAT_MODEL = 'claude-opus-5';
 const CATEGORIZE_MODEL = 'claude-haiku-4-5';
 
 // Chat + a bounded tool loop; not "hard reasoning" work, so medium effort over high/xhigh.
-const CHAT_EFFORT: Anthropic.Messages.OutputConfig['effort'] = 'medium';
+const CHAT_EFFORT: Anthropic.Beta.BetaOutputConfig['effort'] = 'medium';
+
+// Claude Opus 5's safety classifiers can occasionally decline a harmless request (a
+// "refusal"). With server-side fallbacks the API re-runs a declined request on the model
+// Anthropic recommends for that kind of refusal, in the same call, instead of the owner
+// getting "I couldn't help with that". 'default' picks the fallback model automatically.
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
 // Guards against a runaway tool-calling loop driving up cost on a stuck conversation.
 const MAX_TOOL_ITERATIONS = 6;
@@ -33,13 +40,18 @@ After recording, confirm what was recorded in one short, natural sentence — do
 ## Answering questions about the shop's money
 Never add up or estimate amounts yourself. For "how much did I make/spend", "what's my biggest expense", or anything needing a real total, call get_spending_summary and report its numbers. For "who owes me", "did I sell to X", or finding a specific past transaction, call find_transactions.
 
+## When a debt is paid
+When the owner says a customer has paid money they owed ("Mama Nkechi has paid", "Musa paid 5k of what he owes"), or that they have paid a supplier they owed, that is NOT a new sale or expense — the income or cost was already counted when the credit sale or bill was recorded, so recording it again would count it twice. Instead, call find_transactions with unpaidOnly set to locate the open debt, then call record_debt_payment with its id.
+
+Pass amount only for a part-payment; leave it out when they paid everything still owed. Pass paidOn only if they said when it was paid ("yesterday"), resolved to a date. The debt's balance field says what is still owed; if they paid more than that, don't record anything — tell them what is actually owed. If you can't tell which debt they mean, ask. If no matching unpaid debt exists, say so and ask whether they want to record it as a new sale instead. After recording, tell them what is still owed, if anything.
+
 ## Receipts and invoices
 When the owner asks for a receipt or invoice ("give me a receipt for Mama Nkechi", "print an invoice for that credit sale"), first call find_transactions to locate the real transaction — never invent an id. Once you have identified the one transaction they mean, call show_receipt with its id, then briefly confirm what you're showing them.
 
 ## Tone
 Warm, direct, and brief — the owner is running a shop, not reading a report. Use the shop's actual currency for every amount. If a request is genuinely outside what you can do here (it isn't about this shop's transactions), say so plainly.`;
 
-const TOOLS: Anthropic.Tool[] = [
+const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: 'record_transaction',
     description: 'Record one sale, expense, receivable (a customer owes the shop), or payable (the shop owes a supplier) that the owner just described. Call once per distinct transaction.',
@@ -67,7 +79,22 @@ const TOOLS: Anthropic.Tool[] = [
         counterparty: { type: 'string', description: 'Customer or supplier name to search for (partial match)' },
         description: { type: 'string', description: 'Keyword to search the item/description for' },
         type: { type: 'string', enum: [...TRANSACTION_TYPES] },
+        unpaidOnly: { type: 'boolean', description: 'Only debts not yet paid — use when looking for a debt someone has just paid' },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'record_debt_payment',
+    description: 'Record a payment — in full or in part — towards an unpaid receivable (a customer paying what they owed) or payable (the shop paying a supplier). Use instead of record_transaction when an existing debt is paid. Requires the debt’s real id from find_transactions. The debt is marked paid once its payments cover it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        transactionId: { type: 'string', description: 'The unpaid receivable or payable’s id, from a find_transactions result' },
+        amount: { type: 'number', description: 'Amount paid, for a part-payment. Omit when the whole remaining balance was paid.' },
+        paidOn: { type: 'string', description: 'YYYY-MM-DD the payment was made, resolved from any relative date. Omit for today.' },
+      },
+      required: ['transactionId'],
       additionalProperties: false,
     },
   },
@@ -113,11 +140,12 @@ export interface ClaudeChatResult {
 
 interface ToolState {
   createdTransactionIds: string[];
+  paidDebtIds: string[];
   receiptTransactionId?: string;
 }
 
 function dynamicContext(ctx: ChatContext): string {
-  return `Shop: ${ctx.shopName} (${ctx.shopType})\nCurrency: ${ctx.currency}\nToday's date: ${new Date().toISOString().slice(0, 10)}`;
+  return `Shop: ${ctx.shopName} (${ctx.shopType})\nCurrency: ${ctx.currency}\nToday's date: ${todayIso()}`;
 }
 
 function isTransactionType(value: unknown): value is TransactionType {
@@ -156,7 +184,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         description,
         category,
         counterparty: typeof args['counterparty'] === 'string' ? args['counterparty'] : undefined,
-        date: typeof args['date'] === 'string' ? args['date'] : new Date().toISOString().slice(0, 10),
+        date: typeof args['date'] === 'string' ? args['date'] : todayIso(),
         dueDate: typeof args['dueDate'] === 'string' ? args['dueDate'] : undefined,
         aiCategorized,
       });
@@ -169,15 +197,39 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         counterparty: typeof args['counterparty'] === 'string' ? args['counterparty'] : undefined,
         description: typeof args['description'] === 'string' ? args['description'] : undefined,
         type: isTransactionType(args['type']) ? args['type'] : undefined,
+        unpaidOnly: args['unpaidOnly'] === true,
       });
       return { count: results.length, transactions: results };
     }
 
+    case 'record_debt_payment': {
+      const transactionId = args['transactionId'];
+      if (typeof transactionId !== 'string') throw new Error('transactionId is required');
+      const amount = args['amount'];
+      if (amount !== undefined && (typeof amount !== 'number' || !(amount > 0))) throw new Error('amount must be a positive number');
+      const paidOn = typeof args['paidOn'] === 'string' ? args['paidOn'] : todayIso();
+      const result = await db.recordDebtPayment(transactionId, ctx.shopId, ctx.userId, {
+        amount: amount as number | undefined, paidOn, today: todayIso(),
+      });
+      if (!result.ok) {
+        switch (result.reason) {
+          case 'not_found': throw new Error('No transaction with that id exists for this shop');
+          case 'not_a_debt': throw new Error('Only receivables and payables (debts) can be paid off — this is a cash sale or expense');
+          case 'already_paid': throw new Error('That debt is already fully paid');
+          case 'more_than_owed': throw new Error(`That is more than is still owed; the remaining balance is ${result.balance}`);
+          case 'before_debt': throw new Error('The payment date is before the debt was recorded');
+          case 'in_future': throw new Error('The payment date is in the future');
+        }
+      }
+      state.paidDebtIds.push(result.transaction.id);
+      return { recorded: true, payment: result.payment, transaction: result.transaction };
+    }
+
     case 'get_spending_summary': {
-      const to = typeof args['to'] === 'string' ? args['to'] : new Date().toISOString().slice(0, 10);
+      const to = typeof args['to'] === 'string' ? args['to'] : todayIso();
       const from = typeof args['from'] === 'string'
         ? args['from']
-        : new Date(new Date(to).getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
+        : addDays(to, -30);
       return db.getSpendingSummary(ctx.shopId, ctx.userId, from, to);
     }
 
@@ -195,15 +247,32 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
   }
 }
 
-export async function sendChatMessage(ctx: ChatContext, history: Anthropic.MessageParam[]): Promise<ClaudeChatResult> {
-  const messages: Anthropic.MessageParam[] = [...history];
-  const state: ToolState = { createdTransactionIds: [] };
+/**
+ * A response's content as it should be acted on and echoed back. When a fallback model
+ * took over mid-answer, `fallback` blocks mark the switch: before the last one, only text
+ * is kept (the declined model's tool calls and thinking are dropped, per the fallback
+ * rules); everything after it is the fallback model's own answer and is kept as-is.
+ */
+export function afterFallback(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlock[] {
+  let boundary = -1;
+  content.forEach((b, i) => { if (b.type === 'fallback') boundary = i; });
+  if (boundary === -1) return content;
+  return content.filter((b, i) => i > boundary || (i < boundary && b.type === 'text'));
+}
+
+export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Beta.BetaMessageParam[]): Promise<ClaudeChatResult> {
+  const messages: Anthropic.Beta.BetaMessageParam[] = [...history];
+  const state: ToolState = { createdTransactionIds: [], paidDebtIds: [] };
+  // Every transaction this turn created or marked paid; the chat shows each one.
+  const touched = () => [...new Set([...state.createdTransactionIds, ...state.paidDebtIds])];
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    let response: Anthropic.Message;
+    let response: Anthropic.Beta.BetaMessage;
     try {
-      response = await client.messages.create({
+      response = await client.beta.messages.create({
         model: CHAT_MODEL,
+        betas: [FALLBACK_BETA],
+        fallbacks: 'default',
         max_tokens: 4096,
         output_config: { effort: CHAT_EFFORT },
         system: [
@@ -216,10 +285,14 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
     } catch (err) {
       // If a transaction was already saved this turn, surfacing an error would make the
       // owner resend and record it twice — report what was saved instead.
-      if (state.createdTransactionIds.length === 0) throw err;
+      if (touched().length === 0) throw err;
+      const n = touched().length;
+      const what = state.paidDebtIds.length === 0
+        ? (n === 1 ? 'that transaction' : `${n} transactions`)
+        : (n === 1 ? 'that change' : `${n} changes`);
       return {
-        reply: `I saved ${state.createdTransactionIds.length === 1 ? 'that transaction' : `${state.createdTransactionIds.length} transactions`}, but couldn't finish my reply. Check your transactions list before sending it again.`,
-        extractedTransactionIds: state.createdTransactionIds,
+        reply: `I saved ${what}, but couldn't finish my reply. Check your transactions list before sending it again.`,
+        extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
       };
     }
@@ -227,29 +300,33 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
     if (response.stop_reason === 'refusal') {
       return {
         reply: "I couldn't help with that one — could you rephrase it?",
-        extractedTransactionIds: state.createdTransactionIds,
+        extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
       };
     }
 
-    messages.push({ role: 'assistant', content: response.content });
+    // If the requested model declined partway and a fallback model took over, only the
+    // fallback's part is real: drop the declined attempt's tool calls (they must not run)
+    // and other internal blocks, as the API requires when echoing the turn back.
+    const content = afterFallback(response.content);
+    messages.push({ role: 'assistant', content });
 
     if (response.stop_reason !== 'tool_use') {
-      const reply = response.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      const reply = content
+        .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
         .map((b) => b.text)
         .join('')
         .trim();
       return {
         reply: reply || "I'm not sure how to respond to that — could you say it differently?",
-        extractedTransactionIds: state.createdTransactionIds,
+        extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
       };
     }
 
-    const toolUseBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-    const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-      toolUseBlocks.map(async (block): Promise<Anthropic.ToolResultBlockParam> => {
+    const toolUseBlocks = content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
+    const toolResults: Anthropic.Beta.BetaToolResultBlockParam[] = await Promise.all(
+      toolUseBlocks.map(async (block): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
         try {
           const output = await executeTool(block.name, block.input, ctx, state);
           return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(output) };
@@ -268,7 +345,7 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
 
   return {
     reply: "That's a lot to work through in one go — could you break it into smaller messages?",
-    extractedTransactionIds: state.createdTransactionIds,
+    extractedTransactionIds: touched(),
     receiptTransactionId: state.receiptTransactionId,
   };
 }

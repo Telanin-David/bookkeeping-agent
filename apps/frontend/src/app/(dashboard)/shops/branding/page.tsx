@@ -23,7 +23,8 @@ export default function BrandingPage() {
       id: 'sample-00a1b2', shopId: shop.id, userId: '', type: 'receivable', status: 'pending',
       amount: 25000, currency: shop.currency, description: 'Sample item', category: 'Preview',
       counterparty: 'Customer name', date: now, createdAt: now, updatedAt: now,
-      dueDate: new Date(Date.now() + 14 * 86_400_000).toISOString(), aiCategorized: false,
+      dueDate: new Date(Date.now() + 14 * 86_400_000).toISOString(), amountPaid: 0, balance: 25000,
+      aiCategorized: false,
     };
   }, [shop]);
 

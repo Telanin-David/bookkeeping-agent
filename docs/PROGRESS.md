@@ -9,8 +9,8 @@
 | 3 | Backend Source Code Structure & Entry Point | ✅ Done | `feat/deliverable-3-backend-structure` | merged to main |
 | 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | merged to main |
 | 5 | Claude Integration & System Prompt | ✅ Done | `feat/deliverable-5-claude-integration` | merged to main (#16) |
-| 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | — |
-| 7 | Report Generation & PDF Templates | ⬜ Not started | — | — |
+| 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | merged to main (#18, #19) |
+| 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | — |
 | 8 | Alert Detection & Routing System | ⬜ Not started | — | — |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
@@ -48,6 +48,49 @@
   - **Instant sign-out.** Access tokens carry `sid` (the device's refresh-token family). `requireAuth` checks that session is still active on every request, costing one indexed lookup. Signing a device out, or stolen-token detection, now cuts off its access token immediately, not up to 15 minutes later. Tokens without `sid` get a 401, so the app refreshes once and continues.
   - **Weak secrets.** In production, the server refuses to start if `JWT_ACCESS_SECRET` is under 32 characters or is the `.env.example` placeholder. Generate one with `openssl rand -base64 48`.
   - **Login limit per IP raised from 5 to 25 failed attempts per 15 minutes.** Nigerian mobile carriers put many phones behind one public IP, so 5 per IP let strangers lock each other out. Guessing a single account is still stopped at 5 by the per-account lockout, which doesn't depend on IP.
+
+- **Deliverable 7** made reports real. Before it, the report form sent `from`/`to` while the API expects `dateFrom`/`dateTo`, so every download failed; the endpoints also returned a line of text labelled as a PDF.
+  - **PDFs** (`services/pdf/`, pdfkit):
+    - Profit & Loss (A4)
+    - Credit Report (A4), as of the end date: who owed the shop that day, payments received in the period, the shop's unpaid bills and payments to suppliers
+    - 80 mm receipts and invoices
+    - All carry the shop's logo; invoices carry the signature. Long tables continue across pages with the header repeated and "Page x of y".
+  - **Fonts:** text is set in Geist, the web app's font, bundled in `apps/backend/assets/fonts` with its OFL licence. Any character Geist lacks (₦, and Yoruba letters like ṣ) is drawn from DejaVu Sans, also bundled. Don't switch to a font without ₦.
+  - **Accounting rule (owner's decision): accrual.** A credit sale is income on the day of the sale; a bill on credit is a cost on the day received. The P&L shows how much of each was still unpaid at the end of the period.
+    - A debt being paid is recorded as a payment against it, never as a new sale; otherwise the income would be counted twice.
+  - **Payments towards debts** (migration `005_debt_payments.sql`):
+    - `debt_payments` holds each payment (amount, `paid_on` date). Existing paid debts were backfilled with one payment dated their last update.
+    - The `transactions_with_payments` view adds `amount_paid`; the API returns `amountPaid` and `balance` on every transaction. All transaction reads go through the view.
+    - A debt's status follows its payments: `settled` once they cover the amount, back to unpaid when one is undone. Money is compared in kobo, and the debt row is locked (`FOR UPDATE`) while a payment is recorded, so two payments at once can't overpay it.
+    - Endpoints: `GET/POST /shops/{id}/transactions/{txId}/payments`, `DELETE …/payments/{paymentId}`. Refusals are 422 with plain messages: more than is owed, dated in the future or before the debt, already paid, not a debt.
+    - The old `PATCH status: settled` still works: it pays whatever is left, dated today. `PATCH status: pending` removes the payments. A debt can't be lowered below what's been paid, or turned into a cash sale while it has payments.
+    - The Credit Report is now a true snapshot as of its end date, because payments carry dates. The P&L's "unpaid" figure is as of the period end, too.
+    - Frontend: "Record payment" on Transactions opens a screen showing owed, paid and still owed, the payment history with Undo, and an amount (default: the rest) and date (default: today in Lagos). Rows show "Part-paid" and "₦x paid · ₦y left". Invoices, on screen and PDF, show "Paid so far" and "Balance due".
+    - Chat: the `record_debt_payment` tool replaces `mark_debt_paid`; it takes an optional amount and date, so "Mama Nkechi paid ₦5,000 yesterday" is recorded against her debt. **Not yet tried against the real Claude API**, because no `ANTHROPIC_API_KEY` is set in the dev environment; the tool is covered by unit tests with a mocked client.
+  - **Transactions filters fixed:** the list sent `from`/`to` (ignored by the API) and the API ignored `status`, so the date and status filters did nothing. Both work now.
+  - **Stock report is not available yet.** There are no products or quantities, so `POST /reports/stock` returns 501 and the UI hides it. The owner wants real shelf counting with low-stock warnings, planned as its own deliverable next.
+  - **Branding upload** (`PUT/DELETE /shops/{id}/branding/{logo|signature}`, migration `004_shop_branding.sql`):
+    - PNG and JPEG only, checked from the file's bytes, because those are the formats pdfkit can embed.
+    - Each upload gets a new random file name; the old file is deleted.
+    - Served publicly at `/api/v1/files/branding/{key}`.
+    - Files live under `UPLOAD_DIR`. On the VPS this must be a persistent, backed-up folder.
+  - **Date bug fixed:**
+    - pg parsed Postgres `DATE` columns into JS Dates at local midnight, and `toISOString()` shifted them a day early on any server east of UTC. On a Lagos-time VPS, every transaction would have shown the previous day. `DATE` is now read as plain `YYYY-MM-DD` text.
+    - "Today", due-date lateness and receipt times now use `BUSINESS_TIME_ZONE` (default `Africa/Lagos`) instead of UTC. The chat agent used UTC "today", so it dated sales as yesterday between midnight and 1am.
+  - **Frontend:**
+    - Receipt page has "Share PDF" (the phone share sheet, e.g. WhatsApp; download on desktop).
+    - Transactions show as cards on phones, so amount, status and "Record payment" aren't off-screen.
+    - Plain labels replace jargon: "Credit sale"/"Bill on credit" for receivable/payable, and "Paid"/"Unpaid" for the statuses.
+    - An invoice for a paid credit sale now says "Paid", not "Balance due".
+    - Chat list no longer shows "1 Jan 1970" or creates duplicate empty chats.
+    - The shared `Table` component's typing is fixed, so frontend `tsc` is now clean with 0 errors.
+  - **Refusal fallbacks:** the chat loop calls `client.beta.messages.create` with the `server-side-fallback-2026-07-01` beta and `fallbacks: "default"`, so if `claude-opus-5` declines a turn, the API retries it on the fallback model instead of returning a refusal. `afterFallback()` drops any text from before the switch. Categorisation still uses the regular endpoint with `claude-haiku-4-5`.
+
+## Before hosting (owner's decision)
+- **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday"), and the refusal fallback.
+  - To keep it cheap, run most of it on the cheapest model (`claude-haiku-4-5`). The chat model will need to be configurable by an environment variable for this.
+  - Haiku checks the wiring, but not how the production model (`claude-opus-5`) behaves, and the fallback beta may not apply to Haiku. So finish with a few messages on the production model.
+- The key goes in the server's environment, never in the repo or in chat.
 
 ## Rules
 - Never commit/push to `main` directly.

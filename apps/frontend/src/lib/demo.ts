@@ -1,4 +1,4 @@
-import type { Alert, Transaction, TransactionType, TransactionStatus } from '@/types';
+import type { Alert, DebtPayment, Transaction, TransactionType, TransactionStatus } from '@/types';
 
 export const DEMO_SHOP_ID = 'demo-shop-1';
 export const DEMO_USER_ID = 'demo-user-1';
@@ -20,6 +20,7 @@ function tx(
     id, shopId: DEMO_SHOP_ID, userId: 'demo-user-1', type, status, amount,
     currency: 'NGN', description, category, counterparty, date: at,
     dueDate: type === 'receivable' ? new Date(Date.now() + dueInDays * DAY).toISOString() : undefined,
+    amountPaid: status === 'settled' ? amount : 0, balance: status === 'settled' ? 0 : amount,
     aiCategorized: true, createdAt: at, updatedAt: at,
   };
 }
@@ -37,6 +38,43 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 export function findDemoTransaction(id: string): Transaction {
   const found = DEMO_TRANSACTIONS.find((t) => t.id === id);
   if (!found) throw new Error('Transaction not found');
+  return found;
+}
+
+// Demo-mode payments, kept in memory like the rest of the demo data.
+const demoPayments: DebtPayment[] = [];
+
+export function listDemoPayments(txId: string): DebtPayment[] {
+  return demoPayments.filter((p) => p.transactionId === txId);
+}
+
+/** Mirrors the server: pays `amount` (default: everything owed) and settles when covered. */
+export function recordDemoPayment(txId: string, amount: number | undefined, paidOn: string): Transaction {
+  const tx = findDemoTransaction(txId);
+  const pay = amount ?? tx.balance;
+  if (pay > tx.balance + 0.001) throw new Error('That’s more than is still owed.');
+  demoPayments.push({ id: `demo-pay-${Date.now()}`, transactionId: txId, amount: pay, paidOn, createdAt: new Date().toISOString() });
+  return syncDemoDebt(tx);
+}
+
+export function removeDemoPayment(txId: string, paymentId: string): Transaction {
+  const i = demoPayments.findIndex((p) => p.id === paymentId && p.transactionId === txId);
+  if (i >= 0) demoPayments.splice(i, 1);
+  return syncDemoDebt(findDemoTransaction(txId));
+}
+
+function syncDemoDebt(tx: Transaction): Transaction {
+  const paid = listDemoPayments(tx.id).reduce((s, p) => s + p.amount, 0);
+  return updateDemoTransaction(tx.id, {
+    amountPaid: paid, balance: tx.amount - paid,
+    status: paid >= tx.amount ? 'settled' : tx.status === 'settled' ? 'pending' : tx.status,
+  });
+}
+
+/** Demo-mode edit: changed in place so every screen sees it. */
+export function updateDemoTransaction(id: string, changes: Partial<Transaction>): Transaction {
+  const found = findDemoTransaction(id);
+  Object.assign(found, changes, { updatedAt: new Date().toISOString() });
   return found;
 }
 

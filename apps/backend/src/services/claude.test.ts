@@ -1,7 +1,10 @@
 const mockCreate = jest.fn();
 
+// Chat goes through client.beta.messages (for server-side fallbacks); categorization uses
+// client.messages. One mock records both, in call order.
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockCreate },
+  beta: { messages: { create: mockCreate } },
 })));
 
 jest.mock('./db');
@@ -33,7 +36,7 @@ function fakeTransaction(overrides: Partial<Transaction> = {}): Transaction {
   return {
     id: 'tx-1', shopId: ctx.shopId, userId: ctx.userId, type: 'sale', amount: 5000,
     currency: 'NGN', description: '2 bags of rice', category: 'Groceries', counterparty: undefined,
-    date: '2026-09-25', status: 'settled', aiCategorized: false,
+    date: '2026-09-25', status: 'settled', amountPaid: 5000, balance: 0, aiCategorized: false,
     createdAt: new Date(), updatedAt: new Date(),
     ...overrides,
   };
@@ -104,6 +107,91 @@ describe('sendChatMessage', () => {
     expect(mockDb.searchTransactions).toHaveBeenCalledWith('shop-1', 'user-1', expect.objectContaining({ counterparty: 'Mama Nkechi' }));
     expect(mockDb.findTransactionById).toHaveBeenCalledWith('tx-2', 'shop-1', 'user-1');
     expect(result.receiptTransactionId).toBe('tx-2');
+  });
+
+  it('records a debt payment when the customer pays, instead of recording a new sale', async () => {
+    const debt = fakeTransaction({ id: 'debt-1', type: 'receivable', status: 'pending', counterparty: 'Mama Nkechi', amount: 20000, amountPaid: 0, balance: 20000 });
+    mockDb.searchTransactions.mockResolvedValue([debt]);
+    mockDb.recordDebtPayment.mockResolvedValue({
+      ok: true,
+      transaction: { ...debt, status: 'settled', amountPaid: 20000, balance: 0 },
+      payment: { id: 'pay-1', transactionId: 'debt-1', amount: 20000, paidOn: '2026-09-26', createdAt: new Date() },
+    });
+
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('find_transactions', { counterparty: 'Mama Nkechi', unpaidOnly: true }, 'call-1'))
+      .mockResolvedValueOnce(toolUseResponse('record_debt_payment', { transactionId: 'debt-1' }, 'call-2'))
+      .mockResolvedValueOnce(textResponse('Done — Mama Nkechi’s ₦20,000 is paid in full.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'Mama Nkechi has paid her 20k' }]);
+
+    expect(mockDb.searchTransactions).toHaveBeenCalledWith('shop-1', 'user-1', expect.objectContaining({ unpaidOnly: true }));
+    expect(mockDb.recordDebtPayment).toHaveBeenCalledWith('debt-1', 'shop-1', 'user-1', expect.objectContaining({ amount: undefined }));
+    expect(mockDb.createTransaction).not.toHaveBeenCalled(); // no new sale: that would count the income twice
+    expect(result.extractedTransactionIds).toEqual(['debt-1']);
+  });
+
+  it('records a part-payment with the amount and date the owner gave', async () => {
+    mockDb.recordDebtPayment.mockResolvedValue({
+      ok: true,
+      transaction: fakeTransaction({ id: 'debt-1', type: 'receivable', status: 'pending', amount: 20000, amountPaid: 5000, balance: 15000 }),
+      payment: { id: 'pay-1', transactionId: 'debt-1', amount: 5000, paidOn: '2026-09-25', createdAt: new Date() },
+    });
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_debt_payment', { transactionId: 'debt-1', amount: 5000, paidOn: '2026-09-25' }))
+      .mockResolvedValueOnce(textResponse('Recorded ₦5,000 from Mama Nkechi — she still owes ₦15,000.'));
+
+    await sendChatMessage(ctx, [{ role: 'user', content: 'Mama Nkechi paid 5k yesterday' }]);
+
+    expect(mockDb.recordDebtPayment).toHaveBeenCalledWith('debt-1', 'shop-1', 'user-1', expect.objectContaining({ amount: 5000, paidOn: '2026-09-25' }));
+  });
+
+  it('tells the model when a payment is more than is owed, without recording it', async () => {
+    mockDb.recordDebtPayment.mockResolvedValue({ ok: false, reason: 'more_than_owed', balance: 15000 });
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_debt_payment', { transactionId: 'debt-1', amount: 50000 }))
+      .mockResolvedValueOnce(textResponse('She only owes ₦15,000 — did you mean that?'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'Mama Nkechi paid 50k' }]);
+
+    const finalMessages = mockCreate.mock.calls[1][0].messages;
+    const toolResultUserMsg = finalMessages.find(
+      (m: { content: unknown }) => Array.isArray(m.content) && m.content[0]?.type === 'tool_result',
+    );
+    expect(toolResultUserMsg.content[0].is_error).toBe(true);
+    expect(toolResultUserMsg.content[0].content).toMatch(/remaining balance is 15000/);
+    expect(result.extractedTransactionIds).toEqual([]);
+  });
+
+  it('asks for server-side refusal fallbacks on every chat request', async () => {
+    mockCreate.mockResolvedValueOnce(textResponse('Hello!'));
+    await sendChatMessage(ctx, [{ role: 'user', content: 'hi' }]);
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-opus-5', fallbacks: 'default', betas: ['server-side-fallback-2026-07-01'],
+    }));
+  });
+
+  it('after a mid-answer fallback, runs only the fallback model’s tool calls', async () => {
+    mockDb.searchTransactions.mockResolvedValue([]);
+    mockCreate
+      .mockResolvedValueOnce({
+        stop_reason: 'tool_use',
+        content: [
+          { type: 'text', text: 'Let me look that up.' },
+          { type: 'tool_use', id: 'declined', name: 'record_transaction', input: { type: 'sale', amount: 1, description: 'x' } },
+          { type: 'fallback', from: { model: 'claude-opus-5' }, to: { model: 'claude-opus-4-8' } },
+          { type: 'tool_use', id: 'kept', name: 'find_transactions', input: { counterparty: 'Musa' } },
+        ],
+      })
+      .mockResolvedValueOnce(textResponse('Musa has no unpaid debts.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'does Musa owe me?' }]);
+
+    expect(mockDb.createTransaction).not.toHaveBeenCalled(); // the declined model's call never runs
+    expect(mockDb.searchTransactions).toHaveBeenCalledTimes(1);
+    const echoed = mockCreate.mock.calls[1][0].messages.find((m: { role: string }) => m.role === 'assistant');
+    expect(echoed.content.map((b: { type: string; id?: string }) => b.id ?? b.type)).toEqual(['text', 'kept']);
+    expect(result.reply).toBe('Musa has no unpaid debts.');
   });
 
   it('never sets receiptTransactionId for a transaction id that does not belong to this shop', async () => {

@@ -34,9 +34,14 @@ export interface Shop {
   location?: string;
   currency: string;
   isActive: boolean;
+  /** Receipt branding images, as URLs the browser can load (null when not set). */
+  logoUrl: string | null;
+  signatureUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type BrandingKind = 'logo' | 'signature';
 
 export interface Transaction {
   id: string;
@@ -51,10 +56,23 @@ export interface Transaction {
   date: string;
   dueDate?: string;
   status: TransactionStatus;
+  /** Paid so far: sum of payments for a debt; the full amount for a settled cash sale/expense. */
+  amountPaid: number;
+  /** amount − amountPaid: what is still owed (0 for cash sales/expenses). */
+  balance: number;
   aiCategorized: boolean;
   importId?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** One payment towards a receivable (customer paying the shop) or payable (shop paying a supplier). */
+export interface DebtPayment {
+  id: string;
+  transactionId: string;
+  amount: number;
+  paidOn: string;
+  createdAt: Date;
 }
 
 export interface ChatSession {

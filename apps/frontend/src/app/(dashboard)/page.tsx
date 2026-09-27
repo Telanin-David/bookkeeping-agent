@@ -7,7 +7,7 @@ import { useAlerts } from '@/hooks/useAlerts';
 import PageWrapper from '@/components/layout/PageWrapper';
 import Spinner from '@/components/ui/Spinner';
 import Badge from '@/components/ui/Badge';
-import { capitalize, formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, typeLabel } from '@/lib/utils';
 
 export default function DashboardPage() {
   useShops();
@@ -60,7 +60,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-white/30">{formatDate(tx.date)}</p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <Badge>{capitalize(tx.type)}</Badge>
+                <Badge>{typeLabel(tx.type)}</Badge>
                 <span className="whitespace-nowrap text-sm font-medium tabular-nums text-white/70">
                   {tx.type === 'expense' ? '−' : '+'}{formatCurrency(tx.amount, tx.currency)}
                 </span>

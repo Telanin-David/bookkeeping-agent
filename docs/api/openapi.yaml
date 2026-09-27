@@ -317,9 +317,11 @@ paths:
       tags: [shops]
       summary: Upload or replace the shop's receipt logo or signature
       description: |
-        Max 2 MB; PNG, JPEG or WebP. The client already converts the image to grayscale and scales it
+        Max 2 MB; PNG or JPEG (checked from the file's bytes, not its name or type) — the formats the
+        PDF generator can embed. The client already converts the image to a grayscale PNG and scales it
         to at most 600×300 px, because receipts are printed in black and white. The server stores the file
-        and sets `logoUrl` or `signatureUrl` to a URL the browser can load.
+        under a new random name on every upload and sets `logoUrl` or `signatureUrl` to
+        `/api/v1/files/branding/{key}` (public, cacheable forever); the replaced file is deleted.
       x-rateLimit: '20 requests per hour'
       requestBody:
         required: true
@@ -376,6 +378,11 @@ paths:
           schema:
             type: string
             enum: [sale, expense, receivable, payable]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, settled, overdue]
         - name: category
           in: query
           schema:
@@ -480,6 +487,12 @@ paths:
     patch:
       tags: [transactions]
       summary: Update a transaction
+      description: |
+        For a credit sale or bill on credit, `status` is driven by its payments: `settled` records a
+        payment of whatever is still owed (dated today), `pending` removes all its payments, `overdue`
+        just flags it. Prefer the payments endpoints below, which support part-payments and dates.
+        Returns 400 if `amount` would drop below what has already been paid, or if `type` would turn a
+        debt with payments into a cash sale or expense.
       x-rateLimit: '120 requests per minute'
       requestBody:
         required: true
@@ -516,6 +529,108 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /shops/{shopId}/transactions/{transactionId}/payments:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - $ref: '#/components/parameters/transactionId'
+
+    get:
+      tags: [transactions]
+      summary: List payments towards a debt, oldest first
+      x-rateLimit: '120 requests per minute'
+      responses:
+        '200':
+          description: Payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DebtPayment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [transactions]
+      summary: Record a payment (full or part) towards a credit sale or bill on credit
+      description: |
+        The debt's status follows its payments: it becomes `settled` once they cover the amount. A
+        payment is never recorded as a new sale, which would count the income twice. Refused with 422
+        (plain-English `message`) when the transaction isn't a debt, is already paid, the amount is more
+        than is still owed, or `paidOn` is in the future or before the debt's date.
+      x-rateLimit: '120 requests per minute'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                  description: Omit to pay off everything still owed.
+                paidOn:
+                  type: string
+                  format: date
+                  description: Omit for today (in the shop's time zone).
+            example:
+              amount: 5000
+              paidOn: '2026-09-20'
+      responses:
+        '201':
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction:
+                    $ref: '#/components/schemas/Transaction'
+                  payment:
+                    $ref: '#/components/schemas/DebtPayment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Payment refused (see description)
+
+  /shops/{shopId}/transactions/{transactionId}/payments/{paymentId}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - $ref: '#/components/parameters/transactionId'
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    delete:
+      tags: [transactions]
+      summary: Undo a payment
+      description: Removes the payment; a paid debt reopens as unpaid.
+      x-rateLimit: '120 requests per minute'
+      responses:
+        '200':
+          description: The debt after the payment was removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # ── CHAT ─────────────────────────────────────
   /chat/sessions:
@@ -667,14 +782,17 @@ paths:
     post:
       tags: [reports]
       summary: Generate a receipt PDF for a transaction
-      x-rateLimit: '30 requests per minute'
+      description: |
+        An 80 mm-wide receipt (or invoice, for a credit sale) with the shop's logo and, on invoices,
+        signature. Sales and credit sales only; an expense or bill returns 422.
+      x-rateLimit: '30 requests per minute per user'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [transactionId]
+              required: [transactionId, shopId]
               properties:
                 transactionId:
                   type: string
@@ -701,6 +819,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -708,7 +828,12 @@ paths:
     post:
       tags: [reports]
       summary: Generate a credit (receivables) report PDF
-      x-rateLimit: '10 requests per minute'
+      description: |
+        A snapshot as of `dateTo` (or today, if `dateTo` is later): who owed the shop on that day (by
+        customer and itemised, with part-payments and days late), the payments received in the date
+        range, the shop's unpaid bills and what it paid suppliers. Payments count on the day they were
+        made, so a payment after `dateTo` isn't included.
+      x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
         content:
@@ -734,7 +859,9 @@ paths:
     post:
       tags: [reports]
       summary: Generate a stock/inventory report PDF
-      x-rateLimit: '10 requests per minute'
+      description: |
+        Not available yet — returns 501 until stock tracking (products and quantities) exists.
+      x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
         content:
@@ -753,6 +880,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          description: Stock tracking isn't available yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -760,7 +895,12 @@ paths:
     post:
       tags: [reports]
       summary: Generate a Profit & Loss statement PDF
-      x-rateLimit: '10 requests per minute'
+      description: |
+        Accrual basis: every transaction counts on its own date, so a credit sale is income on the day
+        of the sale and a bill on credit is a cost on the day received. The PDF also shows how much of
+        each was still unpaid at the end of the period. A debt being paid later is recorded as a payment
+        against it (`/transactions/{id}/payments`), never as a new sale.
+      x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
         content:
@@ -1397,6 +1537,12 @@ components:
         status:
           type: string
           enum: [pending, settled, overdue]
+        amountPaid:
+          type: number
+          description: Paid so far — payments towards a debt, or the full amount of a settled cash sale/expense.
+        balance:
+          type: number
+          description: Still owed (0 when paid, and for cash sales/expenses).
         aiCategorized:
           type: boolean
         importId:
@@ -1407,6 +1553,24 @@ components:
           type: string
           format: date-time
         updatedAt:
+          type: string
+          format: date-time
+
+    DebtPayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        paidOn:
+          type: string
+          format: date
+        createdAt:
           type: string
           format: date-time
 

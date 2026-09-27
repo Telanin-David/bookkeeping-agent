@@ -13,10 +13,28 @@ export function formatDate(dateStr: string): string {
   return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(new Date(dateStr));
 }
 
+const lagosDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/** Today's date as 'YYYY-MM-DD' in Lagos — the shop's day, whatever the device clock's zone. */
+export function todayInLagos(): string {
+  return lagosDay.format(new Date());
+}
+
 export function formatDateTime(dateStr: string): string {
   return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(dateStr));
 }
 
 export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).replace(/_/g, ' ');
+}
+
+/** Everyday names for transaction types — "receivable"/"payable" are accounting jargon. */
+export function typeLabel(type: string): string {
+  switch (type) {
+    case 'sale':       return 'Sale';
+    case 'expense':    return 'Expense';
+    case 'receivable': return 'Credit sale';
+    case 'payable':    return 'Bill on credit';
+    default:           return capitalize(type);
+  }
 }

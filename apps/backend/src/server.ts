@@ -14,13 +14,16 @@ import chatRoutes        from './routes/chat';
 import reportRoutes      from './routes/reports';
 import alertRoutes       from './routes/alerts';
 import importRoutes      from './routes/imports';
+import fileRoutes        from './routes/files';
 
 const app = express();
 if (config.trustProxyHops > 0) app.set('trust proxy', config.trustProxyHops);
 
 // ── Security middleware ───────────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: config.cors.frontendUrl, credentials: true }));
+// Content-Disposition carries the PDF file name; browsers hide it from cross-origin
+// scripts unless it's exposed here.
+app.use(cors({ origin: config.cors.frontendUrl, credentials: true, exposedHeaders: ['Content-Disposition'] }));
 app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 
@@ -40,6 +43,7 @@ app.use('/api/v1/chat',                        chatRoutes);
 app.use('/api/v1/reports',                     reportRoutes);
 app.use('/api/v1/alerts',                      alertRoutes);
 app.use('/api/v1/imports',                     importRoutes);
+app.use('/api/v1/files',                       fileRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'NOT_FOUND', message: 'Endpoint not found' }));

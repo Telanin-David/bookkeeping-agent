@@ -1,7 +1,10 @@
 'use client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { transactionsApi } from '@/lib/api';
-import { DEMO_TRANSACTIONS, findDemoTransaction, isDemoShop } from '@/lib/demo';
+import {
+  DEMO_TRANSACTIONS, findDemoTransaction, isDemoShop, updateDemoTransaction,
+  listDemoPayments, recordDemoPayment, removeDemoPayment,
+} from '@/lib/demo';
 import type { PaginatedResponse, Transaction } from '@/types';
 
 function demoPage(params?: Parameters<typeof transactionsApi.list>[1]): PaginatedResponse<Transaction> {
@@ -43,9 +46,13 @@ export function useCreateTransaction(shopId: string) {
 export function useUpdateTransaction(shopId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: Partial<Transaction> & { id: string }) =>
-      transactionsApi.update(shopId, id, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions', shopId] }),
+    mutationFn: ({ id, ...body }: Partial<Transaction> & { id: string }) => isDemoShop(shopId)
+      ? Promise.resolve(updateDemoTransaction(id, body))
+      : transactionsApi.update(shopId, id, body).then((r) => r.data),
+    onSuccess: (tx) => {
+      qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['transaction', shopId, tx.id] });
+    },
   });
 }
 
@@ -54,5 +61,44 @@ export function useDeleteTransaction(shopId: string) {
   return useMutation({
     mutationFn: (txId: string) => transactionsApi.delete(shopId, txId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions', shopId] }),
+  });
+}
+
+// ── Payments towards a debt ──────────────────────────────────
+
+export function usePayments(shopId: string, txId: string | null) {
+  return useQuery({
+    queryKey: ['payments', shopId, txId],
+    queryFn: () => isDemoShop(shopId)
+      ? Promise.resolve(listDemoPayments(txId!))
+      : transactionsApi.listPayments(shopId, txId!),
+    enabled: !!shopId && !!txId,
+  });
+}
+
+/** After a payment changes, the debt's status and balance change everywhere it's shown. */
+function refreshDebt(qc: QueryClient, shopId: string, txId: string) {
+  qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+  qc.invalidateQueries({ queryKey: ['transaction', shopId, txId] });
+  qc.invalidateQueries({ queryKey: ['payments', shopId, txId] });
+}
+
+export function useRecordPayment(shopId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ txId, amount, paidOn }: { txId: string; amount?: number; paidOn: string }) => isDemoShop(shopId)
+      ? Promise.resolve().then(() => recordDemoPayment(txId, amount, paidOn))
+      : transactionsApi.recordPayment(shopId, txId, { amount, paidOn }).then((r) => r.transaction),
+    onSuccess: (tx) => refreshDebt(qc, shopId, tx.id),
+  });
+}
+
+export function useRemovePayment(shopId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ txId, paymentId }: { txId: string; paymentId: string }) => isDemoShop(shopId)
+      ? Promise.resolve(removeDemoPayment(txId, paymentId))
+      : transactionsApi.removePayment(shopId, txId, paymentId),
+    onSuccess: (tx) => refreshDebt(qc, shopId, tx.id),
   });
 }

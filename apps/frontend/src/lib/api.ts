@@ -1,6 +1,6 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  DebtPayment, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -111,13 +111,18 @@ export const transactionsApi = {
   list: (shopId: string, params?: {
     type?: string; status?: string; category?: string;
     from?: string; to?: string; page?: number; limit?: number;
-  }) =>
-    api.get<PaginatedResponse<Transaction>>(`/api/v1/shops/${shopId}/transactions`, { params }),
+  }) => {
+    // The API names the date range dateFrom/dateTo; sending from/to was silently ignored.
+    const { from, to, ...rest } = params ?? {};
+    return api.get<PaginatedResponse<Transaction>>(`/api/v1/shops/${shopId}/transactions`, {
+      params: { ...rest, dateFrom: from || undefined, dateTo: to || undefined },
+    });
+  },
 
   get: (shopId: string, txId: string) =>
     api.get<Transaction>(`/api/v1/shops/${shopId}/transactions/${txId}`),
 
-  create: (shopId: string, body: Omit<Transaction, 'id' | 'shopId' | 'userId' | 'aiCategorized' | 'createdAt' | 'updatedAt'>) =>
+  create: (shopId: string, body: Omit<Transaction, 'id' | 'shopId' | 'userId' | 'aiCategorized' | 'amountPaid' | 'balance' | 'createdAt' | 'updatedAt'>) =>
     api.post<Transaction>(`/api/v1/shops/${shopId}/transactions`, body),
 
   update: (shopId: string, txId: string, body: Partial<Transaction>) =>
@@ -125,6 +130,18 @@ export const transactionsApi = {
 
   delete: (shopId: string, txId: string) =>
     api.delete(`/api/v1/shops/${shopId}/transactions/${txId}`),
+
+  // Payments towards a debt. Omitting amount pays off everything still owed; omitting
+  // paidOn means today.
+  listPayments: (shopId: string, txId: string) =>
+    api.get<{ data: DebtPayment[] }>(`/api/v1/shops/${shopId}/transactions/${txId}/payments`).then((r) => r.data.data),
+
+  recordPayment: (shopId: string, txId: string, body: { amount?: number; paidOn?: string }) =>
+    api.post<{ transaction: Transaction; payment: DebtPayment }>(`/api/v1/shops/${shopId}/transactions/${txId}/payments`, body)
+      .then((r) => r.data),
+
+  removePayment: (shopId: string, txId: string, paymentId: string) =>
+    api.delete<Transaction>(`/api/v1/shops/${shopId}/transactions/${txId}/payments/${paymentId}`).then((r) => r.data),
 };
 
 // ── Chat ──────────────────────────────────────────────────────
@@ -148,8 +165,29 @@ export const chatApi = {
 // ── Reports ───────────────────────────────────────────────────
 export const reportsApi = {
   generate: (type: ReportType, body: Record<string, unknown>) =>
-    api.post(`/api/v1/reports/${type}`, body, { responseType: 'blob' }),
+    api.post<Blob>(`/api/v1/reports/${type}`, body, { responseType: 'blob' }),
 };
+
+/** The file name the server chose (Content-Disposition), or a fallback. */
+export function downloadName(headers: Record<string, unknown>, fallback: string): string {
+  const cd = String(headers['content-disposition'] ?? '');
+  return /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback;
+}
+
+/**
+ * The server's error message for a request made with responseType 'blob' — the error
+ * body then arrives as a Blob too, so it has to be read as text before parsing.
+ */
+export async function blobErrorMessage(err: unknown, fallback: string): Promise<string> {
+  if (!isAxiosError(err)) return fallback;
+  const data: unknown = err.response?.data;
+  try {
+    const text = data instanceof Blob ? await data.text() : JSON.stringify(data);
+    return (JSON.parse(text) as { message?: string }).message ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 // ── Alerts ────────────────────────────────────────────────────
 export const alertsApi = {
