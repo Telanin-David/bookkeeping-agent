@@ -162,7 +162,13 @@
   - **History bug fixed:** the assistant was sent the *first* 30 messages of a chat, not the newest 30, so from the 31st message on it never saw what the owner had just typed. It now gets the newest 30, starting with an owner message. Checked against a local stand-in for the API: at message 20 of 20 (40 stored), the assistant sees message 20 last; the old query stopped at the 15th reply.
 
 - **Business dashboard** (owner's request, before Deliverable 10; migration `009_business_dashboard.sql`; built on `feat/chat-model-haiku`, so that merges first):
-  - **Who can open it:** accounts with `users.is_admin`. It's set on the server only, never from the app: `npm run make-admin -- someone@example.com` (add `--remove` to take it away). In production, where there is no ts-node: `node dist/scripts/makeAdmin.js someone@example.com`. Admins see "Business" in the sidebar and "Business dashboard" in the phone menu; everyone else gets a 403 from `/api/v1/admin/*`.
+  - **Who can open it:** accounts with `users.is_admin`. It's set on the server only, never from the app: `npm run make-admin -- someone@example.com` (add `--remove` to take it away). In production, where there is no ts-node: `node dist/scripts/makeAdmin.js someone@example.com`. Admins see "Business" in the sidebar and "Business dashboard" in the phone menu.
+  - **Invisible to everyone else** (owner's request): owners shouldn't know it exists.
+    - The page `/admin` shows the same full-page "This page doesn't exist" as any wrong address, signed in or out (the layout throws it, so it doesn't appear inside the app's menus; signed out, it's not a redirect to log in).
+    - `/api/v1/admin/*` answers non-admins, and requests with no or a forged sign-in, with the same 404 as a path that isn't there. An expired sign-in still gets 401, so an admin's app can refresh it; that only tells someone already signed in that the path needs a sign-in.
+    - `isAdmin` is only in the sign-up/login/refresh response for admins.
+    - Still true: the link's label and address are in the app's code, like every page's, so someone who reads the JavaScript could find the word. It gives them nothing: the server checks every request. A separate admin site would remove even that; not worth it now.
+    - New: a "page not found" page in the app's style for every wrong address (it was Next.js's white default).
   - **What it shows (last 30 days, Lagos days):**
     - AI spending: today, this month so far, this month at this pace, per message, per owner who chatted, a bar per day (hover or tap for the numbers, or read it as a table), and how often the assistant couldn't answer.
     - Owners: signed up, email confirmed, used the app today, this week and in 30 days.
@@ -178,7 +184,7 @@
     - `transactions.source`: 'chat' for anything the assistant recorded, 'app' otherwise.
     - `ai_corrections`: an owner edited what the assistant filled in (amount, type, date, who, what, category) or deleted the transaction. Marking paid doesn't count. It keeps no amounts, and survives the transaction's deletion.
   - **Limits:** the queries scan the tables directly, which is fine for hundreds of owners. Past that they will need summary tables. The user list shows the top 200. The migration's backfill uses Lagos time.
-  - **Checked:** 8 new backend unit tests (usage rows, activity once a day, admin gate); 28 end-to-end checks against a local stand-in for the AI (make-admin, 401/403, costs, messages, failures, accuracy with edits, deletes and form sales, coming back, the user list, and nothing private in the responses); 11 browser checks on desktop and phone with a made-up 10-owner trial, including an ordinary owner being kept out.
+  - **Checked:** 9 new backend unit tests (usage rows, activity once a day, the admin gate answering like a missing path); 28 end-to-end checks against a local stand-in for the AI (make-admin, 404 for everyone but the admin, costs, messages, failures, accuracy with edits, deletes and form sales, coming back, the user list, and nothing private in the responses); 11 browser checks on desktop and phone with a made-up 10-owner trial; 11 more that an owner and a signed-out visitor see exactly the same page at `/admin` as at a made-up address, that the API answers them like a missing path, and that the admin's dashboard survives an expired sign-in.
   - **Merge note:** migration 009 skips 008, which is on the unmerged D9 branch. Whichever merges second has to keep both in `npm run migrate`.
 
 ## Before hosting (owner's decision)

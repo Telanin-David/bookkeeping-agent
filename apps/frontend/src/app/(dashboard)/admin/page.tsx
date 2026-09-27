@@ -1,5 +1,6 @@
 'use client';
 import type { ReactNode } from 'react';
+import { notFound } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
@@ -19,13 +20,8 @@ export default function AdminPage() {
   const overview = useQuery({ queryKey: ['admin', 'overview'], queryFn: adminApi.overview, enabled: isAdmin });
   const users = useQuery({ queryKey: ['admin', 'users'], queryFn: adminApi.users, enabled: isAdmin });
 
-  if (!isAdmin) {
-    return (
-      <PageWrapper title="Business dashboard">
-        <p className="glass-card max-w-xl rounded-2xl p-5 text-[14px] text-white/55">Only the app&apos;s admins can see this page.</p>
-      </PageWrapper>
-    );
-  }
+  // The dashboard layout already shows non-admins "not found"; this is a second lock.
+  if (!isAdmin) notFound();
 
   return (
     <PageWrapper title="Business dashboard">

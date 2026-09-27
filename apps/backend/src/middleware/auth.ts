@@ -83,12 +83,31 @@ async function markActive(userId: string): Promise<void> {
   }
 }
 
-/** For the business dashboard: only accounts made admin on the server get past. Use after requireAuth. */
-export async function requireAdmin(req: Request, _res: Response, next: NextFunction): Promise<void> {
+// Exactly what the server sends for a path that doesn't exist.
+const notFound = () => new AppError(404, 'NOT_FOUND', 'Endpoint not found');
+
+/**
+ * For the business dashboard, which owners shouldn't know exists: anyone but an admin,
+ * signed in or not, gets the same 404 as a path that isn't there. The one exception is an
+ * expired sign-in, which gets the usual 401 so an admin's app can refresh it and carry on;
+ * that only tells someone who was already signed in that the path needs a sign-in.
+ */
+export async function adminOnly(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return next(notFound());
   try {
-    if (!(await db.isAdmin(req.user!.id))) throw new AppError(403, 'FORBIDDEN', 'Only the app’s admins can see this.');
-    next();
+    jwt.verify(header.slice(7), config.jwt.accessSecret);
   } catch (err) {
-    next(err);
+    return next(err instanceof jwt.TokenExpiredError
+      ? new AppError(401, 'UNAUTHORIZED', 'Token is expired or invalid')
+      : notFound());
   }
+  await requireAuth(req, res, async (err?: unknown) => {
+    if (err) return next(err instanceof AppError && err.statusCode === 401 ? notFound() : err);
+    try {
+      next((await db.isAdmin(req.user!.id)) ? undefined : notFound());
+    } catch (e) {
+      next(e);
+    }
+  });
 }

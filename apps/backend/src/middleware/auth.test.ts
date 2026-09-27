@@ -6,7 +6,7 @@ jest.mock('../services/db');
 
 // Imported after the mock so the middleware gets the mocked db module.
 import * as db from '../services/db';
-import { requireAuth, requireAdmin } from './auth';
+import { requireAuth, adminOnly } from './auth';
 import { errorHandler } from './errorHandler';
 import { config } from '../config';
 
@@ -14,7 +14,7 @@ const mockDb = db as jest.Mocked<typeof db>;
 
 const app = express();
 app.get('/protected', requireAuth, (req, res) => res.json({ user: req.user }));
-app.get('/admin', requireAuth, requireAdmin, (_req, res) => res.json({ ok: true }));
+app.get('/admin', adminOnly, (_req, res) => res.json({ ok: true }));
 app.use(errorHandler);
 
 function token(payload: object, secret = config.jwt.accessSecret) {
@@ -87,15 +87,31 @@ describe('activity for the business dashboard', () => {
   });
 });
 
-describe('requireAdmin', () => {
-  const auth = () => `Bearer ${token({ sub: 'user-1', email: 'a@t.ng', sid: 'family-1' })}`;
+describe('adminOnly', () => {
+  const auth = (secret?: string) => `Bearer ${token({ sub: 'user-1', email: 'a@t.ng', sid: 'family-1' }, secret)}`;
+  const looksMissing = (res: request.Response) => {
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'NOT_FOUND', message: 'Endpoint not found' });
+  };
 
-  it('turns away a signed-in owner who is not an admin', async () => {
+  it('answers an ordinary owner exactly as if the path did not exist', async () => {
     mockDb.isSessionActive.mockResolvedValue(true);
     mockDb.isAdmin.mockResolvedValue(false);
-    const res = await request(app).get('/admin').set('Authorization', auth());
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe('FORBIDDEN');
+    looksMissing(await request(app).get('/admin').set('Authorization', auth()));
+  });
+
+  it('answers a request with no sign-in, a forged token, or a signed-out device the same way', async () => {
+    looksMissing(await request(app).get('/admin'));
+    looksMissing(await request(app).get('/admin').set('Authorization', auth('forged-secret')));
+    mockDb.isSessionActive.mockResolvedValue(false);
+    looksMissing(await request(app).get('/admin').set('Authorization', auth()));
+    expect(mockDb.isAdmin).not.toHaveBeenCalled();
+  });
+
+  it('gives an expired sign-in the usual 401, so an admin\u2019s app can refresh it', async () => {
+    const expired = jwt.sign({ sub: 'user-1', email: 'a@t.ng', sid: 'family-1', exp: Math.floor(Date.now() / 1000) - 60 }, config.jwt.accessSecret);
+    const res = await request(app).get('/admin').set('Authorization', `Bearer ${expired}`);
+    expect(res.status).toBe(401);
   });
 
   it('lets an admin through', async () => {
@@ -104,11 +120,5 @@ describe('requireAdmin', () => {
     const res = await request(app).get('/admin').set('Authorization', auth());
     expect(res.status).toBe(200);
     expect(mockDb.isAdmin).toHaveBeenCalledWith('user-1');
-  });
-
-  it('never reaches the admin check without a valid session', async () => {
-    const res = await request(app).get('/admin');
-    expect(res.status).toBe(401);
-    expect(mockDb.isAdmin).not.toHaveBeenCalled();
   });
 });

@@ -248,6 +248,8 @@ paths:
       summary: The app's numbers for the last 30 days
       description: |
         Admins only (users.is_admin, set on the server with `npm run make-admin -- email`).
+        To anyone else it doesn't exist: 404 like an unknown path. An expired token still
+        gets 401, so the admin's app can refresh it.
         Counts and costs only; no shop's amounts, customers or descriptions. "Active" means
         the owner opened the app that day. Admin accounts are left out of users, activity,
         returning and accuracy, but AI spending includes them. Days are business days
@@ -255,7 +257,7 @@ paths:
       responses:
         '200': { description: Overview, content: { application/json: { schema: { $ref: '#/components/schemas/AdminOverview' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Not an admin }
+        '404': { description: 'Not an admin, or not signed in: the same answer as a path that does not exist' }
 
   /admin/users:
     get:
@@ -273,7 +275,7 @@ paths:
                   total: { type: integer }
                   limit: { type: integer, example: 200 }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Not an admin }
+        '404': { description: 'Not an admin, or not signed in: the same answer as a path that does not exist' }
 
   # ── SHOPS ────────────────────────────────────
   /shops:
@@ -1692,7 +1694,7 @@ components:
           description: Alerts are only emailed to a confirmed address. Settings are at /account/alert-settings.
         isAdmin:
           type: boolean
-          description: Can open the business dashboard. Set on the server only.
+          description: Only present, as true, for admins (who can open the business dashboard). Set on the server only.
 
     AdminOverview:
       type: object
