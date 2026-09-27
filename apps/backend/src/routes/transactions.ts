@@ -118,6 +118,10 @@ router.patch('/:transactionId', validate(updateSchema), async (req: Request, res
 
     let tx = await db.updateTransaction(txId, shopId, userId, isDebt(current.type) ? changes : { ...changes, status });
     if (!tx) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
+    // Changing what the assistant filled in counts against its accuracy; marking paid doesn't.
+    const fixed = (Object.keys(changes) as (keyof typeof changes)[])
+      .some((k) => changes[k] !== undefined && changes[k] !== current[k]);
+    if (fixed) await db.noteAiCorrection(txId, shopId, userId, 'edited');
     if (changes.date && changes.date !== current.date) await stock.moveTransactionItems(txId, changes.date);
 
     // A debt's status follows its payments. "Settled" pays off what's left today;
@@ -190,6 +194,8 @@ router.delete('/:transactionId/payments/:paymentId', async (req: Request, res: R
 
 router.delete('/:transactionId', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Counted before the row goes, while its source is still known.
+    await db.noteAiCorrection(req.params['transactionId']!, req.params['shopId']!, req.user!.id, 'deleted');
     // Any stock the transaction moved goes back with it.
     const deleted = await stock.deleteTransactionWithStock(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
     if (!deleted) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');

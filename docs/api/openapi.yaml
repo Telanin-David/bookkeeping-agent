@@ -34,6 +34,8 @@ tags:
     description: The signed-in owner's own settings
   - name: imports
     description: Excel/CSV bulk upload pipeline
+  - name: admin
+    description: Business dashboard for the app's admins (counts and costs only)
   - name: health
     description: Service health
 
@@ -238,6 +240,40 @@ paths:
         '200': { description: Updated settings, content: { application/json: { schema: { $ref: '#/components/schemas/AlertSettings' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ── ADMIN (business dashboard) ─────────────
+  /admin/overview:
+    get:
+      tags: [admin]
+      summary: The app's numbers for the last 30 days
+      description: |
+        Admins only (users.is_admin, set on the server with `npm run make-admin -- email`).
+        Counts and costs only; no shop's amounts, customers or descriptions. "Active" means
+        the owner opened the app that day. Admin accounts are left out of users, activity,
+        returning and accuracy, but AI spending includes them. Days are business days
+        (BUSINESS_TIME_ZONE).
+      responses:
+        '200': { description: Overview, content: { application/json: { schema: { $ref: '#/components/schemas/AdminOverview' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Not an admin }
+
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: Every account with its last 30 days of use, most AI spending first (top 200)
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/AdminUser' } }
+                  total: { type: integer }
+                  limit: { type: integer, example: 200 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Not an admin }
 
   # ── SHOPS ────────────────────────────────────
   /shops:
@@ -1654,6 +1690,84 @@ components:
         emailVerified:
           type: boolean
           description: Alerts are only emailed to a confirmed address. Settings are at /account/alert-settings.
+        isAdmin:
+          type: boolean
+          description: Can open the business dashboard. Set on the server only.
+
+    AdminOverview:
+      type: object
+      properties:
+        today: { type: string, format: date }
+        windowStart: { type: string, format: date, description: First day of the 30-day window }
+        users:
+          type: object
+          properties:
+            total: { type: integer }
+            verified: { type: integer }
+            newInWindow: { type: integer }
+            activeToday: { type: integer }
+            active7: { type: integer }
+            active30: { type: integer }
+        ai:
+          type: object
+          description: US dollars. costPerMessage and costPerChatUser are null when there were no messages.
+          properties:
+            messagesToday: { type: integer }
+            costToday: { type: number }
+            messages: { type: integer, description: Owner messages answered in the window }
+            cost: { type: number }
+            failed: { type: integer, description: Messages the assistant couldn't answer }
+            costPerMessage: { type: number, nullable: true }
+            chatUsers: { type: integer }
+            costPerChatUser: { type: number, nullable: true }
+            monthToDate: { type: number }
+            monthProjected: { type: number, description: monthToDate spread over the whole month }
+            daily:
+              type: array
+              items:
+                type: object
+                properties:
+                  day: { type: string, format: date }
+                  messages: { type: integer }
+                  cost: { type: number }
+        accuracy:
+          type: object
+          description: Transactions the assistant recorded, and how many an owner later edited (what it filled in) or deleted.
+          properties:
+            recorded: { type: integer }
+            corrected: { type: integer }
+            rate: { type: number, nullable: true }
+        returning:
+          type: array
+          description: Of owners who signed up at least afterDays ago, how many opened the app again afterDays or more after signing up.
+          items:
+            type: object
+            properties:
+              afterDays: { type: integer, enum: [7, 14, 28] }
+              eligible: { type: integer }
+              returned: { type: integer }
+        emails:
+          type: object
+          properties:
+            sent: { type: integer }
+            failed: { type: integer }
+
+    AdminUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        signedUp: { type: string, format: date }
+        emailVerified: { type: boolean }
+        isAdmin: { type: boolean }
+        shops: { type: integer }
+        lastActive: { type: string, format: date, nullable: true }
+        activeDays: { type: integer, description: Days used in the last 30 }
+        messages: { type: integer }
+        cost: { type: number, description: US dollars, last 30 days }
+        recorded: { type: integer }
+        corrected: { type: integer }
 
     AlertSettings:
       type: object

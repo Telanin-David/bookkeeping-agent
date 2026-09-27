@@ -254,6 +254,44 @@ describe('sendChatMessage', () => {
     expect(result.reply).toMatch(/smaller messages/i);
   });
 
+  it('saves one usage row per owner message: tokens, cost, and how many transactions it recorded', async () => {
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+    mockDb.createTransaction.mockResolvedValue(fakeTransaction());
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', { type: 'sale', amount: 5000, description: '2 bags of rice', category: 'Groceries' }))
+      .mockResolvedValueOnce(textResponse('Recorded.'));
+
+    await sendChatMessage(ctx, [{ role: 'user', content: 'I sold 2 bags of rice for 5000' }]);
+
+    expect(mockDb.createTransaction).toHaveBeenCalledWith(expect.objectContaining({ source: 'chat' }));
+    expect(mockDb.recordAiUsage).toHaveBeenCalledTimes(1);
+    expect(mockDb.recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1', shopId: 'shop-1', model: 'claude-haiku-4-5', calls: 2,
+      input: 6000, cacheWrite: 8000, output: 200, recorded: 1, failed: false,
+    }));
+    (console.info as jest.Mock).mockRestore();
+  });
+
+  it('saves a failed usage row when the assistant could not answer at all', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('overloaded'));
+    await expect(sendChatMessage(ctx, [{ role: 'user', content: 'hi' }])).rejects.toThrow('overloaded');
+    expect(mockDb.recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({ calls: 0, costUsd: 0, recorded: 0, failed: true }));
+  });
+
+  it('still replies when the usage row cannot be saved', async () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+    mockDb.recordAiUsage.mockRejectedValueOnce(new Error('db down'));
+    mockCreate.mockResolvedValueOnce(textResponse('Hello!'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'hi' }]);
+
+    expect(result.reply).toBe('Hello!');
+    expect(error).toHaveBeenCalledWith('Could not save AI usage:', 'db down');
+    error.mockRestore();
+    (console.info as jest.Mock).mockRestore();
+  });
+
   it('returns a plain fallback reply on a refusal instead of surfacing raw stop details', async () => {
     mockCreate.mockResolvedValueOnce({ stop_reason: 'refusal', content: [], usage });
 

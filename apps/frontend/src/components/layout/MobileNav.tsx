@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   X, SquaresFour, ArrowsLeftRight, ChartBar, Bell,
-  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging,
+  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging, Gauge,
 } from '@phosphor-icons/react';
 import { MenuIcon } from '@/components/ui/icons';
 import { cn, formatDateTime } from '@/lib/utils';
@@ -114,6 +114,7 @@ export default function MobileNav() {
             <MenuRow href="/shops" Icon={Storefront} label="Manage shops" onClick={closeAll} />
             <MenuRow href="/shops/branding" Icon={Stamp} label="Receipt branding" onClick={closeAll} />
             <MenuRow href="/settings/alerts" Icon={BellRinging} label="Alert emails" onClick={closeAll} />
+            {user?.isAdmin && <MenuRow href="/admin" Icon={Gauge} label="Business dashboard" onClick={closeAll} />}
 
             <div className="mx-3 my-1.5 h-px bg-white/[0.07]" />
 

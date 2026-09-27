@@ -14,6 +14,7 @@
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
+| 9b | Business dashboard (owner's request) | 🔍 In review | `feat/business-dashboard` | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -159,6 +160,26 @@
   - **Caching:** Haiku 4.5 only caches a prompt start of 4,096+ tokens, and the system prompt plus tools come to about 2,500. So the marker on the system prompt alone saved nothing. The request now also marks the newest message (top-level `cache_control`): when a turn uses a tool, the second call reads the whole conversation from the cache at a tenth of the price. A turn with no tool call pays 25% extra on that write, unless the owner's next message comes within 5 minutes.
   - **Usage log:** every owner message logs one line: `chat usage shop=… model=… calls=… input=… cache_write=… cache_read=… output=… cost_usd=…`. Read real costs off it during the live test.
   - **History bug fixed:** the assistant was sent the *first* 30 messages of a chat, not the newest 30, so from the 31st message on it never saw what the owner had just typed. It now gets the newest 30, starting with an owner message. Checked against a local stand-in for the API: at message 20 of 20 (40 stored), the assistant sees message 20 last; the old query stopped at the 15th reply.
+
+- **Business dashboard** (owner's request, before Deliverable 10; migration `009_business_dashboard.sql`; built on `feat/chat-model-haiku`, so that merges first):
+  - **Who can open it:** accounts with `users.is_admin`. It's set on the server only, never from the app: `npm run make-admin -- someone@example.com` (add `--remove` to take it away). In production, where there is no ts-node: `node dist/scripts/makeAdmin.js someone@example.com`. Admins see "Business" in the sidebar and "Business dashboard" in the phone menu; everyone else gets a 403 from `/api/v1/admin/*`.
+  - **What it shows (last 30 days, Lagos days):**
+    - AI spending: today, this month so far, this month at this pace, per message, per owner who chatted, a bar per day (hover or tap for the numbers, or read it as a table), and how often the assistant couldn't answer.
+    - Owners: signed up, email confirmed, used the app today, this week and in 30 days.
+    - Accuracy: of the transactions the assistant recorded, how many an owner later changed or deleted. Under 1 in 20 is the target; above it, try a stronger model. It's a rough measure: some fixes are owners changing their minds.
+    - Coming back: of owners who signed up at least 1, 2 or 4 weeks ago, how many opened the app again at least that long after.
+    - Alert emails sent and failed.
+    - A list of every owner, most AI spending first: signed up, last used, days used, messages, AI cost, and how many of their assistant records they fixed.
+  - **Privacy:** counts and costs only. The dashboard never reads a shop's amounts, customers or descriptions (the end-to-end check searches the responses for them).
+  - **Admins are left out** of the owner, activity, coming-back and accuracy numbers, so your own testing doesn't skew them. AI spending includes everyone, since it's the bill.
+  - **New data:**
+    - `ai_usage`: one row per owner chat message: model, calls, tokens, estimated cost, how many transactions it recorded, and whether it failed. The chat saves it even when the reply fails; if saving fails, the owner still gets their reply.
+    - `user_active_days`: a user is marked active once a day, on their first signed-in request (kept in memory after that, so it costs one write per user per day). The migration fills it from existing sign-ins, chats and transactions.
+    - `transactions.source`: 'chat' for anything the assistant recorded, 'app' otherwise.
+    - `ai_corrections`: an owner edited what the assistant filled in (amount, type, date, who, what, category) or deleted the transaction. Marking paid doesn't count. It keeps no amounts, and survives the transaction's deletion.
+  - **Limits:** the queries scan the tables directly, which is fine for hundreds of owners. Past that they will need summary tables. The user list shows the top 200. The migration's backfill uses Lagos time.
+  - **Checked:** 8 new backend unit tests (usage rows, activity once a day, admin gate); 28 end-to-end checks against a local stand-in for the AI (make-admin, 401/403, costs, messages, failures, accuracy with edits, deletes and form sales, coming back, the user list, and nothing private in the responses); 11 browser checks on desktop and phone with a made-up 10-owner trial, including an ordinary owner being kept out.
+  - **Merge note:** migration 009 skips 008, which is on the unmerged D9 branch. Whichever merges second has to keep both in `npm run migrate`.
 
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").

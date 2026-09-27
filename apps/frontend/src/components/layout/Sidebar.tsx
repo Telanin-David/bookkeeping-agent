@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   SquaresFour, ArrowsLeftRight, ChatCircle,
-  ChartBar, Bell, UploadSimple, Storefront, NotePencil, Package,
+  ChartBar, Bell, UploadSimple, Storefront, NotePencil, Package, Gauge,
 } from '@phosphor-icons/react';
 import { cn, formatDateTime } from '@/lib/utils';
 import { useAlertsStore } from '@/store/alerts';
+import { useAuthStore } from '@/store/auth';
 import { useChatStore } from '@/store/chat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 
@@ -20,11 +21,14 @@ const NAV = [
   { href: '/imports',      label: 'Import',        Icon: UploadSimple },
   { href: '/shops',        label: 'Shops',         Icon: Storefront },
 ];
+// Only for accounts made admin on the server.
+const ADMIN_NAV = { href: '/admin', label: 'Business', Icon: Gauge };
 
 export default function Sidebar() {
   const pathname   = usePathname();
   const router     = useRouter();
   const alertCount = useAlertsStore((s) => s.activeCount);
+  const isAdmin    = useAuthStore((s) => s.user?.isAdmin === true);
   const activeSessionId    = useChatStore((s) => s.activeSessionId);
   const setActiveSessionId = useChatStore((s) => s.setActiveSessionId);
   const { sessions, createSession } = useChatSessions();
@@ -48,7 +52,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="shrink-0 space-y-0.5 px-2 py-2">
-        {NAV.map(({ href, label, Icon }) => {
+        {(isAdmin ? [...NAV, ADMIN_NAV] : NAV).map(({ href, label, Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
             <Link

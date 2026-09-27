@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { AppError } from './errorHandler';
 import * as db from '../services/db';
+import { todayIso } from '../utils/dates';
 
 interface AccessTokenPayload {
   sub: string;
@@ -35,6 +36,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       return next(new AppError(401, 'UNAUTHORIZED', 'Session has ended. Please log in again.'));
     }
     req.user = { id: payload.sub, email: payload.email };
+    await markActive(payload.sub);
     next();
   } catch (err) {
     next(err);
@@ -62,4 +64,31 @@ export function requireShopOwnership(getShopId: (req: Request) => unknown) {
       next();
     } catch (err) { next(err); }
   };
+}
+
+// Users already marked active today, so it costs one write per user per day, not per request.
+let activeDay = '';
+const activeToday = new Set<string>();
+
+async function markActive(userId: string): Promise<void> {
+  const today = todayIso();
+  if (today !== activeDay) { activeDay = today; activeToday.clear(); }
+  if (activeToday.has(userId)) return;
+  try {
+    await db.markActiveDay(userId, today);
+    activeToday.add(userId);
+  } catch (err) {
+    // Only the dashboard's numbers depend on this; never block the owner over it.
+    console.error('Could not record activity:', err instanceof Error ? err.message : err);
+  }
+}
+
+/** For the business dashboard: only accounts made admin on the server get past. Use after requireAuth. */
+export async function requireAdmin(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!(await db.isAdmin(req.user!.id))) throw new AppError(403, 'FORBIDDEN', 'Only the app’s admins can see this.');
+    next();
+  } catch (err) {
+    next(err);
+  }
 }

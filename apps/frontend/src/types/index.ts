@@ -5,6 +5,31 @@ export interface User {
   phone?: string;
   /** Alerts are only emailed to a confirmed address. Absent in demo mode. */
   emailVerified?: boolean;
+  /** Can open the business dashboard (set on the server). */
+  isAdmin?: boolean;
+}
+
+// ── Business dashboard (admins only) ──────────────────────────
+export interface AdminOverview {
+  today: string;
+  windowStart: string;
+  users: { total: number; verified: number; newInWindow: number; activeToday: number; active7: number; active30: number };
+  ai: {
+    messagesToday: number; costToday: number;
+    messages: number; cost: number; failed: number; costPerMessage: number | null;
+    chatUsers: number; costPerChatUser: number | null;
+    monthToDate: number; monthProjected: number;
+    daily: { day: string; messages: number; cost: number }[];
+  };
+  accuracy: { recorded: number; corrected: number; rate: number | null };
+  returning: { afterDays: number; eligible: number; returned: number }[];
+  emails: { sent: number; failed: number };
+}
+
+export interface AdminUser {
+  id: string; name: string; email: string; signedUp: string; emailVerified: boolean; isAdmin: boolean;
+  shops: number; lastActive: string | null; activeDays: number;
+  messages: number; cost: number; recorded: number; corrected: number;
 }
 
 export interface AlertSettings {

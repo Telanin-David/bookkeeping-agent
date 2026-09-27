@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  AlertSettings, CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AdminOverview, AdminUser, AlertSettings, CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -89,6 +89,12 @@ export const accountApi = {
 
   updateAlertSettings: (body: Partial<Pick<AlertSettings, 'emailAlerts' | 'quietStart' | 'quietEnd'>>) =>
     api.patch<AlertSettings>('/api/v1/account/alert-settings', body).then((r) => r.data),
+};
+
+// ── Business dashboard (admins only) ──────────────────────────
+export const adminApi = {
+  overview: () => api.get<AdminOverview>('/api/v1/admin/overview').then((r) => r.data),
+  users: () => api.get<{ data: AdminUser[]; total: number; limit: number }>('/api/v1/admin/users').then((r) => r.data),
 };
 
 // ── Shops ─────────────────────────────────────────────────────
