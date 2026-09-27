@@ -125,6 +125,17 @@
   - Haiku checks the wiring, but not how the production model (`claude-opus-5`) behaves, and the fallback beta may not apply to Haiku. So finish with a few messages on the production model.
 - The key goes in the server's environment, never in the repo or in chat.
 
+## Voice input (owner's decision)
+- **For now:** owners use their phone keyboard's microphone to dictate into the chat box. The app's own mic button does nothing yet.
+- **When voice is built: self-hosted Whisper on the VPS from day one** (not a paid speech-to-text API). It is to be moved to its own VPS as users grow.
+  - Run it as its own service (faster-whisper) in a container with CPU and memory limits, so it can't starve the other apps on the VPS.
+  - Only the backend can reach it; it isn't open to the internet.
+  - Handle one or two voice notes at a time and queue the rest.
+  - The backend finds it through one setting (`WHISPER_URL`), so moving it to another VPS is a config change, not a code change.
+  - Voice notes are capped in length and size, and rate-limited per user.
+  - The transcript is shown in the chat box for the owner to check and edit before sending, because misheard amounts ("fifty" for "fifteen") go straight into the books otherwise.
+  - Before launch, pick the model size by testing 20–30 real Nigerian voice notes (English, Pidgin, names, amounts) for accuracy and speed on the actual VPS.
+
 ## Rules
 - Never commit/push to `main` directly.
 - One deliverable per branch. Create feature branch → do work → push → open PR → wait for merge.
