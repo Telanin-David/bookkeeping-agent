@@ -151,7 +151,7 @@
     - A banner asking the owner to confirm their email.
     - The Alerts page links to email settings and uses everyday labels ("Customer owes you", "Bill due", "Low stock", "Recorded twice?").
   - **Known limit:** a low-stock alert that was already emailed as "running low" is not emailed again when the product runs out. The app does re-show it as active.
-  - **Not fixed here, pre-existing:** `npm audit` flags `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp`. The risk is when installing packages, not while the app runs. The fix is bcrypt 6, which is a separate change to test on its own.
+  - **Fixed afterwards (`fix/bcrypt-6`):** `npm audit` flagged `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp` (an install-time risk). bcrypt is now 6; `npm audit` reports 0 vulnerabilities. Passwords hashed by bcrypt 5 still verify: an account created before the upgrade logs in, and a wrong password is refused.
 
 - **Deliverable 9: spreadsheet import.** Before this, only the upload worked; preview, check and import were placeholders that saved nothing. Migration `008_import_undo.sql`.
   - **Flow:**
