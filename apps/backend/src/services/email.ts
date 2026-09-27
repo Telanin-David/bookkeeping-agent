@@ -94,6 +94,21 @@ export async function sendVerificationEmail(to: string, name: string, token: str
   });
 }
 
+export async function sendPasswordResetEmail(to: string, name: string, token: string): Promise<Delivery> {
+  const link = appUrl(`/reset-password?token=${encodeURIComponent(token)}`);
+  return sendMail({
+    to,
+    subject: 'Reset your Bookkeeping AI password',
+    html: layout(
+      'Reset your password',
+      `<p style="margin:0">Hi ${esc(name)}, someone (hopefully you) asked to reset the password for your Bookkeeping AI account. Tap the button to choose a new one.</p>${button(link, 'Choose a new password')}
+<p style="margin:12px 0 0;font-size:13px;color:#777">The link works once, for 1 hour. If you didn't ask for this, ignore this email: your password stays the same.</p>`,
+      'You received this because a password reset was requested for this address on Bookkeeping AI.',
+    ),
+    text: `Hi ${name},\n\nTo choose a new Bookkeeping AI password, open this link (it works once, for 1 hour):\n${link}\n\nIf you didn't ask for this, ignore this email: your password stays the same.`,
+  });
+}
+
 export interface DigestAlert extends Pick<Alert, 'id' | 'type' | 'message' | 'createdAt'> {
   shopName: string;
 }

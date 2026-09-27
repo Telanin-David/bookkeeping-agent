@@ -50,7 +50,7 @@ export default function SignupPage() {
 
       <div className="glass-card relative w-full max-w-sm rounded-2xl p-8">
         <div className="mb-7">
-          <p className="text-lg font-bold tracking-tight text-white/85">Bookkeeping Agent</p>
+          <p className="text-lg font-bold tracking-tight text-white/85">Bookkeeping AI</p>
           <p className="mt-0.5 text-xs text-white/30 tracking-wide">Create your account</p>
         </div>
 

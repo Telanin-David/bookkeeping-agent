@@ -5,13 +5,16 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 jest.mock('../services/db');
+jest.mock('../services/email');
 
 // Imported after the mock so the routes get the mocked db module.
 import * as db from '../services/db';
+import * as email from '../services/email';
 import authRoutes from './auth';
 import { errorHandler } from '../middleware/errorHandler';
 
 const mockDb = db as jest.Mocked<typeof db>;
+const mockEmail = email as jest.Mocked<typeof email>;
 
 const app = express();
 app.use(express.json());
@@ -113,5 +116,78 @@ describe('POST /auth/login', () => {
     expect(wrong.status).toBe(401);
     expect(unknown.body).toEqual(wrong.body);
     expect(mockDb.createRefreshToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /auth/forgot-password', () => {
+  const known = { ...user, passwordHash: 'x', loginAttempts: 0, lockoutUntil: null } as NonNullable<Awaited<ReturnType<typeof db.findUserByEmail>>>;
+
+  it('sends a one-hour link to a known email, storing only its hash', async () => {
+    mockDb.findUserByEmail.mockResolvedValue(known);
+    mockEmail.sendPasswordResetEmail.mockResolvedValue({ sent: true } as never);
+
+    const res = await request(app).post('/api/v1/auth/forgot-password').send({ email: ' Amara@Test.ng ' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ sent: true });
+    expect(mockDb.findUserByEmail).toHaveBeenCalledWith('amara@test.ng');
+    const [userId, address, tokenHash, expiresAt] = mockDb.createPasswordReset.mock.calls[0]!;
+    expect([userId, address]).toEqual(['user-1', 'amara@test.ng']);
+    const token = mockEmail.sendPasswordResetEmail.mock.calls[0]![2];
+    expect(tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(tokenHash).not.toContain(token);
+    expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(59 * 60_000);
+    expect(expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(60 * 60_000);
+  });
+
+  it('answers an unknown email exactly the same, without sending anything', async () => {
+    mockDb.findUserByEmail.mockResolvedValue(null);
+    const res = await request(app).post('/api/v1/auth/forgot-password').send({ email: 'nobody@test.ng' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ sent: true });
+    expect(mockDb.createPasswordReset).not.toHaveBeenCalled();
+    expect(mockEmail.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  it('still answers the same if the email fails to send', async () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockDb.findUserByEmail.mockResolvedValue(known);
+    mockEmail.sendPasswordResetEmail.mockRejectedValue(new Error('smtp down'));
+    const res = await request(app).post('/api/v1/auth/forgot-password').send({ email: 'amara@test.ng' });
+    expect(res.status).toBe(200);
+    await new Promise((r) => setImmediate(r));
+    expect(error).toHaveBeenCalledWith('Password reset email failed:', 'smtp down');
+    error.mockRestore();
+  });
+});
+
+describe('POST /auth/reset-password', () => {
+  const token = 'a'.repeat(43);
+
+  it('saves a bcrypt hash of the new password, never the password itself', async () => {
+    mockDb.resetPassword.mockResolvedValue({ status: 'reset', userId: 'user-1' });
+    const res = await request(app).post('/api/v1/auth/reset-password').send({ token, password: 'Fresh-Start9' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ reset: true });
+    const [tokenHash, passwordHash] = mockDb.resetPassword.mock.calls[0]!;
+    expect(tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(await bcrypt.compare('Fresh-Start9', passwordHash)).toBe(true);
+  });
+
+  it('refuses a weak password before touching the link', async () => {
+    const res = await request(app).post('/api/v1/auth/reset-password').send({ token, password: 'password' });
+    expect(res.status).toBe(400);
+    expect(mockDb.resetPassword).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['used', /already been used/],
+    ['expired', /expired/],
+    ['invalid', /isn’t valid/],
+  ] as const)('explains a %s link in plain words', async (status, message) => {
+    mockDb.resetPassword.mockResolvedValue({ status });
+    const res = await request(app).post('/api/v1/auth/reset-password').send({ token, password: 'Fresh-Start9' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(message);
   });
 });

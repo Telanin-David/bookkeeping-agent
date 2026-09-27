@@ -919,6 +919,61 @@ function mapImport(row: Record<string, unknown>): ExcelImport {
   };
 }
 
+// ── Forgot password (migration 010) ──────────────────────────
+
+/** Stores a new reset token (hashed) for the account's current address and retires older unused ones. */
+export async function createPasswordReset(userId: string, email: string, tokenHash: string, expiresAt: Date): Promise<void> {
+  await db.query('UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL', [userId]);
+  await db.query(
+    'INSERT INTO password_reset_tokens (user_id, email, token_hash, expires_at) VALUES ($1, $2, $3, $4)',
+    [userId, email, tokenHash, expiresAt],
+  );
+}
+
+export type PasswordResetResult = { status: 'reset'; userId: string } | { status: 'invalid' | 'expired' | 'used' };
+
+/**
+ * Sets a new password if the token is live and was sent to the address the account still
+ * has. In the same step: every signed-in device is signed out (someone else may have had
+ * the password), the lockout from wrong guesses is cleared, other reset links stop
+ * working, and the email counts as confirmed, since the owner just proved they read it.
+ */
+export async function resetPassword(tokenHash: string, passwordHash: string): Promise<PasswordResetResult> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT t.id, t.user_id, t.email, t.expires_at, t.used_at, u.email AS current_email
+       FROM password_reset_tokens t JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = $1 FOR UPDATE OF t`,
+      [tokenHash],
+    );
+    const t = rows[0];
+    let result: PasswordResetResult;
+    if (!t || t['email'] !== t['current_email']) result = { status: 'invalid' };
+    else if (t['used_at']) result = { status: 'used' };
+    else if ((t['expires_at'] as Date) < new Date()) result = { status: 'expired' };
+    else {
+      const userId = t['user_id'] as string;
+      await client.query('UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL', [userId]);
+      await client.query(
+        `UPDATE users SET password_hash = $2, login_attempts = 0, lockout_until = NULL, email_verified = true, updated_at = NOW()
+         WHERE id = $1`,
+        [userId, passwordHash],
+      );
+      await client.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [userId]);
+      result = { status: 'reset', userId };
+    }
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ── Email verification (migration 007) ───────────────────────
 
 /** Stores a new verification token (hashed) and retires any older unused ones. */
