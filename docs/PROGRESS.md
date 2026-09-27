@@ -12,7 +12,7 @@
 | 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | merged to main (#18, #19) |
 | 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | merged to main (#20) |
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
-| 8 | Alert Detection & Routing System (email) | 🟡 In review | `feat/deliverable-8-alerts` | — |
+| 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
