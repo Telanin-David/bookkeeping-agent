@@ -70,9 +70,28 @@ export const config = {
     apiKey: required('ANTHROPIC_API_KEY'),
   },
 
-  sendgrid: {
-    apiKey: process.env['SENDGRID_API_KEY'] ?? '',
-    fromEmail: process.env['SENDGRID_FROM_EMAIL'] ?? 'noreply@bookkeepingagent.com',
+  // Outgoing email over SMTP, which every email provider offers (Brevo, Amazon SES,
+  // Zoho, Mailgun, SendGrid…), so switching provider is a config change. With no
+  // SMTP_HOST, development writes emails to EMAIL_OUTBOX_DIR as .eml files instead,
+  // and production sends nothing (and says so in the log).
+  email: {
+    smtpHost: process.env['SMTP_HOST'] ?? '',
+    smtpPort: parseInt(process.env['SMTP_PORT'] ?? '587', 10),
+    // true for port 465 (TLS from the start); 587 upgrades with STARTTLS.
+    smtpSecure: (process.env['SMTP_SECURE'] ?? '') === 'true',
+    smtpUser: process.env['SMTP_USER'] ?? '',
+    smtpPass: process.env['SMTP_PASS'] ?? '',
+    from: process.env['EMAIL_FROM'] ?? 'Bookkeeping AI <alerts@localhost>',
+    outboxDir: process.env['EMAIL_OUTBOX_DIR'] ?? 'tmp/outbox',
+  },
+
+  // Background alert checks and email delivery. Off in tests; ALERT_WORKER=off also
+  // turns it off (e.g. when a second backend instance runs on another server).
+  alerts: {
+    workerEnabled: (process.env['ALERT_WORKER'] ?? 'on') !== 'off' && (process.env['NODE_ENV'] ?? '') !== 'test',
+    intervalMs: parseInt(process.env['ALERT_WORKER_INTERVAL_MS'] ?? String(10 * 60_000), 10),
+    // At most one alert email per person in this window; newer alerts wait for the next one.
+    emailGapMs: parseInt(process.env['ALERT_EMAIL_GAP_MS'] ?? String(60 * 60_000), 10),
   },
 
   twilio: {

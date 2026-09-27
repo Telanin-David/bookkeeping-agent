@@ -8,6 +8,8 @@ import { config } from '../config';
 import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
+import { requireAuth } from '../middleware/auth';
+import { sendVerificationEmail } from '../services/email';
 
 const router = Router();
 
@@ -65,6 +67,9 @@ router.post('/signup', signupLimiter, validate(signupSchema), async (req: Reques
 
     const sessionId = await startSession(res, user.id);
     res.status(201).json({ accessToken: signAccessToken(user.id, user.email, sessionId), user: publicUser(user) });
+    // After responding: a slow or failing mail server mustn't hold up or fail the sign-up.
+    // The owner can ask for another link from the app.
+    sendVerification(user).catch((err) => console.error('[email] verification email failed:', err instanceof Error ? err.message : err));
   } catch (err) {
     next(err);
   }
@@ -135,6 +140,53 @@ router.post('/logout', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+// ── Email verification ───────────────────────────────────────
+// Alerts carry customer names and amounts, so they are only emailed to an address its
+// owner has confirmed. The link opens the app's /verify-email page, which posts the token here.
+const VERIFY_TTL_MS = 48 * 60 * 60_000;
+
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again in 15 minutes.' },
+});
+const resendLimiter = rateLimit({
+  windowMs: 60 * 60_000, limit: 5, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => req.user!.id,
+  message: { error: 'TOO_MANY_REQUESTS', message: 'You’ve asked for several emails already. Check your inbox and spam folder, or try again in an hour.' },
+});
+
+async function sendVerification(user: { id: string; name: string; email: string }): Promise<void> {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await db.createEmailVerification(user.id, user.email, hashToken(token), new Date(Date.now() + VERIFY_TTL_MS));
+  await sendVerificationEmail(user.email, user.name, token);
+}
+
+router.post('/verify-email', verifyLimiter, validate(z.object({ token: z.string().min(20).max(200) })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await db.consumeEmailVerification(hashToken(req.body.token));
+    switch (result.status) {
+      case 'verified': res.json({ verified: true }); return;
+      case 'used': throw new AppError(400, 'BAD_REQUEST', 'This link has already been used. If your email isn’t confirmed yet, ask for a new link in the app.');
+      case 'expired': throw new AppError(400, 'BAD_REQUEST', 'This link has expired. Ask for a new one in the app.');
+      default: throw new AppError(400, 'BAD_REQUEST', 'This link isn’t valid. Ask for a new one in the app.');
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/resend-verification', requireAuth, resendLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await db.findUserById(req.user!.id);
+    if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+    if (user.emailVerified) { res.json({ alreadyVerified: true }); return; }
+    await sendVerification(user);
+    res.json({ sent: true, email: user.email });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Helpers ──────────────────────────────────────────────────
 // `sid` is the device's session (its refresh-token family). requireAuth checks it is still
 // active on every request, so signing a device out cuts off its access token immediately
@@ -172,8 +224,8 @@ function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE, token, { ...refreshCookieOptions(), maxAge: config.jwt.refreshTtlMs });
 }
 
-function publicUser(user: { id: string; name: string; email: string; phone?: string }) {
-  return { id: user.id, name: user.name, email: user.email, phone: user.phone };
+function publicUser(user: { id: string; name: string; email: string; phone?: string; emailVerified: boolean }) {
+  return { id: user.id, name: user.name, email: user.email, phone: user.phone, emailVerified: user.emailVerified };
 }
 
 export default router;

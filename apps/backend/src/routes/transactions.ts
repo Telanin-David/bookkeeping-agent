@@ -5,6 +5,7 @@ import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import * as stock from '../services/stock';
+import { checkDuplicateSafely, refreshDebtAlerts } from '../services/alerts';
 import { categorizeTransaction } from '../services/claude';
 import { todayIso } from '../utils/dates';
 
@@ -75,6 +76,9 @@ router.post('/', validate(createSchema), async (req: Request, res: Response, nex
     const tx = items?.length
       ? await stock.createTransactionWithItems(data, items)
       : await db.createTransaction(data);
+    await checkDuplicateSafely(tx);
+    // A debt entered already past its due date is flagged straight away.
+    if (tx.dueDate) await refreshDebtAlerts(tx.id);
     res.status(201).json({ ...tx, items: items?.length ? await stock.getTransactionItems(tx.id) : [] });
   } catch (err) { next(err); }
 });
@@ -130,6 +134,8 @@ router.patch('/:transactionId', validate(updateSchema), async (req: Request, res
         await db.resyncDebtStatus(txId);
         tx = (await db.findTransactionById(txId, shopId, userId))!;
       }
+      await refreshDebtAlerts(txId);
+      tx = (await db.findTransactionById(txId, shopId, userId))!;
     }
     res.json(tx);
   } catch (err) { next(err); }
@@ -168,7 +174,8 @@ router.post('/:transactionId/payments', validate(paymentSchema), async (req: Req
         case 'in_future':      throw new AppError(422, 'UNPROCESSABLE_ENTITY', 'The payment date can’t be in the future.');
       }
     }
-    res.status(201).json({ transaction: result.transaction, payment: result.payment });
+    await refreshDebtAlerts(result.transaction.id);
+    res.status(201).json({ transaction: (await db.findTransactionById(result.transaction.id, result.transaction.shopId, req.user!.id))!, payment: result.payment });
   } catch (err) { next(err); }
 });
 
@@ -176,7 +183,8 @@ router.delete('/:transactionId/payments/:paymentId', async (req: Request, res: R
   try {
     const result = await db.removeDebtPayments(req.params['transactionId']!, req.params['shopId']!, req.user!.id, req.params['paymentId']!);
     if (!result || result.removed === 0) throw new AppError(404, 'NOT_FOUND', 'Payment not found');
-    res.json(result.transaction);
+    await refreshDebtAlerts(result.transaction.id);
+    res.json((await db.findTransactionById(result.transaction.id, result.transaction.shopId, req.user!.id))!);
   } catch (err) { next(err); }
 });
 
@@ -185,6 +193,7 @@ router.delete('/:transactionId', async (req: Request, res: Response, next: NextF
     // Any stock the transaction moved goes back with it.
     const deleted = await stock.deleteTransactionWithStock(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
     if (!deleted) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
+    await refreshDebtAlerts(req.params['transactionId']!); // closes any alert about it
     res.status(204).send();
   } catch (err) { next(err); }
 });
