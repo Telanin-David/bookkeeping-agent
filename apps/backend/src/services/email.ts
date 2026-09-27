@@ -106,10 +106,15 @@ const TYPE_LABELS: Partial<Record<Alert['type'], string>> = {
 
 /** One email for everything that's new, grouped by shop, so a busy day isn't a stream of emails. */
 export async function sendAlertDigest(to: string, name: string, alerts: DigestAlert[]): Promise<Delivery> {
+  // A big import of old debts can raise dozens at once: list the first few and point to the app.
+  const MAX_LISTED = 10;
+  const hidden = Math.max(0, alerts.length - MAX_LISTED);
+  const total = alerts.length;
+  alerts = alerts.slice(0, MAX_LISTED);
   const shops = [...new Set(alerts.map((a) => a.shopName))];
-  const subject = alerts.length === 1
+  const subject = total === 1
     ? alerts[0]!.message
-    : `${alerts.length} things need your attention${shops.length === 1 ? ` at ${shops[0]}` : ''}`;
+    : `${total} things need your attention${shops.length === 1 ? ` at ${shops[0]}` : ''}`;
   const sections = shops.map((shop) => {
     const items = alerts.filter((a) => a.shopName === shop).map((a) =>
       `<li style="margin:0 0 10px"><span style="display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#888">${esc(TYPE_LABELS[a.type] ?? 'Alert')}</span>${esc(a.message)}</li>`,
@@ -121,11 +126,11 @@ export async function sendAlertDigest(to: string, name: string, alerts: DigestAl
     to,
     subject: subject.length > 120 ? `${subject.slice(0, 117)}…` : subject,
     html: layout(
-      alerts.length === 1 ? 'Something needs your attention' : `${alerts.length} things need your attention`,
-      `<p style="margin:0">Hi ${esc(name)},</p>${sections}${button(appUrl('/alerts'), 'Open your alerts')}`,
+      total === 1 ? 'Something needs your attention' : `${total} things need your attention`,
+      `<p style="margin:0">Hi ${esc(name)},</p>${sections}${hidden ? `<p style="margin:12px 0 0;color:#555">…and ${hidden} more in the app.</p>` : ''}${button(appUrl('/alerts'), 'Open your alerts')}`,
       `You get these because email alerts are on. <a href="${esc(settings)}" style="color:#888">Change or turn off alert emails</a>.`,
     ),
-    text: `Hi ${name},\n\n${shops.map((shop) => `${shops.length > 1 ? `${shop}\n` : ''}${alerts.filter((a) => a.shopName === shop).map((a) => `- ${a.message}`).join('\n')}`).join('\n\n')}\n\nOpen your alerts: ${appUrl('/alerts')}\nTurn off alert emails: ${settings}`,
+    text: `Hi ${name},\n\n${shops.map((shop) => `${shops.length > 1 ? `${shop}\n` : ''}${alerts.filter((a) => a.shopName === shop).map((a) => `- ${a.message}`).join('\n')}`).join('\n\n')}${hidden ? `\n…and ${hidden} more in the app.` : ''}\n\nOpen your alerts: ${appUrl('/alerts')}\nTurn off alert emails: ${settings}`,
     headers: { 'List-Unsubscribe': `<${settings}>` },
   });
 }
