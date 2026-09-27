@@ -16,6 +16,8 @@ import reportRoutes      from './routes/reports';
 import alertRoutes       from './routes/alerts';
 import importRoutes      from './routes/imports';
 import fileRoutes        from './routes/files';
+import accountRoutes     from './routes/account';
+import { startAlertWorker } from './services/alertWorker';
 
 const app = express();
 if (config.trustProxyHops > 0) app.set('trust proxy', config.trustProxyHops);
@@ -46,6 +48,7 @@ app.use('/api/v1/reports',                     reportRoutes);
 app.use('/api/v1/alerts',                      alertRoutes);
 app.use('/api/v1/imports',                     importRoutes);
 app.use('/api/v1/files',                       fileRoutes);
+app.use('/api/v1/account',                     accountRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'NOT_FOUND', message: 'Endpoint not found' }));
@@ -59,6 +62,7 @@ async function start() {
   app.listen(config.port, () => {
     console.log(`Server running on port ${config.port} [${config.nodeEnv}]`);
   });
+  startAlertWorker();
 }
 
 start().catch((err) => {

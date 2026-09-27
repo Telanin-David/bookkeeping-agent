@@ -859,3 +859,92 @@ function mapImport(row: Record<string, unknown>): ExcelImport {
     updatedAt: row['updated_at'] as Date,
   };
 }
+
+// ── Email verification (migration 007) ───────────────────────
+
+/** Stores a new verification token (hashed) and retires any older unused ones. */
+export async function createEmailVerification(userId: string, email: string, tokenHash: string, expiresAt: Date): Promise<void> {
+  await db.query('UPDATE email_verification_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL', [userId]);
+  await db.query(
+    'INSERT INTO email_verification_tokens (user_id, email, token_hash, expires_at) VALUES ($1, $2, $3, $4)',
+    [userId, email, tokenHash, expiresAt],
+  );
+}
+
+export type VerificationResult = { status: 'verified'; userId: string } | { status: 'invalid' | 'expired' | 'used' };
+
+/**
+ * Marks the user's email verified if the token is live and was issued for the address
+ * the account still has (so a link sent before an email change can't verify the new one).
+ */
+export async function consumeEmailVerification(tokenHash: string): Promise<VerificationResult> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT t.id, t.user_id, t.email, t.expires_at, t.used_at, u.email AS current_email
+       FROM email_verification_tokens t JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = $1 FOR UPDATE OF t`,
+      [tokenHash],
+    );
+    const t = rows[0];
+    let result: VerificationResult;
+    if (!t || t['email'] !== t['current_email']) result = { status: 'invalid' };
+    else if (t['used_at']) result = { status: 'used' };
+    else if ((t['expires_at'] as Date) < new Date()) result = { status: 'expired' };
+    else {
+      await client.query('UPDATE email_verification_tokens SET used_at = NOW() WHERE id = $1', [t['id']]);
+      await client.query('UPDATE users SET email_verified = true, updated_at = NOW() WHERE id = $1', [t['user_id']]);
+      result = { status: 'verified', userId: t['user_id'] as string };
+    }
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Alert settings ───────────────────────────────────────────
+
+export interface AlertSettings {
+  emailAlerts: boolean;
+  emailVerified: boolean;
+  email: string;
+  /** 'HH:MM', shop time. No alert emails are sent between quietStart and quietEnd. */
+  quietStart: string;
+  quietEnd: string;
+}
+
+function mapAlertSettings(row: Record<string, unknown>): AlertSettings {
+  return {
+    emailAlerts: row['alert_email'] as boolean,
+    emailVerified: row['email_verified'] as boolean,
+    email: row['email'] as string,
+    quietStart: String(row['alert_quiet_start']).slice(0, 5),
+    quietEnd: String(row['alert_quiet_end']).slice(0, 5),
+  };
+}
+
+export async function getAlertSettings(userId: string): Promise<AlertSettings | null> {
+  const { rows } = await db.query(
+    'SELECT email, email_verified, alert_email, alert_quiet_start, alert_quiet_end FROM users WHERE id = $1', [userId],
+  );
+  return rows[0] ? mapAlertSettings(rows[0]) : null;
+}
+
+export async function updateAlertSettings(userId: string, changes: { emailAlerts?: boolean; quietStart?: string; quietEnd?: string }): Promise<AlertSettings | null> {
+  const { rows } = await db.query(
+    `UPDATE users SET
+       alert_email = COALESCE($2, alert_email),
+       alert_quiet_start = COALESCE($3::time, alert_quiet_start),
+       alert_quiet_end = COALESCE($4::time, alert_quiet_end),
+       updated_at = NOW()
+     WHERE id = $1
+     RETURNING email, email_verified, alert_email, alert_quiet_start, alert_quiet_end`,
+    [userId, changes.emailAlerts ?? null, changes.quietStart ?? null, changes.quietEnd ?? null],
+  );
+  return rows[0] ? mapAlertSettings(rows[0]) : null;
+}

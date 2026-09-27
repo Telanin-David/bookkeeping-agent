@@ -30,6 +30,8 @@ tags:
     description: PDF report generation
   - name: alerts
     description: Alert management and history
+  - name: account
+    description: The signed-in owner's own settings
   - name: imports
     description: Excel/CSV bulk upload pipeline
   - name: health
@@ -166,6 +168,76 @@ paths:
           description: Logged out
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /auth/verify-email:
+    post:
+      tags: [auth]
+      summary: Confirm an email address from the link in the confirmation email
+      description: No login needed. Each link works once, for 48 hours, and only for the address it was sent to.
+      x-rateLimit: '20 requests per 15 minutes per IP'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Confirmed
+          content: { application/json: { schema: { type: object, properties: { verified: { type: boolean } } } } }
+        '400':
+          description: Link invalid, expired or already used (plain-English message)
+
+  /auth/resend-verification:
+    post:
+      tags: [auth]
+      summary: Send a new confirmation email
+      description: Earlier links stop working. Sign-up sends the first one.
+      x-rateLimit: '5 per hour per user'
+      responses:
+        '200':
+          description: Sent, or already confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sent: { type: boolean }
+                  email: { type: string }
+                  alreadyVerified: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Too many requests
+
+  /account/alert-settings:
+    get:
+      tags: [account]
+      summary: How alerts reach the owner
+      responses:
+        '200': { description: Settings, content: { application/json: { schema: { $ref: '#/components/schemas/AlertSettings' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [account]
+      summary: Change alert settings
+      description: Equal quietStart and quietEnd mean no quiet hours.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emailAlerts: { type: boolean }
+                quietStart: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '22:00' }
+                quietEnd: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '07:00' }
+      responses:
+        '200': { description: Updated settings, content: { application/json: { schema: { $ref: '#/components/schemas/AlertSettings' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   # ── SHOPS ────────────────────────────────────
   /shops:
@@ -1579,11 +1651,18 @@ components:
           format: email
         phone:
           type: string
-        alertPreferences:
-          $ref: '#/components/schemas/AlertPreferences'
-        createdAt:
-          type: string
-          format: date-time
+        emailVerified:
+          type: boolean
+          description: Alerts are only emailed to a confirmed address. Settings are at /account/alert-settings.
+
+    AlertSettings:
+      type: object
+      properties:
+        emailAlerts: { type: boolean, description: 'Email alerts on (default) or off' }
+        emailVerified: { type: boolean }
+        email: { type: string, format: email }
+        quietStart: { type: string, example: '22:00', description: Shop time (BUSINESS_TIME_ZONE) }
+        quietEnd: { type: string, example: '07:00' }
 
     AlertPreferences:
       type: object
@@ -1999,7 +2078,11 @@ components:
           format: uuid
         type:
           type: string
-          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock]
+          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock, bill_due]
+          description: |
+            Raised today: overdue_receivable (a customer's debt past its due date), bill_due (a bill due
+            within 2 days or overdue), low_stock, duplicate (the same transaction entered twice within 2
+            minutes; in the app only). low_cash, high_payable and anomaly are reserved, not raised yet.
         status:
           type: string
           enum: [active, acknowledged, dismissed, resolved]

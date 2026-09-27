@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import * as db from './db';
 import * as stock from './stock';
+import { checkDuplicateSafely, refreshDebtAlerts } from './alerts';
 import { todayIso, addDays } from '../utils/dates';
 import { Transaction, TransactionType } from '../types';
 
@@ -291,6 +292,8 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
       };
       const tx = items.length ? await stock.createTransactionWithItems(data, items) : await db.createTransaction(data);
       state.createdTransactionIds.push(tx.id);
+      await checkDuplicateSafely(tx);
+      if (tx.dueDate) await refreshDebtAlerts(tx.id);
       return items.length ? { ...tx, items: await stock.getTransactionItems(tx.id) } : tx;
     }
 
@@ -324,6 +327,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         }
       }
       state.paidDebtIds.push(result.transaction.id);
+      await refreshDebtAlerts(result.transaction.id);
       return { recorded: true, payment: result.payment, transaction: result.transaction };
     }
 

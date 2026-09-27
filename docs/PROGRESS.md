@@ -12,7 +12,7 @@
 | 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | merged to main (#18, #19) |
 | 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | merged to main (#20) |
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
-| 8 | Alert Detection & Routing System | ⬜ Not started | — | — |
+| 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
@@ -119,11 +119,50 @@
     - Stock bought is a cost when bought, not when sold (no cost-of-goods-sold). Buying a lot of stock in one month lowers that month's profit even though the goods are still on the shelf.
     - No unit conversion (buying cartons, selling pieces). Such a product needs to be tracked in one unit.
 
+- **Deliverable 8** (email only, the owner's decision; WhatsApp is planned later as a paid extra). Migration `007_alert_delivery.sql`.
+  - **What raises an alert:**
+    - `overdue_receivable`: a customer's credit is past its due date and not fully paid.
+    - `bill_due`: a bill the shop owes is due within 2 days, or overdue.
+    - `low_stock`: from the stock deliverable.
+    - `duplicate`: the same transaction (type, amount, date, description, customer) entered twice within 2 minutes. This is shown in the app only.
+    - `low_cash`, `high_payable` and `anomaly` are still not raised. The app doesn't know the cash balance, and "anomaly" needs a definition first.
+  - **One alert per thing:**
+    - `alerts.source_key` (e.g. `overdue:<transaction id>`) stops the same debt having two open alerts.
+    - Paying, deleting, or moving the due date later marks the alert `resolved` at once. This runs after payments, edits and deletes, whether made in the app or in chat.
+  - **Debt status follows the due date:** an unpaid debt past its due date becomes `overdue`, and moving the date later puts it back to `pending`. Invoices for part-paid overdue debts say "Part-paid, overdue".
+  - **Email:**
+    - Sent over SMTP with nodemailer, replacing SendGrid, so any provider works (Brevo, Amazon SES, Zoho, Mailgun, SendGrid's own SMTP). Settings are in `.env.example`.
+    - In development without `SMTP_HOST`, emails are written to `EMAIL_OUTBOX_DIR` as `.eml` files. In production without it, nothing is sent and the log says so.
+    - nodemailer needs Node.js 20 or newer.
+  - **Only confirmed addresses get alert emails**, because alerts contain customer names and amounts.
+    - Sign-up sends a confirmation link: hashed token, single use, 48 hours, tied to the address it was sent to.
+    - The app shows a banner with "Send again" (5 an hour) until the address is confirmed.
+    - Existing accounts start unconfirmed after this deploys, so they see the banner.
+  - **The worker** (`services/alertWorker.ts`) runs inside the backend every 10 minutes:
+    - It checks debts and bills, then emails what's new: one digest per person at most once an hour, never in their quiet hours (default 22:00–07:00 shop time), only while email alerts are on.
+    - Each attempt is recorded in `alert_history`. A failed send is retried, up to 3 attempts.
+    - Alerts more than 7 days old that were never emailed stay in the app only.
+    - A Postgres advisory lock means two backend processes never both send.
+    - It is off in tests; set `ALERT_WORKER=off` to disable it.
+  - **Emails:** HTML plus plain text. Names and messages are HTML-escaped. They link to the alerts page and to settings to turn emails off, and carry a `List-Unsubscribe` header.
+  - **Frontend:**
+    - `/settings/alerts`: email on/off, quiet hours, and whether the address is confirmed, with resend.
+    - `/verify-email`: the page the confirmation link opens.
+    - A banner asking the owner to confirm their email.
+    - The Alerts page links to email settings and uses everyday labels ("Customer owes you", "Bill due", "Low stock", "Recorded twice?").
+  - **Known limit:** a low-stock alert that was already emailed as "running low" is not emailed again when the product runs out. The app does re-show it as active.
+  - **Not fixed here, pre-existing:** `npm audit` flags `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp`. The risk is when installing packages, not while the app runs. The fix is bcrypt 6, which is a separate change to test on its own.
+
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday"), and the refusal fallback.
   - To keep it cheap, run most of it on the cheapest model (`claude-haiku-4-5`). The chat model will need to be configurable by an environment variable for this.
   - Haiku checks the wiring, but not how the production model (`claude-opus-5`) behaves, and the fallback beta may not apply to Haiku. So finish with a few messages on the production model.
 - The key goes in the server's environment, never in the repo or in chat.
+- **Email for alerts:**
+  - Pick an email provider and put its SMTP details in the server's `.env`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `EMAIL_FROM`.
+  - Add the provider's SPF and DKIM records to the sending domain's DNS, or alerts land in spam.
+  - Send a test by signing up with a real address.
+  - Run `npm run migrate` (it includes migration 007).
 
 ## Voice input (owner's decision)
 - **For now:** owners use their phone keyboard's microphone to dictate into the chat box. The app's own mic button does nothing yet.

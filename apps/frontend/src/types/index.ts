@@ -3,6 +3,17 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
+  /** Alerts are only emailed to a confirmed address. Absent in demo mode. */
+  emailVerified?: boolean;
+}
+
+export interface AlertSettings {
+  emailAlerts: boolean;
+  emailVerified: boolean;
+  email: string;
+  /** 'HH:MM' shop time; no alert emails between quietStart and quietEnd. */
+  quietStart: string;
+  quietEnd: string;
 }
 
 /** POST /auth/refresh — a new access token and who it belongs to. */
@@ -150,7 +161,8 @@ export type AlertType =
   | 'budget_exceeded'
   | 'duplicate'
   | 'anomaly'
-  | 'low_stock';
+  | 'low_stock'
+  | 'bill_due';
 
 /** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
 export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';

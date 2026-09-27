@@ -9,6 +9,7 @@ jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
 
 jest.mock('./db');
 jest.mock('./stock');
+jest.mock('./alerts');
 
 // Imported after the mocks above so the mocked modules are what claude.ts actually gets.
 import * as db from './db';
