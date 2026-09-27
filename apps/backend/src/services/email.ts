@@ -102,6 +102,7 @@ const TYPE_LABELS: Partial<Record<Alert['type'], string>> = {
   overdue_receivable: 'Customer owes you',
   bill_due: 'Bill due',
   low_stock: 'Low stock',
+  salary_due: 'Pay day',
 };
 
 /** One email for everything that's new, grouped by shop, so a busy day isn't a stream of emails. */

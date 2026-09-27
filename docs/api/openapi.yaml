@@ -26,6 +26,8 @@ tags:
     description: AI chat sessions
   - name: stock
     description: Products, stock movements, shelf counts and low-stock alerts
+  - name: profit
+    description: Monthly profit with plain-language feedback, and the optional staff list with salaries
   - name: reports
     description: PDF report generation
   - name: alerts
@@ -511,6 +513,12 @@ paths:
           in: query
           schema:
             type: string
+        - name: costKind
+          in: query
+          description: Only expenses and bills of this kind
+          schema:
+            type: string
+            enum: [stock, running]
         - name: dateFrom
           in: query
           schema:
@@ -938,6 +946,153 @@ paths:
                         expected: { type: number }
                         difference: { type: number }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ── PROFIT AND STAFF ─────────────────────────
+  /shops/{shopId}/profit:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+    get:
+      tags: [profit]
+      summary: One month's profit, with feedback
+      description: |
+        Worked out with SQL from the records; no AI, so it costs nothing. Sales count on the day they were
+        made (credit sales included) and costs on the day they were incurred (bills on credit included).
+        `method` says how profit was counted:
+          - `sold`: sales − cost of the goods sold (quantity sold × the product's current cost price) −
+            running costs. Used when sales recorded with products that all have cost prices make up at least
+            90% of sales; the rest of sales is costed at the same ratio.
+          - `spent`: sales − stock bought − running costs. `methodNote` explains it when stock was bought.
+        While the month is in progress, it runs to today and `previous` is last month up to the same day.
+      parameters:
+        - name: month
+          in: query
+          description: YYYY-MM. This month when omitted.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+      responses:
+        '200':
+          description: The month's profit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MonthlyProfit' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: The month hasn't started yet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /shops/{shopId}/staff:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+    get:
+      tags: [profit]
+      summary: The shop's staff (optional; empty for shops without any)
+      responses:
+        '200':
+          description: Staff, by name, with where they are with this month's pay
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/StaffMember' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [profit]
+      summary: Add a staff member
+      description: With a pay day, a `salary_due` alert is raised the day before each pay date until a salary for them is recorded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffFields' }
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffMember' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /shops/{shopId}/staff/pay:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+    post:
+      tags: [profit]
+      summary: Pay salaries in one go
+      description: |
+        Records one expense per person (running cost, category Salaries, linked to them), all or none, and
+        closes their pay-day reminders. 400 if someone appears twice; 404 for a staff member not in this
+        shop; 422 for a future date.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payments]
+              properties:
+                date: { type: string, format: date, description: Omit for today }
+                payments:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [staffId, amount]
+                    properties:
+                      staffId: { type: string, format: uuid }
+                      amount: { type: number, minimum: 0.01 }
+      responses:
+        '201':
+          description: The salary expenses recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Transaction' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /shops/{shopId}/staff/{staffId}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - name: staffId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [profit]
+      summary: Change a staff member's details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffFields' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffMember' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [profit]
+      summary: Someone has left
+      description: Takes them off the list. Their past salary payments stay in the records.
+      responses:
+        '204': { description: Removed }
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ── CHAT ─────────────────────────────────────
@@ -1957,6 +2112,16 @@ components:
               quantity: { type: number }
         aiCategorized:
           type: boolean
+        costKind:
+          type: string
+          enum: [stock, running]
+          description: |
+            Expenses and bills only (absent on sales): goods bought to resell, or a running cost
+            (rent, salaries, fuel…). Profit depends on it.
+        staffId:
+          type: string
+          format: uuid
+          description: A salary payment — who it was for
         importId:
           type: string
           format: uuid
@@ -2070,6 +2235,16 @@ components:
             a sale and a purchase.
           items:
             $ref: '#/components/schemas/TransactionItemInput'
+        costKind:
+          type: string
+          enum: [stock, running]
+          description: |
+            Expenses and bills: what the money was for. Omitted means running. Always `stock` when items
+            are given. Ignored on sales.
+        staffId:
+          type: string
+          format: uuid
+          description: 'For a salary: the staff member it was for (404 if not in this shop).'
 
     UpdateTransactionRequest:
       type: object
@@ -2095,6 +2270,104 @@ components:
         status:
           type: string
           enum: [pending, settled, overdue]
+        costKind:
+          type: string
+          enum: [stock, running]
+          description: 400 when changing to `running` a purchase that put products on the shelf.
+
+    StaffFields:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        role: { type: string, nullable: true, maxLength: 100 }
+        monthlyPay: { type: number, nullable: true, minimum: 0.01 }
+        payDay:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 31
+          description: Day of the month; 29–31 mean the last day in shorter months.
+
+    StaffMember:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        shopId: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, nullable: true }
+        monthlyPay: { type: number, nullable: true }
+        payDay: { type: integer, nullable: true }
+        payDate:
+          type: string
+          format: date
+          nullable: true
+          description: The pay date that matters now (this month's from the day before it, otherwise last month's; their first one if they joined since).
+        paid: { type: boolean, description: A salary covering payDate is recorded (from 7 days before it). }
+        due: { type: boolean, description: payDate is tomorrow, today or past, and not paid. }
+        lastPaidOn: { type: string, format: date, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    MonthlyProfit:
+      type: object
+      properties:
+        month: { type: string, example: '2026-09' }
+        from: { type: string, format: date }
+        to: { type: string, format: date, description: Today while the month is in progress }
+        inProgress: { type: boolean }
+        sales: { type: number, description: Sales and credit sales }
+        salesCount: { type: integer }
+        coverage: { type: number, nullable: true, description: Share of sales recorded with products that all have cost prices }
+        costOfGoodsSold: { type: number, nullable: true }
+        stockBought: { type: number }
+        runningCosts: { type: number }
+        running:
+          type: array
+          description: Running costs by category, largest first
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              total: { type: number }
+              count: { type: integer }
+        method: { type: string, enum: [sold, spent] }
+        profit: { type: number, description: Negative for a loss }
+        previous:
+          type: object
+          nullable: true
+          description: Last month to the same day (or all of it, for a finished month), counted the same way
+          properties:
+            month: { type: string }
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+            profit: { type: number }
+            sales: { type: number }
+            runningCosts: { type: number }
+        salariesDue:
+          type: object
+          nullable: true
+          description: This month's salaries not yet recorded, for staff with a monthly pay. Null without any.
+          properties:
+            total: { type: number }
+            people:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  amount: { type: number }
+                  payDate: { type: string, format: date }
+        insights:
+          type: array
+          description: Short sentences on how the month is going; only those with something to say.
+          items:
+            type: object
+            properties:
+              kind: { type: string, enum: [empty, vs_last_month, margin, biggest_cost, rising_cost, stock_on_shelf, salaries_due, no_running_costs] }
+              tone: { type: string, enum: [good, bad, neutral] }
+              text: { type: string }
+        methodNote: { type: string, nullable: true }
 
     TransactionListResponse:
       type: object
@@ -2219,10 +2492,11 @@ components:
           format: uuid
         type:
           type: string
-          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock, bill_due]
+          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock, bill_due, salary_due]
           description: |
             Raised today: overdue_receivable (a customer's debt past its due date), bill_due (a bill due
-            within 2 days or overdue), low_stock, duplicate (the same transaction entered twice within 2
+            within 2 days or overdue), salary_due (a staff member's pay day, from the day before until their
+            salary is recorded), low_stock, duplicate (the same transaction entered twice within 2
             minutes; in the app only). low_cash, high_payable and anomaly are reserved, not raised yet.
         status:
           type: string

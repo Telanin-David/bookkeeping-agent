@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  AdminOverview, AdminUser, AlertSettings, DailyUsage, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AdminOverview, AdminUser, MonthlyProfit, StaffMember, StaffFields, AlertSettings, DailyUsage, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -135,7 +135,7 @@ export type NewTransactionBody =
 
 export const transactionsApi = {
   list: (shopId: string, params?: {
-    type?: string; status?: string; category?: string;
+    type?: string; status?: string; category?: string; costKind?: string;
     from?: string; to?: string; page?: number; limit?: number;
   }) => {
     // The API names the date range dateFrom/dateTo; sending from/to was silently ignored.
@@ -202,6 +202,28 @@ export const stockApi = {
 
   count: (shopId: string, body: { items: { productId: string; counted: number }[]; occurredOn?: string; note?: string }) =>
     api.post<{ data: CountLine[] }>(`/api/v1/shops/${shopId}/stock/counts`, body).then((r) => r.data.data),
+};
+
+// ── Profit and staff ──────────────────────────────────────────
+export const profitApi = {
+  /** month: YYYY-MM; this month when omitted. */
+  get: (shopId: string, month?: string) =>
+    api.get<MonthlyProfit>(`/api/v1/shops/${shopId}/profit`, { params: { month } }).then((r) => r.data),
+};
+
+export const staffApi = {
+  list: (shopId: string) =>
+    api.get<{ data: StaffMember[] }>(`/api/v1/shops/${shopId}/staff`).then((r) => r.data.data),
+  create: (shopId: string, body: StaffFields) =>
+    api.post<StaffMember>(`/api/v1/shops/${shopId}/staff`, body).then((r) => r.data),
+  update: (shopId: string, staffId: string, body: Partial<StaffFields>) =>
+    api.patch<StaffMember>(`/api/v1/shops/${shopId}/staff/${staffId}`, body).then((r) => r.data),
+  /** Someone who has left; their past salaries stay in the records. */
+  remove: (shopId: string, staffId: string) =>
+    api.delete(`/api/v1/shops/${shopId}/staff/${staffId}`),
+  /** Records one salary expense per person. */
+  pay: (shopId: string, body: { date?: string; payments: { staffId: string; amount: number }[] }) =>
+    api.post<{ data: Transaction[] }>(`/api/v1/shops/${shopId}/staff/pay`, body).then((r) => r.data.data),
 };
 
 // ── Chat ──────────────────────────────────────────────────────

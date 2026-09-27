@@ -12,6 +12,7 @@ import {
 } from './importParse';
 import { todayIso } from '../utils/dates';
 import type { ExcelImport, TransactionType } from '../types';
+import { guessCostKind } from '../utils/costKind';
 
 const SAMPLE_ROWS = 5;
 const MAX_PROBLEMS_SHOWN = 100;
@@ -166,14 +167,15 @@ export async function confirmImport(job: ExcelImport, opts: { includeDuplicates:
     const status = (r: ParsedRow) => (!isDebt(r.type) || (r.paid ?? 0) >= r.amount ? 'settled' : 'pending');
     await client.query(
       `INSERT INTO transactions (id, shop_id, user_id, type, amount, currency, description, category, counterparty,
-                                 date, due_date, status, ai_categorized, import_id)
+                                 date, due_date, status, ai_categorized, import_id, cost_kind)
        SELECT r.id, $1, $2, r.type, r.amount, $3, NULLIF(r.descr, ''), NULLIF(r.cat, ''), NULLIF(r.cp, ''),
-              r.d, r.due, r.status, false, $4
-       FROM unnest($5::uuid[], $6::text[], $7::numeric[], $8::text[], $9::text[], $10::text[], $11::date[], $12::date[], $13::text[])
-         AS r(id, type, amount, descr, cat, cp, d, due, status)`,
+              r.d, r.due, r.status, false, $4, r.kind
+       FROM unnest($5::uuid[], $6::text[], $7::numeric[], $8::text[], $9::text[], $10::text[], $11::date[], $12::date[], $13::text[], $14::text[])
+         AS r(id, type, amount, descr, cat, cp, d, due, status, kind)`,
       [job.shopId, job.userId, currency, job.id, ids, toImport.map((r) => r.type), toImport.map((r) => r.amount),
        toImport.map((r) => r.description ?? ''), toImport.map((r) => r.category ?? ''), toImport.map((r) => r.counterparty ?? ''),
-       toImport.map((r) => r.date), toImport.map((r) => r.dueDate ?? null), toImport.map(status)],
+       toImport.map((r) => r.date), toImport.map((r) => r.dueDate ?? null), toImport.map(status),
+       toImport.map((r) => guessCostKind(r.type, r.category, r.description) ?? null)],
     );
     // What was already paid on a debt becomes a payment. The sheet doesn't say when, so it's
     // dated the day of the sale.

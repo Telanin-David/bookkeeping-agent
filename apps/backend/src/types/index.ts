@@ -1,7 +1,9 @@
 export type TransactionType = 'sale' | 'expense' | 'receivable' | 'payable';
 export type TransactionStatus = 'pending' | 'settled' | 'overdue';
+/** What money spent was for: goods to resell, or running the business (rent, salaries, fuel…). */
+export type CostKind = 'stock' | 'running';
 export type ShopType = 'retail' | 'wholesale' | 'services' | 'food' | 'other';
-export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'duplicate' | 'anomaly' | 'low_stock' | 'bill_due';
+export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'duplicate' | 'anomaly' | 'low_stock' | 'bill_due' | 'salary_due';
 /** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
 export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';
 export type AlertChannel = 'email' | 'sms' | 'whatsapp' | 'in_app';
@@ -65,6 +67,24 @@ export interface Transaction {
   balance: number;
   aiCategorized: boolean;
   importId?: string;
+  /** Expenses and bills only; absent on sales. */
+  costKind?: CostKind;
+  /** The staff member a salary payment was for. */
+  staffId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Someone the shop pays. Optional: owners without staff never see any of this. */
+export interface StaffMember {
+  id: string;
+  shopId: string;
+  name: string;
+  role: string | null;
+  monthlyPay: number | null;
+  /** Day of the month they are paid (29–31 mean the last day in shorter months). */
+  payDay: number | null;
+  archived: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

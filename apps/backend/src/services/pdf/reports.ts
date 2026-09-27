@@ -1,5 +1,6 @@
 import type { Shop, Transaction } from '../../types';
 import type { CategoryLine, DebtAsOf, PaymentLine } from '../db';
+import type { ProfitFigures } from '../profit';
 import { Report, type Cell } from './report';
 import { MUTED } from './layout';
 import { money, day, shortDay, period, dateTime } from './format';
@@ -16,51 +17,58 @@ export interface ProfitAndLossInput {
   from: string;
   to: string;
   lines: CategoryLine[];
+  /** The same figures the Profit page shows, so the two always agree. */
+  profit: ProfitFigures;
 }
 
 /** Merges sale + receivable (or expense + payable) lines that share a category. */
 function byCategory(lines: CategoryLine[]): { category: string; count: number; total: number }[] {
   const map = new Map<string, { category: string; count: number; total: number }>();
   for (const l of lines) {
-    const row = map.get(l.category) ?? { category: l.category, count: 0, total: 0 };
+    const key = l.category.toLowerCase();
+    const row = map.get(key) ?? { category: l.category, count: 0, total: 0 };
     row.count += l.count;
     row.total += l.total;
-    map.set(l.category, row);
+    map.set(key, row);
   }
   return [...map.values()].sort((a, b) => b.total - a.total);
 }
 
-export async function renderProfitAndLoss({ shop, logo, from, to, lines }: ProfitAndLossInput): Promise<Buffer> {
+const CATEGORY_COLUMNS = [{ label: 'Category', width: 5 }, { label: 'Entries', width: 1.4, align: 'right' as const }, { label: 'Amount', width: 2.2, align: 'right' as const }];
+
+export async function renderProfitAndLoss({ shop, logo, from, to, lines, profit }: ProfitAndLossInput): Promise<Buffer> {
   const c = shop.currency;
   const report = new Report(shop, 'Profit & Loss', period(from, to), logo);
 
   const sales = lines.filter((l) => l.type === 'sale');
   const creditSales = lines.filter((l) => l.type === 'receivable');
-  const expenses = lines.filter((l) => l.type === 'expense');
-  const bills = lines.filter((l) => l.type === 'payable');
+  const costs = lines.filter((l) => l.type === 'expense' || l.type === 'payable');
+  const running = costs.filter((l) => l.costKind !== 'stock');
+  const stockLines = costs.filter((l) => l.costKind === 'stock');
 
   const income = sum([...sales, ...creditSales].map((l) => l.total));
-  const costs = sum([...expenses, ...bills].map((l) => l.total));
-  const net = income - costs;
   const unpaidCredit = sum(creditSales.map((l) => l.unpaid));
-  const unpaidBills = sum(bills.map((l) => l.unpaid));
+  const unpaidBills = sum(costs.filter((l) => l.type === 'payable').map((l) => l.unpaid));
+  const bySold = profit.method === 'sold';
+  const goodsCost = bySold ? profit.costOfGoodsSold ?? 0 : profit.stockBought;
+  const net = profit.profit;
 
   report.summary([
-    { label: 'Income', value: money(income, c), note: unpaidCredit > 0 ? `${money(unpaidCredit, c)} unpaid on ${day(to)}` : undefined },
-    { label: 'Costs', value: money(costs, c), note: unpaidBills > 0 ? `${money(unpaidBills, c)} unpaid on ${day(to)}` : undefined },
-    { label: net >= 0 ? 'Net profit' : 'Net loss', value: money(Math.abs(net), c) },
+    { label: 'Sales', value: money(income, c), note: unpaidCredit > 0 ? `${money(unpaidCredit, c)} unpaid on ${day(to)}` : undefined },
+    { label: 'Costs', value: money(goodsCost + profit.runningCosts, c), note: unpaidBills > 0 ? `${money(unpaidBills, c)} unpaid on ${day(to)}` : undefined },
+    { label: net >= 0 ? 'Profit' : 'Loss', value: money(Math.abs(net), c) },
   ]);
 
   if (lines.length === 0) {
     report.empty('No sales or expenses were recorded in this period.');
   } else {
     const incomeRows = byCategory([...sales, ...creditSales]);
-    report.heading('Income', 'Sales, including sales on credit');
+    report.heading('Sales', 'Including sales on credit');
     if (incomeRows.length) {
       report.table(
-        [{ label: 'Category', width: 5 }, { label: 'Entries', width: 1.4, align: 'right' }, { label: 'Amount', width: 2.2, align: 'right' }],
+        CATEGORY_COLUMNS,
         incomeRows.map((r) => [r.category, String(r.count), money(r.total, c)]),
-        { totalRow: ['Total income', String(sum(incomeRows.map((r) => r.count))), money(income, c)] },
+        { totalRow: ['Total sales', String(sum(incomeRows.map((r) => r.count))), money(income, c)] },
       );
       report.keyLine('Cash sales', money(sum(sales.map((l) => l.total)), c), { size: 9, indent: 0 });
       report.keyLine('Sales on credit', money(sum(creditSales.map((l) => l.total)), c), { size: 9 });
@@ -70,34 +78,51 @@ export async function renderProfitAndLoss({ shop, logo, from, to, lines }: Profi
       report.empty('No sales in this period.');
     }
 
-    const costRows = byCategory([...expenses, ...bills]);
-    report.heading('Costs', 'Expenses, including bills on credit');
-    if (costRows.length) {
+    const runningRows = byCategory(running);
+    report.heading('Running costs', 'What it cost to run the business: salaries, rent, power, fuel…');
+    if (runningRows.length) {
       report.table(
-        [{ label: 'Category', width: 5 }, { label: 'Entries', width: 1.4, align: 'right' }, { label: 'Amount', width: 2.2, align: 'right' }],
-        costRows.map((r) => [r.category, String(r.count), money(r.total, c)]),
-        { totalRow: ['Total costs', String(sum(costRows.map((r) => r.count))), money(costs, c)] },
+        CATEGORY_COLUMNS,
+        runningRows.map((r) => [r.category, String(r.count), money(r.total, c)]),
+        { totalRow: ['Total running costs', String(sum(runningRows.map((r) => r.count))), money(profit.runningCosts, c)] },
       );
-      report.keyLine('Paid expenses', money(sum(expenses.map((l) => l.total)), c), { size: 9 });
-      report.keyLine('Bills on credit', money(sum(bills.map((l) => l.total)), c), { size: 9 });
-      if (unpaidBills > 0) report.keyLine(`…of which you still owed on ${day(to)}`, money(unpaidBills, c), { size: 9, color: MUTED, indent: 12 });
       report.y += 10;
     } else {
-      report.empty('No expenses in this period.');
+      report.empty('No running costs were recorded in this period.');
+    }
+
+    const stockRows = byCategory(stockLines);
+    if (stockRows.length) {
+      report.heading('Stock bought', 'Goods bought to resell');
+      report.table(
+        CATEGORY_COLUMNS,
+        stockRows.map((r) => [r.category, String(r.count), money(r.total, c)]),
+        { totalRow: ['Total stock bought', String(sum(stockRows.map((r) => r.count))), money(profit.stockBought, c)] },
+      );
+      report.y += 10;
     }
 
     report.rule();
-    report.keyLine('Total income', money(income, c));
-    report.keyLine('Total costs', `− ${money(costs, c)}`);
-    report.keyLine(net >= 0 ? 'Net profit' : 'Net loss', money(Math.abs(net), c), { size: 13, weight: 'bold' });
+    report.keyLine('Total sales', money(income, c));
+    if (bySold) report.keyLine('Cost of the goods sold', `− ${money(goodsCost, c)}`);
+    else if (profit.stockBought > 0) report.keyLine('Stock bought', `− ${money(goodsCost, c)}`);
+    report.keyLine('Running costs', `− ${money(profit.runningCosts, c)}`);
+    report.keyLine(net >= 0 ? 'Profit' : 'Loss', money(Math.abs(net), c), { size: 13, weight: 'bold' });
     report.y += 8;
   }
 
+  const method = bySold
+    ? 'Profit is counted on what was sold: sales, less what the goods sold cost (from your products\' cost prices), less running costs. ' +
+      'Stock bought is listed but is not a cost until it is sold. ' +
+      (profit.coverage !== null && profit.coverage < 1 ? `${Math.round((1 - profit.coverage) * 100)}% of sales had no cost price; their cost is estimated from the rest. ` : '')
+    : profit.stockBought > 0
+      ? 'Profit here is sales less all spending, so stock still on your shelf counts as a cost. Add cost prices to your products and record sales with their products to count profit on just what was sold. '
+      : '';
   report.paragraph(
-    'How this is counted: a sale counts as income on the day it was made, even if the customer pays later, and a bill ' +
-    'counts as a cost on the day you received it. Money still owed at the end of the period is shown above and listed in the ' +
-    'Credit Report. When a customer pays an old debt, record the payment on that debt — do not record it as a new sale, or it ' +
-    'would be counted twice.',
+    method +
+    'A sale counts on the day it was made, even if the customer pays later, and a bill counts as a cost on the day you received it. ' +
+    'Money still owed at the end of the period is shown above and listed in the Credit Report. When a customer pays an old debt, ' +
+    'record the payment on that debt — not as a new sale, or it would be counted twice.',
   );
   return report.finish();
 }

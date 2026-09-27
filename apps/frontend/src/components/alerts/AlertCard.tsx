@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, DotsThree, Package, X } from '@phosphor-icons/react';
+import { Check, DotsThree, Money, Package, X } from '@phosphor-icons/react';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import ActionSheet, { type SheetAction } from '@/components/ui/ActionSheet';
@@ -14,6 +14,13 @@ const TYPE_LABELS: Partial<Record<Alert['type'], string>> = {
   bill_due: 'Bill due',
   low_stock: 'Low stock',
   duplicate: 'Recorded twice?',
+  salary_due: 'Pay day',
+};
+
+/** Where to go to act on an alert. */
+const LINKS: Partial<Record<Alert['type'], { href: string; label: string; icon: typeof Package }>> = {
+  low_stock: { href: '/stock', label: 'Go to stock', icon: Package },
+  salary_due: { href: '/profit#staff', label: 'Pay salaries', icon: Money },
 };
 
 interface AlertCardProps {
@@ -27,7 +34,7 @@ interface AlertCardProps {
 export default function AlertCard({ alert, showStatus, onAcknowledge, onDismiss }: AlertCardProps) {
   const [loading, setLoading] = useState<'ack' | 'dismiss' | null>(null);
   const [menu, setMenu] = useState(false);
-  const stockLink = alert.type === 'low_stock' && alert.status !== 'resolved';
+  const link = alert.status !== 'resolved' ? LINKS[alert.type] : undefined;
 
   async function run(kind: 'ack' | 'dismiss') {
     setLoading(kind);
@@ -37,7 +44,7 @@ export default function AlertCard({ alert, showStatus, onAcknowledge, onDismiss 
   const actions: SheetAction[] = [
     { label: 'Acknowledge', description: 'Keep it, but take it off the active list', icon: Check, onSelect: () => run('ack') },
     { label: 'Dismiss', description: "It isn't a problem", icon: X, onSelect: () => run('dismiss') },
-    ...(stockLink ? [{ label: 'Go to stock', icon: Package, href: '/stock' }] : []),
+    ...(link ? [{ label: link.label, icon: link.icon, href: link.href }] : []),
   ];
 
   return (
@@ -49,9 +56,9 @@ export default function AlertCard({ alert, showStatus, onAcknowledge, onDismiss 
             <Badge>{TYPE_LABELS[alert.type] ?? capitalize(alert.type)}</Badge>
           </div>
           <p className="text-[15px] leading-relaxed text-white/80 sm:text-sm">{alert.message}</p>
-          {stockLink && (
-            <Link href="/stock" className="mt-1.5 hidden text-[13px] text-white/55 underline-offset-2 hover:text-white/85 hover:underline sm:inline-block">
-              Go to stock
+          {link && (
+            <Link href={link.href} className="mt-1.5 hidden text-[13px] text-white/55 underline-offset-2 hover:text-white/85 hover:underline sm:inline-block">
+              {link.label}
             </Link>
           )}
           <p className="mt-1.5 text-xs text-white/35">{formatDateTime(alert.createdAt)}</p>

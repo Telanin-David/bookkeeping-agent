@@ -1,6 +1,7 @@
 'use client';
 import Table from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
+import CostKindChip from './CostKindChip';
 import type { Transaction } from '@/types';
 import { formatCurrency, formatDate, typeLabel, cn } from '@/lib/utils';
 
@@ -76,7 +77,10 @@ export default function TransactionTable({ data, onRowClick, onRecordPayment }: 
             </p>
             <div className="mt-2.5 flex items-center justify-between gap-2">
               <div className="flex min-w-0 flex-col items-start gap-1">
-                <Badge>{statusLabel(tx)}</Badge>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge>{statusLabel(tx)}</Badge>
+                  <CostKindChip tx={tx} />
+                </div>
                 <PaidSoFar tx={tx} />
               </div>
               <PaymentButton tx={tx} onRecordPayment={onRecordPayment} />
@@ -104,7 +108,16 @@ export default function TransactionTable({ data, onRowClick, onRecordPayment }: 
                 </div>
               ),
             },
-            { key: 'type',         header: 'Type',         render: (r) => <Badge>{typeLabel(r.type)}</Badge> },
+            {
+              key: 'type',
+              header: 'Type',
+              render: (r) => (
+                <div className="flex flex-col items-start gap-1">
+                  <Badge>{typeLabel(r.type)}</Badge>
+                  <CostKindChip tx={r} />
+                </div>
+              ),
+            },
             { key: 'category',     header: 'Category',     render: (r) => r.category ?? '—' },
             { key: 'counterparty', header: 'Customer or supplier', render: (r) => r.counterparty ?? '—' },
           ]}

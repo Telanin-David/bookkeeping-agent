@@ -58,6 +58,8 @@ export default function ImportsPage() {
     setStep('done');
     // Everything that shows transactions, stock-free totals and alerts is now out of date.
     qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+    qc.invalidateQueries({ queryKey: ['profit', shopId] });
+    qc.invalidateQueries({ queryKey: ['staff', shopId] });
     qc.invalidateQueries({ queryKey: ['alerts'] });
     qc.invalidateQueries({ queryKey: ['imports', shopId] });
   }, "Couldn't import. Nothing was saved; try again.");
@@ -69,6 +71,8 @@ export default function ImportsPage() {
       setNote(`Removed ${removed} ${removed === 1 ? 'transaction' : 'transactions'} imported from ${filename}.`);
       if (result?.importId === importId) reset();
       qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['profit', shopId] });
+      qc.invalidateQueries({ queryKey: ['staff', shopId] });
       qc.invalidateQueries({ queryKey: ['alerts'] });
       qc.invalidateQueries({ queryKey: ['imports', shopId] });
     }, "Couldn't undo the import. Try again.");

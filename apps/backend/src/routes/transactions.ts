@@ -5,6 +5,7 @@ import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import * as stock from '../services/stock';
+import * as staff from '../services/staff';
 import { checkDuplicateSafely, refreshDebtAlerts } from '../services/alerts';
 import { categorizeTransaction } from '../services/claude';
 import { todayIso } from '../utils/dates';
@@ -25,6 +26,8 @@ const baseSchema = z.object({
   counterparty: z.string().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Expenses and bills: goods to resell, or a running cost (rent, salaries, fuel…). Ignored on sales.
+  costKind: z.enum(['stock', 'running']).optional(),
 });
 
 // Products sold (stock off the shelf) or bought (stock onto it) in this transaction.
@@ -33,6 +36,8 @@ const createSchema = baseSchema.extend({
     productId: z.string().uuid(),
     quantity: z.number().positive().max(1_000_000),
   })).max(50).optional(),
+  // A salary payment: who it was for.
+  staffId: z.string().uuid().optional(),
 });
 
 // Items can't be edited after the fact: delete the transaction and record it again.
@@ -48,6 +53,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       type: req.query['type'] as Parameters<typeof db.listTransactions>[2]['type'],
       status: req.query['status'] as Parameters<typeof db.listTransactions>[2]['status'],
       category: req.query['category'] as string | undefined,
+      costKind: ['stock', 'running'].includes(req.query['costKind'] as string) ? req.query['costKind'] as 'stock' | 'running' : undefined,
       dateFrom: req.query['dateFrom'] as string | undefined,
       dateTo: req.query['dateTo'] as string | undefined,
       page,
@@ -72,6 +78,9 @@ router.post('/', validate(createSchema), async (req: Request, res: Response, nex
     }
 
     const { items, ...fields } = req.body as z.infer<typeof createSchema>;
+    if (fields.staffId && !(await staff.findStaff(fields.staffId, req.params['shopId']!, req.user!.id))) {
+      throw new AppError(404, 'NOT_FOUND', 'Staff member not found');
+    }
     const data = { shopId: req.params['shopId']!, userId: req.user!.id, ...fields, category, aiCategorized };
     const tx = items?.length
       ? await stock.createTransactionWithItems(data, items)
@@ -79,6 +88,7 @@ router.post('/', validate(createSchema), async (req: Request, res: Response, nex
     await checkDuplicateSafely(tx);
     // A debt entered already past its due date is flagged straight away.
     if (tx.dueDate) await refreshDebtAlerts(tx.id);
+    if (tx.staffId) await staff.refreshSalaryAlerts(tx.shopId);
     res.status(201).json({ ...tx, items: items?.length ? await stock.getTransactionItems(tx.id) : [] });
   } catch (err) { next(err); }
 });
@@ -116,6 +126,10 @@ router.patch('/:transactionId', validate(updateSchema), async (req: Request, res
       throw new AppError(400, 'BAD_REQUEST', 'This transaction moved stock, so it can’t be switched between a sale and a purchase. Delete it and record it again.');
     }
 
+    if (changes.costKind === 'running' && await stock.hasItems(txId)) {
+      throw new AppError(400, 'BAD_REQUEST', 'This put products on your shelf, so it’s stock to resell. To change that, delete it and record it again.');
+    }
+
     let tx = await db.updateTransaction(txId, shopId, userId, isDebt(current.type) ? changes : { ...changes, status });
     if (!tx) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
     // Changing what the assistant filled in counts against its accuracy; marking paid doesn't.
@@ -141,6 +155,7 @@ router.patch('/:transactionId', validate(updateSchema), async (req: Request, res
       await refreshDebtAlerts(txId);
       tx = (await db.findTransactionById(txId, shopId, userId))!;
     }
+    if (current.staffId) await staff.refreshSalaryAlerts(shopId); // its date or type may have changed
     res.json(tx);
   } catch (err) { next(err); }
 });
@@ -200,6 +215,7 @@ router.delete('/:transactionId', async (req: Request, res: Response, next: NextF
     const deleted = await stock.deleteTransactionWithStock(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
     if (!deleted) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
     await refreshDebtAlerts(req.params['transactionId']!); // closes any alert about it
+    await staff.refreshSalaryAlerts(req.params['shopId']!); // a deleted salary payment is owed again
     res.status(204).send();
   } catch (err) { next(err); }
 });
