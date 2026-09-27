@@ -85,7 +85,7 @@
     - An invoice for a paid credit sale now says "Paid", not "Balance due".
     - Chat list no longer shows "1 Jan 1970" or creates duplicate empty chats.
     - The shared `Table` component's typing is fixed, so frontend `tsc` is now clean with 0 errors.
-  - **Refusal fallbacks:** the chat loop calls `client.beta.messages.create` with the `server-side-fallback-2026-07-01` beta and `fallbacks: "default"`, so if `claude-opus-5` declines a turn, the API retries it on the fallback model instead of returning a refusal. `afterFallback()` drops any text from before the switch. Categorisation still uses the regular endpoint with `claude-haiku-4-5`.
+  - **Refusal fallbacks:** the chat loop calls `client.beta.messages.create` with the `server-side-fallback-2026-07-01` beta and `fallbacks: "default"`, so if `claude-opus-5` declines a turn, the API retries it on the fallback model instead of returning a refusal. `afterFallback()` drops any text from before the switch. Categorisation still uses the regular endpoint with `claude-haiku-4-5`. *(Removed when the chat moved to Haiku 4.5; see "Chat model" below.)*
 
 - **Stock & shelf counting** (owner's request, built after Deliverable 7; migration `006_stock.sql`):
   - **Products:** name, unit (bag, carton, litre…), quantity on hand, an optional "warn me at" level, and optional cost and selling prices. Names are unique per shop, ignoring case. Removing a product keeps its history.
@@ -153,10 +153,17 @@
   - **Known limit:** a low-stock alert that was already emailed as "running low" is not emailed again when the product runs out. The app does re-show it as active.
   - **Not fixed here, pre-existing:** `npm audit` flags `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp`. The risk is when installing packages, not while the app runs. The fix is bcrypt 6, which is a separate change to test on its own.
 
+- **Chat model: Claude Haiku 4.5** (owner's decision, on cost):
+  - The chat assistant now uses `claude-haiku-4-5` ($1 in / $5 out per million tokens) instead of `claude-opus-5` ($5 / $25). Set `CHAT_MODEL` in the server's `.env` to try another model; empty means Haiku.
+  - Haiku takes a plain request on the regular endpoint: no `effort` (Haiku 4.5 rejects it) and no refusal-fallback beta (made for Opus 5 / Fable). A refusal still gets the "could you rephrase it?" reply. `afterFallback()` is gone.
+  - **Caching:** Haiku 4.5 only caches a prompt start of 4,096+ tokens, and the system prompt plus tools come to about 2,500. So the marker on the system prompt alone saved nothing. The request now also marks the newest message (top-level `cache_control`): when a turn uses a tool, the second call reads the whole conversation from the cache at a tenth of the price. A turn with no tool call pays 25% extra on that write, unless the owner's next message comes within 5 minutes.
+  - **Usage log:** every owner message logs one line: `chat usage shop=… model=… calls=… input=… cache_write=… cache_read=… output=… cost_usd=…`. Read real costs off it during the live test.
+  - **History bug fixed:** the assistant was sent the *first* 30 messages of a chat, not the newest 30, so from the 31st message on it never saw what the owner had just typed. It now gets the newest 30, starting with an owner message. Checked against a local stand-in for the API: at message 20 of 20 (40 stored), the assistant sees message 20 last; the old query stopped at the 15th reply.
+
 ## Before hosting (owner's decision)
-- **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday"), and the refusal fallback.
-  - To keep it cheap, run most of it on the cheapest model (`claude-haiku-4-5`). The chat model will need to be configurable by an environment variable for this.
-  - Haiku checks the wiring, but not how the production model (`claude-opus-5`) behaves, and the fallback beta may not apply to Haiku. So finish with a few messages on the production model.
+- **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").
+  - It runs on the production model, `claude-haiku-4-5`. Watch the `chat usage` log lines for the real cost per message.
+  - Check that Haiku gets amounts, dates, products and part-payments right, and asks when unsure rather than guessing. If it doesn't, try `CHAT_MODEL=claude-sonnet-5` ($2 / $10) before rewriting prompts.
 - The key goes in the server's environment, never in the repo or in chat.
 - **Email for alerts:**
   - Pick an email provider and put its SMTP details in the server's `.env`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `EMAIL_FROM`.
