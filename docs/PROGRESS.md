@@ -15,7 +15,7 @@
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
 | 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
-| 9c | Running costs, staff & profit (owner's request) | 🟡 Built, not pushed | `feat/running-costs-profit` | — |
+| 9c | Running costs, staff & profit (owner's request) | ✅ Done | `feat/running-costs-profit` | merged to main (#30) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
