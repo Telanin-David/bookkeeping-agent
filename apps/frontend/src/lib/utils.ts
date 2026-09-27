@@ -16,6 +16,13 @@ export function formatDate(dateStr: string): string {
 const lagosDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' });
 
 /** Today's date as 'YYYY-MM-DD' in Lagos — the shop's day, whatever the device clock's zone. */
+const shortDateFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/** '2026-09-27' -> '27 Sept', the same on every phone whatever its time zone. */
+export function formatShortDate(iso: string): string {
+  return shortDateFmt.format(new Date(`${iso}T00:00:00Z`));
+}
+
 export function todayInLagos(): string {
   return lagosDay.format(new Date());
 }

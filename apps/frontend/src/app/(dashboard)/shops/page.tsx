@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Stamp, Storefront } from '@phosphor-icons/react';
+import { Plus, Stamp, Storefront } from '@phosphor-icons/react';
 import { shopsApi } from '@/lib/api';
 import { useShopsStore } from '@/store/shops';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -10,7 +10,10 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
-import Spinner from '@/components/ui/Spinner';
+import Select from '@/components/ui/Select';
+import IconButton from '@/components/ui/IconButton';
+import FormActions from '@/components/ui/FormActions';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -59,21 +62,21 @@ export default function ShopsPage() {
       title="Shops"
       actions={
         <>
+          {/* On a phone, receipt branding is in the ⋯ menu, so the header keeps one button. */}
           <Link
             href="/shops/branding"
-            className="flex h-9 items-center gap-2 rounded-xl px-3 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white/90"
+            className="hidden h-9 items-center gap-2 rounded-xl px-3 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white/90 sm:flex"
           >
             <Stamp size={16} />
             Receipt branding
           </Link>
-          <Button onClick={() => setShowCreate(true)}>+ Add shop</Button>
+          <Button className="hidden sm:inline-flex" onClick={() => setShowCreate(true)}>+ Add shop</Button>
+          <IconButton className="sm:hidden" aria-label="Add a shop" onClick={() => setShowCreate(true)}><Plus size={20} weight="bold" /></IconButton>
         </>
       }
     >
       {isLoading && shops.length === 0 ? (
-        <div className="flex items-center gap-2 text-sm text-white/30">
-          <Spinner className="h-4 w-4 text-white/20" /> Loading…
-        </div>
+        <ListSkeleton rows={2} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shops.map((shop) => (
@@ -105,23 +108,20 @@ export default function ShopsPage() {
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create shop">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add a shop">
         <form onSubmit={handleSubmit((v) => createMut.mutateAsync(v))} className="space-y-4">
           <Input id="name"     label="Shop name"  error={errors.name?.message}     {...register('name')} />
           <Input id="location" label="Location"   error={errors.location?.message} {...register('location')} />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
-            <select {...register('type')} className="glass-input w-full rounded-xl px-3.5 py-2.5 text-sm bg-transparent">
-              {['retail','wholesale','services','food','other'].map((t) => (
-                <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>
-              ))}
-            </select>
-          </div>
+          <Select id="shop-type" label="Type" {...register('type')}>
+            {['retail','wholesale','services','food','other'].map((t) => (
+              <option key={t} value={t} className="bg-ink-900">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+            ))}
+          </Select>
           <Input id="currency" label="Currency" error={errors.currency?.message} {...register('currency')} />
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button type="submit" loading={isSubmitting}>Create</Button>
-          </div>
+          <FormActions>
+            <Button type="button" size="lg" variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button type="submit" size="lg" loading={isSubmitting}>Create shop</Button>
+          </FormActions>
         </form>
       </Modal>
     </PageWrapper>

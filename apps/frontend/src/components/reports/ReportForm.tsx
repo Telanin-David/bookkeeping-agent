@@ -6,6 +6,7 @@ import { isDemoShop } from '@/lib/demo';
 import { shareOrDownload } from '@/lib/share';
 import { useShopsStore } from '@/store/shops';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import type { ReportType } from '@/types';
 
@@ -47,23 +48,20 @@ export default function ReportForm() {
   }
 
   return (
-    <div className="glass-card max-w-md space-y-5 rounded-2xl p-6">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="report-type" className="text-xs font-medium uppercase tracking-wide text-white/40">Report type</label>
-        <select
-          id="report-type"
-          value={type}
-          onChange={(e) => setType(e.target.value as DateRangeReport)}
-          className="glass-input w-full rounded-xl bg-transparent px-3.5 py-2.5 text-sm"
-        >
-          {REPORT_TYPES.map((r) => (
-            <option key={r.value} value={r.value} className="bg-ink-900">{r.label}</option>
-          ))}
-        </select>
-        <p className="text-xs text-white/35">{REPORT_TYPES.find((r) => r.value === type)?.hint}</p>
-      </div>
+    <div className="glass-card max-w-md space-y-5 rounded-2xl p-5 sm:p-6">
+      <Select
+        id="report-type"
+        label="Report type"
+        value={type}
+        onChange={(e) => setType(e.target.value as DateRangeReport)}
+        hint={REPORT_TYPES.find((r) => r.value === type)?.hint}
+      >
+        {REPORT_TYPES.map((r) => (
+          <option key={r.value} value={r.value} className="bg-ink-900">{r.label}</option>
+        ))}
+      </Select>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
         <Input id="from" label="From" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
         <Input id="to"   label="To"   type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
       </div>
@@ -71,7 +69,7 @@ export default function ReportForm() {
       {demo && <p className="text-xs text-white/45">PDF reports are made from your real records, so they aren&apos;t available in demo mode.</p>}
       {error && <p className="text-xs text-white/60">{error}</p>}
 
-      <Button onClick={generate} loading={loading} disabled={!from || !to || demo} className="gap-2">
+      <Button size="lg" onClick={generate} loading={loading} disabled={!from || !to || demo} className="w-full gap-2 sm:w-auto">
         <DownloadSimple size={15} />
         Get PDF
       </Button>

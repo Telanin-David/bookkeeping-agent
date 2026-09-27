@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from 'react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import { errorMessage } from '@/lib/errors';
 import type { Product } from '@/types';
 import type { ProductFields } from '@/lib/api';
@@ -55,7 +56,7 @@ export default function ProductForm({ product, onSubmit, onCancel }: ProductForm
   return (
     <form onSubmit={submit} className="space-y-3.5" noValidate>
       <Input id="product-name" label="Name" placeholder="e.g. Rice (50kg)" value={name} onChange={(e) => setName(e.target.value)} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-3">
         <Input id="product-unit" label="Sold by the" placeholder="bag" value={unit} onChange={(e) => setUnit(e.target.value)} hint="bag, carton, piece, litre…" />
         {product ? (
           <Input id="product-low" label="Warn me at" type="number" inputMode="decimal" min="0" step="any" value={low} onChange={(e) => setLow(e.target.value)} hint="Leave empty for no warning" />
@@ -66,15 +67,15 @@ export default function ProductForm({ product, onSubmit, onCancel }: ProductForm
       {!product && (
         <Input id="product-low" label="Warn me when it gets down to" type="number" inputMode="decimal" min="0" step="any" value={low} onChange={(e) => setLow(e.target.value)} hint="Leave empty for no warning" />
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-3">
         <Input id="product-cost" label="Cost price" type="number" inputMode="decimal" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} hint="What you pay for one" />
         <Input id="product-price" label="Selling price" type="number" inputMode="decimal" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} hint="What you sell one for" />
       </div>
       {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={saving}>{product ? 'Save changes' : 'Add product'}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="lg" loading={saving}>{product ? 'Save changes' : 'Add product'}</Button>
+      </FormActions>
     </form>
   );
 }

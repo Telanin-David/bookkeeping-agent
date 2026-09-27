@@ -13,7 +13,8 @@ export default function PageWrapper({ title, actions, children }: PageWrapperPro
         <h1 className="text-base font-semibold text-white/90 md:text-lg">{title}</h1>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      <div className="flex-1 overflow-y-auto p-5 md:p-6">{children}</div>
+      {/* Content settles in, so moving between pages feels smooth rather than a flash. */}
+      <div className="anim-page flex-1 overflow-y-auto p-5 md:p-6">{children}</div>
     </div>
   );
 }

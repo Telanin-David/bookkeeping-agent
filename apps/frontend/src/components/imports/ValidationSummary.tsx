@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { ImportCheck } from '@/types';
 
@@ -73,12 +74,12 @@ export default function ValidationSummary({ result, loading, error, onConfirm, o
       )}
 
       {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onBack}>Change columns</Button>
-        <Button onClick={() => onConfirm(includeDuplicates)} loading={loading} disabled={toImport === 0}>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onBack}>Change columns</Button>
+        <Button size="lg" onClick={() => onConfirm(includeDuplicates)} loading={loading} disabled={toImport === 0}>
           {toImport === 0 ? 'Nothing to import' : `Import ${toImport} ${toImport === 1 ? 'row' : 'rows'}`}
         </Button>
-      </div>
+      </FormActions>
     </div>
   );
 }

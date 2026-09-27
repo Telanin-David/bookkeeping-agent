@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import { useShelfCount } from '@/hooks/useStock';
 import { errorMessage } from '@/lib/errors';
 import { formatQuantity, pluralUnit, quantityText } from '@/lib/quantity';
@@ -65,7 +66,7 @@ function CountForm({ shopId, products, onClose }: { shopId: string; products: Pr
           })}
         </ul>
         <p className="text-[12px] text-white/35">Your stock now matches what you counted.</p>
-        <div className="flex justify-end"><Button onClick={onClose}>Done</Button></div>
+        <FormActions><Button size="lg" onClick={onClose}>Done</Button></FormActions>
       </div>
     );
   }
@@ -91,10 +92,10 @@ function CountForm({ shopId, products, onClose }: { shopId: string; products: Pr
         ))}
       </ul>
       {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button type="submit" loading={count.isPending}>Save count</Button>
-      </div>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button type="submit" size="lg" loading={count.isPending}>Save count</Button>
+      </FormActions>
     </form>
   );
 }

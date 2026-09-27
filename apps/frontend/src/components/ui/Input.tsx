@@ -20,7 +20,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         ref={ref}
         id={id}
         className={cn(
-          'glass-input block w-full rounded-xl px-3.5 py-2.5 text-sm transition-all placeholder:text-white/25',
+          // 16px text on phones: anything smaller makes iPhones zoom in when the field is tapped.
+          'glass-input block min-h-[2.75rem] w-full rounded-xl px-3.5 py-2.5 text-base transition-all placeholder:text-white/25 sm:text-sm',
           error ? 'border-white/25' : '',
           className,
         )}

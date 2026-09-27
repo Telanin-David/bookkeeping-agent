@@ -1,12 +1,15 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Plus, X } from '@phosphor-icons/react';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import type { TransactionItemInput } from '@/types';
-import { typeLabel } from '@/lib/utils';
+import { typeLabel, todayInLagos } from '@/lib/utils';
 import { useProducts } from '@/hooks/useStock';
 import { useShopsStore } from '@/store/shops';
 import { formatQuantity, quantityText } from '@/lib/quantity';
@@ -36,12 +39,11 @@ interface TransactionFormProps {
   onCancel: () => void;
 }
 
-const selectCls = 'glass-input w-full rounded-xl px-3.5 py-2.5 text-sm bg-transparent';
-
 export default function TransactionForm({ defaultValues, onSubmit, onCancel }: TransactionFormProps) {
   const { register, handleSubmit, watch, setValue, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { currency: 'NGN', status: 'pending', ...defaultValues },
+    // Most entries are for today, so the date starts there.
+    defaultValues: { currency: 'NGN', status: 'pending', date: todayInLagos(), ...defaultValues },
   });
 
   // Products sold (off the shelf) or bought (onto it). Optional: a sale can be recorded without them.
@@ -51,6 +53,9 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
   const [itemError, setItemError] = useState('');
   const type = watch('type');
   const isSale = type === 'sale' || type === 'receivable';
+  const isDebt = type === 'receivable' || type === 'payable';
+  // A cash sale or expense has no due date; drop one left over from switching the type.
+  useEffect(() => { if (!isDebt) setValue('dueDate', undefined); }, [isDebt, setValue]);
 
   // Fill in the amount and description from the product lines, unless the owner typed their own.
   const [autoAmount, setAutoAmount] = useState<string | null>(null);
@@ -85,17 +90,14 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
-          <select {...register('type')} className={selectCls}>
-            {['sale', 'expense', 'receivable', 'payable'].map((t) => (
-              <option key={t} value={t} className="bg-ink-900">{typeLabel(t)}</option>
-            ))}
-          </select>
-          {errors.type && <p className="text-xs text-white/45">{errors.type.message}</p>}
-        </div>
-        <Input id="amount" label="Amount" type="number" step="0.01" error={errors.amount?.message} {...register('amount')} />
+      {/* One field per row on a phone; two short ones side by side on wider screens. */}
+      <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
+        <Select id="type" label="Type" error={errors.type?.message} {...register('type')}>
+          {['sale', 'expense', 'receivable', 'payable'].map((t) => (
+            <option key={t} value={t} className="bg-ink-900">{typeLabel(t)}</option>
+          ))}
+        </Select>
+        <Input id="amount" label="Amount" type="number" inputMode="decimal" step="0.01" error={errors.amount?.message} {...register('amount')} />
       </div>
 
       {products.length > 0 && (
@@ -105,52 +107,54 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
           </p>
           {rows.map((row, i) => (
             <div key={i} className="flex items-center gap-2">
-              <select
-                aria-label="Product" value={row.productId}
-                onChange={(e) => applyRows(rows.map((r, j) => (j === i ? { ...r, productId: e.target.value } : r)))}
-                className={`${selectCls} min-w-0 flex-1`}
-              >
-                <option value="" className="bg-ink-900">Choose a product</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-ink-900">{p.name} · {formatQuantity(p.quantity)} left</option>
-                ))}
-              </select>
+              <div className="min-w-0 flex-1">
+                <Select
+                  aria-label="Product" value={row.productId}
+                  onChange={(e) => applyRows(rows.map((r, j) => (j === i ? { ...r, productId: e.target.value } : r)))}
+                >
+                  <option value="" className="bg-ink-900">Choose a product</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-ink-900">{p.name} · {formatQuantity(p.quantity)} left</option>
+                  ))}
+                </Select>
+              </div>
               <input
                 aria-label="How many" type="number" inputMode="decimal" min="0" step="any" placeholder="Qty" value={row.quantity}
                 onChange={(e) => applyRows(rows.map((r, j) => (j === i ? { ...r, quantity: e.target.value } : r)))}
-                className="glass-input w-20 rounded-xl px-3 py-2.5 text-right text-sm tabular-nums"
+                className="glass-input min-h-[2.75rem] w-20 rounded-xl px-3 py-2.5 text-right text-base tabular-nums sm:text-sm"
               />
               <button
                 type="button" aria-label="Remove line" onClick={() => applyRows(rows.filter((_, j) => j !== i))}
-                className="h-9 w-9 shrink-0 rounded-lg text-white/40 transition hover:bg-white/[0.06] hover:text-white/75"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.06] hover:text-white/80 active:bg-white/[0.1]"
               >
-                ×
+                <X size={16} />
               </button>
             </div>
           ))}
           <button
             type="button" onClick={() => setRows([...rows, { productId: '', quantity: '' }])}
-            className="text-[13px] text-white/55 underline-offset-2 hover:text-white/85 hover:underline"
+            className="flex min-h-[2.75rem] items-center gap-1.5 text-[14px] text-white/60 transition hover:text-white/90 active:text-white"
           >
-            + Add a product
+            <Plus size={14} /> Add a product
           </button>
           {itemError && <p className="text-xs text-white/60" role="alert">{itemError}</p>}
         </div>
       )}
 
-      <Input id="description"  label="Description"   error={errors.description?.message}  {...register('description')} />
-      <Input id="category"     label="Category"      error={errors.category?.message}     {...register('category')} />
-      <Input id="counterparty" label="Counterparty"  error={errors.counterparty?.message} {...register('counterparty')} />
+      <Input id="description"  label={isSale ? 'What was sold' : 'What it was for'} error={errors.description?.message} {...register('description')} />
+      <Input id="counterparty" label={isSale ? 'Customer (optional)' : 'Paid to (optional)'} error={errors.counterparty?.message} {...register('counterparty')} />
+      <Input id="category"     label="Category (optional)" error={errors.category?.message} {...register('category')} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <Input id="date"    label="Date"     type="date" error={errors.date?.message}    {...register('date')} />
-        <Input id="dueDate" label="Due Date" type="date" error={errors.dueDate?.message} {...register('dueDate')} />
+      <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
+        <Input id="date" label="Date" type="date" error={errors.date?.message} {...register('date')} />
+        {/* Only credit sales and bills have a date they're due. */}
+        {isDebt && <Input id="dueDate" label="Due date" type="date" error={errors.dueDate?.message} {...register('dueDate')} />}
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={isSubmitting}>Save</Button>
-      </div>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="lg" loading={isSubmitting}>Save</Button>
+      </FormActions>
     </form>
   );
 }

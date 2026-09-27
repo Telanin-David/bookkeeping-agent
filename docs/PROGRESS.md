@@ -229,6 +229,33 @@
   - The business dashboard shows how many times, and by how many owners, the limit was reached in the last 30 days, to tell whether 20 is right.
   - Checked: 4 unit tests; 15 end-to-end checks with a limit of 3 (counting down, failed replies free, refusal and nothing saved, a new chat doesn't reset it, the form still works, other owners unaffected, the admin unlimited, the dashboard count); 6 browser checks on a phone.
 
+- **Mobile polish** (owner's request; `feat/mobile-ui-polish`): the phone layout reworked to feel like a phone app.
+  - **Controls behind one button, opening top to bottom:**
+    - Transactions: the four filters are one "Filter" button (with a count and a summary of what's applied, and "Clear"). It opens a panel with type, status, from and to, one under the other, then "Show results".
+    - Stock: "Count shelf" and "Add product" become one "+" that opens "Add a product" and "Count the shelf". Shops and Transactions: one "+".
+    - Alerts: the four tabs become "Showing Active ▾", and each alert's unlabelled ✓/✕ become ⋯ with named actions ("Acknowledge: keep it, but take it off the active list", "Dismiss", "Go to stock"). Email settings is a gear.
+    - Import: "Step 1 of 4 · Upload" with a progress bar instead of the breadcrumb row.
+    - Wider screens keep the rows, tabs and named buttons.
+  - **Panels slide up from the bottom on phones** (grab handle, rounded top, safe-area padding). They rise into the middle on wider screens, and animate out as well as in. They render at the top of the page, so a frosted card can't trap them.
+  - **Forms:** one field per row on phones. Buttons are full width and stacked, with the main one on top. Plain labels ("What was sold", "Customer", "Due date" only for credit sales and bills). The date starts at today.
+  - **Dropdowns:** our own arrow with room around it (the browser's sat hard against the edge).
+  - **Date fields:** the calendar icon is light (`color-scheme: dark`); it was black on the dark background.
+  - **Form fields use 16px text on phones,** so iPhones don't zoom in on every tap.
+  - **Menus:** a small gap between rows so highlights never touch. Rows are 48px tall, with a pressed state on tap.
+  - **Buttons** shrink slightly when pressed, and are thumb-sized on phones.
+  - **No more flash between pages:**
+    - Each page shows placeholders in its own shape (`loading.tsx` and skeletons) instead of "Loading…" text, then fades in.
+    - Starting the app shows a dark screen, with the name fading in only if the sign-in check takes a moment.
+    - Measured on a production build with 300 ms of added network delay: tapping a menu link shows the new page in about 55 ms, and the transactions list replaces its placeholders about 0.4 s later. The development server is much slower (about 1.5 s), which exaggerates it.
+  - **Confirm-email banner:** a larger close button, and it stays closed for the rest of the visit.
+  - Motion respects the phone's "reduce motion" setting.
+  - **Checked:**
+    - Before and after screenshots of every screen on a phone.
+    - Frame-by-frame page changes on a production build.
+    - Desktop screenshots.
+    - All browser suites: login 11/11, payments 18/18, part-paid 5/5, stock 16/16, alerts 10/10, import 11/11, daily limit 6/6, business dashboard 11/11, hidden from owners 11/11. Selectors were updated where buttons moved on phones.
+  - **Not changed:** how a date is written inside the date field follows the phone's own language setting (a Nigerian phone shows day/month/year; the test browser was set to US English).
+
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").
   - It runs on the production model, `claude-haiku-4-5`. Watch the `chat usage` log lines for the real cost per message.

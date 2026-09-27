@@ -7,8 +7,8 @@ import { errorMessage } from '@/lib/errors';
 import { usd, shortDay, percent, count } from '@/lib/admin';
 import { useAuthStore } from '@/store/auth';
 import PageWrapper from '@/components/layout/PageWrapper';
+import { ListSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import DailyCostChart from '@/components/admin/DailyCostChart';
-import Spinner from '@/components/ui/Spinner';
 import type { AdminOverview, AdminUser } from '@/types';
 
 // Above this share of the assistant's records being fixed by owners, Haiku isn't accurate
@@ -27,7 +27,9 @@ export default function AdminPage() {
     <PageWrapper title="Business dashboard">
       <div className="max-w-5xl space-y-8">
         {overview.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-white/35"><Spinner className="h-4 w-4 text-white/25" /> Loading…</div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="status" aria-label="Loading">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[92px] rounded-2xl" />)}
+          </div>
         ) : overview.error ? (
           <p className="text-sm text-white/60" role="alert">{errorMessage(overview.error, "Couldn't load the dashboard. Try again.")}</p>
         ) : overview.data && <Overview o={overview.data} />}
@@ -35,7 +37,7 @@ export default function AdminPage() {
         <section>
           <SectionTitle title="Users" note="Last 30 days, most AI spending first. Counts only: their sales and customers stay private." />
           {users.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-white/35"><Spinner className="h-4 w-4 text-white/25" /> Loading…</div>
+            <ListSkeleton rows={3} />
           ) : users.error ? (
             <p className="text-sm text-white/60" role="alert">{errorMessage(users.error, "Couldn't load the users.")}</p>
           ) : users.data && <UserList users={users.data.data} total={users.data.total} />}

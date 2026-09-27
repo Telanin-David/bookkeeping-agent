@@ -106,7 +106,7 @@ export default function TransactionTable({ data, onRowClick, onRecordPayment }: 
             },
             { key: 'type',         header: 'Type',         render: (r) => <Badge>{typeLabel(r.type)}</Badge> },
             { key: 'category',     header: 'Category',     render: (r) => r.category ?? '—' },
-            { key: 'counterparty', header: 'Counterparty', render: (r) => r.counterparty ?? '—' },
+            { key: 'counterparty', header: 'Customer or supplier', render: (r) => r.counterparty ?? '—' },
           ]}
           data={data}
           keyExtractor={(r) => r.id}

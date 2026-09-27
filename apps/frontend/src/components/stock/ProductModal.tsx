@@ -2,7 +2,9 @@
 import { useState, type FormEvent } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import ProductForm from '@/components/stock/ProductForm';
 import { useAdjustStock, useMovements, useProducts, useRemoveProduct, useUndoMovement, useUpdateProduct } from '@/hooks/useStock';
 import { useCreateTransaction } from '@/hooks/useTransactions';
@@ -16,7 +18,6 @@ import type { Product, StockMovement } from '@/types';
 type Mode = 'view' | 'add' | 'remove' | 'edit';
 
 const REMOVE_REASONS = ['Damaged', 'Expired', 'Used in the shop', 'Given away', 'Other'];
-const selectCls = 'glass-input w-full rounded-xl bg-transparent px-3.5 py-2.5 text-sm';
 
 /** What happened, in words: "Sold", "Shelf count: 18 counted, 2 missing"… */
 function describe(m: StockMovement, unit: string): string {
@@ -86,7 +87,7 @@ function AddStockForm({ shopId, product, onDone }: { shopId: string; product: Pr
 
   return (
     <form onSubmit={submit} className="space-y-3" noValidate>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-3">
         <Input id="add-qty" label={`How many ${pluralUnit(product.unit)}`} type="number" inputMode="decimal" min="0" step="any" value={qty} onChange={(e) => { setQty(e.target.value); setError(''); }} />
         <Input id="add-date" label="Date" type="date" max={today} value={date} onChange={(e) => { setDate(e.target.value); setError(''); }} />
       </div>
@@ -98,24 +99,21 @@ function AddStockForm({ shopId, product, onDone }: { shopId: string; product: Pr
             hint={paid.trim() ? 'Recorded as an expense too, so your profit is right.' : 'Fill this in to record the cost as an expense as well.'}
           />
           {paid.trim() !== '' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="add-credit" className="text-xs font-medium uppercase tracking-wide text-white/40">Paid</label>
-                <select id="add-credit" value={onCredit ? 'credit' : 'now'} onChange={(e) => setOnCredit(e.target.value === 'credit')} className={selectCls}>
-                  <option value="now" className="bg-ink-900">Paid now</option>
-                  <option value="credit" className="bg-ink-900">On credit</option>
-                </select>
-              </div>
+            <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-3">
+              <Select id="add-credit" label="Paid" value={onCredit ? 'credit' : 'now'} onChange={(e) => setOnCredit(e.target.value === 'credit')}>
+                <option value="now" className="bg-ink-900">Paid now</option>
+                <option value="credit" className="bg-ink-900">On credit</option>
+              </Select>
               <Input id="add-supplier" label="Supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
             </div>
           )}
         </>
       )}
       {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>
-        <Button type="submit" loading={adjust.isPending || createTx.isPending}>Add stock</Button>
-      </div>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onDone}>Cancel</Button>
+        <Button type="submit" size="lg" loading={adjust.isPending || createTx.isPending}>Add stock</Button>
+      </FormActions>
     </form>
   );
 }
@@ -147,21 +145,18 @@ function RemoveStockForm({ shopId, product, onDone }: { shopId: string; product:
   return (
     <form onSubmit={submit} className="space-y-3" noValidate>
       <p className="text-[13px] text-white/45">For stock that left the shelf without being sold. Sales take stock off by themselves.</p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-3">
         <Input id="remove-qty" label={`How many ${pluralUnit(product.unit)}`} type="number" inputMode="decimal" min="0" step="any" value={qty} onChange={(e) => { setQty(e.target.value); setError(''); }} />
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="remove-reason" className="text-xs font-medium uppercase tracking-wide text-white/40">Why</label>
-          <select id="remove-reason" value={reason} onChange={(e) => setReason(e.target.value)} className={selectCls}>
-            {REMOVE_REASONS.map((r) => <option key={r} value={r} className="bg-ink-900">{r}</option>)}
-          </select>
-        </div>
+        <Select id="remove-reason" label="Why" value={reason} onChange={(e) => setReason(e.target.value)}>
+          {REMOVE_REASONS.map((r) => <option key={r} value={r} className="bg-ink-900">{r}</option>)}
+        </Select>
       </div>
       {reason === 'Other' && <Input id="remove-note" label="What happened" value={note} onChange={(e) => setNote(e.target.value)} />}
       {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>
-        <Button type="submit" loading={adjust.isPending}>Remove stock</Button>
-      </div>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onDone}>Cancel</Button>
+        <Button type="submit" size="lg" loading={adjust.isPending}>Remove stock</Button>
+      </FormActions>
     </form>
   );
 }
@@ -198,13 +193,13 @@ function ProductDetails({ shopId, productId, onClose }: { shopId: string; produc
           {confirmRemove ? (
             <div className="space-y-2">
               <p className="text-[13px] text-white/60">Take {product.name} off your stock list? Past sales and reports keep it.</p>
-              <div className="flex gap-2">
-                <Button variant="danger" size="sm" onClick={remove} loading={removeProduct.isPending}>Yes, remove it</Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirmRemove(false)}>Keep it</Button>
-              </div>
+              <FormActions>
+                <Button variant="ghost" size="lg" onClick={() => setConfirmRemove(false)}>Keep it</Button>
+                <Button variant="danger" size="lg" onClick={remove} loading={removeProduct.isPending}>Yes, remove it</Button>
+              </FormActions>
             </div>
           ) : (
-            <Button variant="danger" size="sm" onClick={() => setConfirmRemove(true)}>Remove product</Button>
+            <Button variant="danger" size="lg" className="w-full sm:w-auto" onClick={() => setConfirmRemove(true)}>Remove product</Button>
           )}
           {error && <p className="mt-2 text-[13px] text-white/70" role="alert">{error}</p>}
         </div>
@@ -232,10 +227,11 @@ function ProductDetails({ shopId, productId, onClose }: { shopId: string; produc
       {mode === 'add' && <AddStockForm shopId={shopId} product={product} onDone={() => setMode('view')} />}
       {mode === 'remove' && <RemoveStockForm shopId={shopId} product={product} onDone={() => setMode('view')} />}
       {mode === 'view' && (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setMode('add')}>Add stock</Button>
-          <Button size="sm" variant="secondary" onClick={() => setMode('remove')}>Remove stock</Button>
-          <Button size="sm" variant="ghost" onClick={() => setMode('edit')}>Edit</Button>
+        // One under the other on a phone, in a row on wider screens.
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button size="lg" onClick={() => setMode('add')}>Add stock</Button>
+          <Button size="lg" variant="secondary" onClick={() => setMode('remove')}>Remove stock</Button>
+          <Button size="lg" variant="ghost" onClick={() => setMode('edit')}>Edit product</Button>
         </div>
       )}
 

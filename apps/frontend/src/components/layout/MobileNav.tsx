@@ -97,7 +97,7 @@ export default function MobileNav() {
               <Link
                 href="/shops"
                 onClick={closeAll}
-                className="flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-white/[0.06]"
+                className="flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition hover:bg-white/[0.06] active:bg-white/[0.1]"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] ring-1 ring-inset ring-white/[0.08]">
                   <Storefront size={19} className="text-white/70" />
@@ -112,10 +112,12 @@ export default function MobileNav() {
 
             <div className="mx-3 my-1.5 h-px bg-white/[0.07]" />
 
-            <MenuRow href="/shops" Icon={Storefront} label="Manage shops" onClick={closeAll} />
-            <MenuRow href="/shops/branding" Icon={Stamp} label="Receipt branding" onClick={closeAll} />
-            <MenuRow href="/settings/alerts" Icon={BellRinging} label="Alert emails" onClick={closeAll} />
-            {user?.isAdmin && <MenuRow href="/admin" Icon={Gauge} label="Business dashboard" onClick={closeAll} />}
+            <div className="space-y-1">
+              <MenuRow href="/shops" Icon={Storefront} label="Manage shops" onClick={closeAll} />
+              <MenuRow href="/shops/branding" Icon={Stamp} label="Receipt branding" onClick={closeAll} />
+              <MenuRow href="/settings/alerts" Icon={BellRinging} label="Alert emails" onClick={closeAll} />
+              {user?.isAdmin && <MenuRow href="/admin" Icon={Gauge} label="Business dashboard" onClick={closeAll} />}
+            </div>
 
             <div className="mx-3 my-1.5 h-px bg-white/[0.07]" />
 
@@ -169,7 +171,8 @@ export default function MobileNav() {
           </button>
         </div>
 
-        <nav className="mt-3 px-3">
+        {/* A small gap between rows, so their highlights never touch. */}
+        <nav className="mt-3 space-y-1 px-3">
           {PAGES.map(({ href, label, Icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
@@ -178,8 +181,8 @@ export default function MobileNav() {
                 href={href}
                 onClick={closeAll}
                 className={cn(
-                  'flex h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] transition',
-                  active ? 'bg-white/[0.07] text-white' : 'text-white/65 hover:bg-white/[0.05] hover:text-white/90',
+                  'flex h-12 items-center gap-3 rounded-2xl px-3.5 text-[15px] transition active:scale-[0.99]',
+                  active ? 'bg-white/[0.08] font-medium text-white' : 'text-white/65 hover:bg-white/[0.05] hover:text-white/90 active:bg-white/[0.09]',
                 )}
               >
                 <Icon size={20} weight={active ? 'fill' : 'regular'} className={cn('shrink-0', active ? 'text-white/85' : 'text-white/45')} />
@@ -195,7 +198,7 @@ export default function MobileNav() {
         </nav>
 
         <p className="mt-6 px-6 pb-2 text-[13px] font-medium text-white/35">Recents</p>
-        <div className="flex-1 overflow-y-auto px-3 pb-3">
+        <div className="flex-1 space-y-1 overflow-y-auto px-3 pb-3">
           {sessions.length === 0 ? (
             <p className="px-3.5 py-2 text-[15px] text-white/30">No chats yet</p>
           ) : sessions.map((s) => {
@@ -205,8 +208,8 @@ export default function MobileNav() {
                 key={s.id}
                 onClick={() => openChat(s.id)}
                 className={cn(
-                  'flex h-11 w-full items-center rounded-xl px-3.5 text-left text-[15px] transition',
-                  active ? 'bg-white/[0.07] text-white' : 'text-white/60 hover:bg-white/[0.05] hover:text-white/90',
+                  'flex h-12 w-full items-center rounded-2xl px-3.5 text-left text-[15px] transition',
+                  active ? 'bg-white/[0.08] text-white' : 'text-white/60 hover:bg-white/[0.05] hover:text-white/90 active:bg-white/[0.09]',
                 )}
               >
                 <span className="truncate">{formatDateTime(s.lastMessageAt ?? s.createdAt)}</span>
@@ -236,7 +239,7 @@ function MenuRow({ href, Icon, label, onClick }: {
     <Link
       href={href}
       onClick={onClick}
-      className="flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+      className="flex h-12 items-center gap-3 rounded-2xl px-3 text-[15px] text-white/75 transition hover:bg-white/[0.06] hover:text-white active:bg-white/[0.1]"
     >
       <Icon size={19} className="shrink-0 text-white/50" />
       {label}

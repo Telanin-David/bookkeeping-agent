@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import { usePayments, useRecordPayment, useRemovePayment, useTransaction } from '@/hooks/useTransactions';
 import { formatCurrency, formatDate, todayInLagos, cn } from '@/lib/utils';
 import { errorMessage } from '@/lib/errors';
@@ -110,13 +111,11 @@ function PaymentForm({ shopId, tx: initial, onClose }: { shopId: string; tx: Tra
         <>
           <p className="text-[13px] text-white/60">This {isCreditSale ? 'credit sale' : 'bill'} is fully paid.</p>
           {error && <p className="text-[13px] text-white/60">{error}</p>}
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={onClose}>Close</Button>
-          </div>
+          <FormActions><Button size="lg" variant="secondary" onClick={onClose}>Close</Button></FormActions>
         </>
       ) : (
         <form onSubmit={submit} className="space-y-3" noValidate>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-3">
             <Input
               id="payment-amount"
               label="Amount paid"
@@ -142,10 +141,10 @@ function PaymentForm({ shopId, tx: initial, onClose }: { shopId: string; tx: Tra
             Paying less than {formatCurrency(tx.balance, tx.currency)} leaves the rest as still owed.
           </p>
           {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" loading={record.isPending}>Save payment</Button>
-          </div>
+          <FormActions>
+            <Button type="button" size="lg" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit" size="lg" loading={record.isPending}>Save payment</Button>
+          </FormActions>
         </form>
       )}
     </div>
