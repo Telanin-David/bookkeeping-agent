@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUp, Camera, FileArrowUp, Image as ImageIcon, Microphone, Plus, X,
@@ -15,12 +15,14 @@ export interface Attachment {
 interface MessageInputProps {
   onSend: (content: string, attachments: Attachment[]) => Promise<void>;
   disabled?: boolean;
+  /** A line under the box: messages left today, tips. */
+  footer?: ReactNode;
 }
 
 const iconBtn =
   'flex h-10 w-10 items-center justify-center rounded-full text-white/55 transition duration-150 hover:bg-white/[0.07] hover:text-white/90 active:scale-[0.92] disabled:opacity-30';
 
-export default function MessageInput({ onSend, disabled }: MessageInputProps) {
+export default function MessageInput({ onSend, disabled, footer }: MessageInputProps) {
   const router = useRouter();
   const setPendingFile = useImportsStore((s) => s.setPendingFile);
 
@@ -192,6 +194,7 @@ export default function MessageInput({ onSend, disabled }: MessageInputProps) {
           )}
         </div>
       </div>
+      {footer && <div className="px-3 pt-2 text-center text-[12px] leading-5 text-white/40">{footer}</div>}
     </div>
   );
 }

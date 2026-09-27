@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { chatApi } from '@/lib/api';
@@ -8,7 +9,7 @@ import MessageInput, { type Attachment } from './MessageInput';
 import Spinner from '@/components/ui/Spinner';
 import { DEMO_TRANSACTIONS } from '@/lib/demo';
 import { formatCurrency } from '@/lib/utils';
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, DailyUsage } from '@/types';
 
 const DEMO_MESSAGES: ChatMessage[] = [
   {
@@ -70,6 +71,9 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
   const [optimistic, setOptimistic] = useState<ChatMessage[]>([]);
   const isDemo = sessionId === 'demo-session-1';
 
+  // Messages left today, shared by every chat (the limit is per owner, not per chat).
+  const { data: usage } = useQuery({ queryKey: ['chat-usage'], queryFn: chatApi.usage, enabled: !isDemo });
+
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ['chat-messages', sessionId],
     queryFn: () => isDemo
@@ -122,11 +126,13 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
       qc.setQueryData<ChatMessage[]>(['chat-messages', sessionId], (old = []) => [
         ...old, data.userMessage, data.assistantMessage,
       ]);
+      qc.setQueryData<DailyUsage>(['chat-usage'], data.dailyUsage);
     } catch (err) {
       setOptimistic((prev) => prev.filter((m) => m.id !== tempId));
       // The server may have saved the message before failing (e.g. assistant unavailable) —
       // refetch so it shows, and pass the server's explanation to the input to display.
       qc.invalidateQueries({ queryKey: ['chat-messages', sessionId] });
+      qc.invalidateQueries({ queryKey: ['chat-usage'] });
       const serverMessage = isAxiosError(err) ? err.response?.data?.message : undefined;
       throw new Error(serverMessage ?? 'Message failed to send. Check your connection and try again.');
     }
@@ -137,7 +143,26 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <MessageList messages={[...messages, ...optimistic]} />
-      <MessageInput onSend={handleSend} />
+      <MessageInput onSend={handleSend} disabled={usage?.remaining === 0} footer={<UsageLine usage={usage} />} />
     </div>
   );
+}
+
+// Grouping sales is the cheapest way to use the assistant, so the tip is always on screen
+// (free) instead of in the assistant's replies (paid for every time).
+const TIP = 'Tip: put several sales in one message, like "sold rice 10k, sugar 5k, beans 3k".';
+
+function UsageLine({ usage }: { usage?: DailyUsage }) {
+  if (usage?.remaining === 0) {
+    return (
+      <span className="text-white/60">
+        You&apos;ve used today&apos;s {usage.limit} messages. They start again at midnight. You can still{' '}
+        <Link href="/transactions" className="text-white/80 underline underline-offset-2">add sales with the form</Link>.
+      </span>
+    );
+  }
+  if (usage?.remaining != null) {
+    return <>{usage.remaining} of {usage.limit} messages left today · {TIP}</>;
+  }
+  return <>{TIP}</>;
 }

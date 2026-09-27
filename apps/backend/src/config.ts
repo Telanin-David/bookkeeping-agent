@@ -71,6 +71,9 @@ export const config = {
     // The model behind the chat assistant. Haiku 4.5 is the cheapest current model and
     // handles this app's short, tool-driven turns; set CHAT_MODEL to try another one.
     chatModel: process.env['CHAT_MODEL'] || 'claude-haiku-4-5',
+    // Messages each owner can send the assistant per day (Lagos time), to cap the AI bill.
+    // 0 turns the limit off. Admins are never limited.
+    chatDailyLimit: Math.max(0, parseInt(process.env['CHAT_DAILY_LIMIT'] || '20', 10) || 0),
   },
 
   // Outgoing email over SMTP, which every email provider offers (Brevo, Amazon SES,

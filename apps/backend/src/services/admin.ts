@@ -30,6 +30,8 @@ export interface DashboardOverview {
   accuracy: { recorded: number; corrected: number; rate: number | null };
   returning: { afterDays: number; eligible: number; returned: number }[];
   emails: { sent: number; failed: number };
+  /** Owner-days that used the whole daily message limit; null when there is no limit. */
+  limit: { daily: number; ownerDays: number; owners: number } | null;
 }
 
 export async function getOverview(now = new Date()): Promise<DashboardOverview> {
@@ -39,7 +41,8 @@ export async function getOverview(now = new Date()): Promise<DashboardOverview> 
   const monthStart = `${today.slice(0, 8)}01`;
   const p = [tz, today, from];
 
-  const [users, active, ai, daily, corrections, recorded, returning, emails] = await Promise.all([
+  const dailyLimit = config.anthropic.chatDailyLimit;
+  const [users, active, ai, daily, corrections, recorded, returning, emails, limitHits] = await Promise.all([
     db.query(
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER (WHERE email_verified) AS verified,
@@ -107,6 +110,16 @@ export async function getOverview(now = new Date()): Promise<DashboardOverview> 
          FROM alert_history WHERE channel = 'email' AND ${day('created_at')} BETWEEN $3 AND $2`,
       p,
     ),
+    // Days on which an owner used every message the limit allows.
+    db.query(
+      `SELECT COUNT(*) AS owner_days, COUNT(DISTINCT user_id) AS owners FROM (
+         SELECT a.user_id, ${day('a.created_at')} AS d
+           FROM ai_usage a JOIN users u ON u.id = a.user_id
+          WHERE NOT a.failed AND NOT u.is_admin AND ${day('a.created_at')} BETWEEN $3 AND $2
+          GROUP BY 1, 2 HAVING COUNT(*) >= $4
+       ) x`,
+      [...p, Math.max(dailyLimit, 1)],
+    ),
   ]);
 
   const a = ai.rows[0]!;
@@ -149,6 +162,11 @@ export async function getOverview(now = new Date()): Promise<DashboardOverview> 
       afterDays: num(r['after_days']), eligible: num(r['eligible']), returned: num(r['returned']),
     })),
     emails: { sent: num(emails.rows[0]!['sent']), failed: num(emails.rows[0]!['failed']) },
+    limit: dailyLimit === 0 ? null : {
+      daily: dailyLimit,
+      ownerDays: num(limitHits.rows[0]!['owner_days']),
+      owners: num(limitHits.rows[0]!['owners']),
+    },
   };
 }
 

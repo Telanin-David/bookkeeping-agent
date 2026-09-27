@@ -710,6 +710,18 @@ export async function isAdmin(userId: string): Promise<boolean> {
   return rows[0]?.['is_admin'] === true;
 }
 
+/** Assistant replies this owner got on `day` (a business-time-zone date); failed ones don't count. */
+export async function countChatMessagesOn(userId: string, day: string, timeZone: string): Promise<number> {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS n FROM ai_usage
+      WHERE user_id = $1 AND NOT failed
+        AND created_at >= ($2::date)::timestamp AT TIME ZONE $3
+        AND created_at < ($2::date + 1)::timestamp AT TIME ZONE $3`,
+    [userId, day, timeZone],
+  );
+  return Number(rows[0]!['n']);
+}
+
 // ── Alerts ────────────────────────────────────────────────────
 export async function listAlerts(userId: string, opts: { shopId?: string; status?: AlertStatus; page: number; limit: number }): Promise<PaginatedResponse<Alert>> {
   const conditions = ['user_id = $1'];

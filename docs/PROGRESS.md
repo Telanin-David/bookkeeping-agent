@@ -187,6 +187,14 @@
   - **Checked:** 9 new backend unit tests (usage rows, activity once a day, the admin gate answering like a missing path); 28 end-to-end checks against a local stand-in for the AI (make-admin, 404 for everyone but the admin, costs, messages, failures, accuracy with edits, deletes and form sales, coming back, the user list, and nothing private in the responses); 11 browser checks on desktop and phone with a made-up 10-owner trial; 11 more that an owner and a signed-out visitor see exactly the same page at `/admin` as at a made-up address, that the API answers them like a missing path, and that the admin's dashboard survives an expired sign-in.
   - **Merge note:** migration 009 skips 008, which is on the unmerged D9 branch. Whichever merges second has to keep both in `npm run migrate`.
 
+- **Daily message limit** (owner's decision; on `feat/business-dashboard`):
+  - Each owner can send the assistant **20 messages a day** (`CHAT_DAILY_LIMIT` in the server's `.env`; 0 turns it off). It resets at midnight Lagos time.
+  - It's per owner account, not per shop or chat. Only answered messages count: a reply that failed doesn't use one up. Admins are never limited.
+  - A message over the limit is refused (429 `DAILY_LIMIT`) before anything is saved, with a plain explanation. Two messages sent at the same instant can both get in at the limit; it's a cent, not worth a lock.
+  - The chat box shows "N of 20 messages left today" and a tip to put several sales in one message (the cheapest way to use the assistant; on screen it's free, in the assistant's replies it would be paid for every time). At the limit, the box switches off and points to the Add transaction form, which never uses the AI.
+  - The business dashboard shows how many times, and by how many owners, the limit was reached in the last 30 days, to tell whether 20 is right.
+  - Checked: 4 unit tests; 15 end-to-end checks with a limit of 3 (counting down, failed replies free, refusal and nothing saved, a new chat doesn't reset it, the form still works, other owners unaffected, the admin unlimited, the dashboard count); 6 browser checks on a phone.
+
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").
   - It runs on the production model, `claude-haiku-4-5`. Watch the `chat usage` log lines for the real cost per message.
@@ -197,6 +205,7 @@
   - Add the provider's SPF and DKIM records to the sending domain's DNS, or alerts land in spam.
   - Send a test by signing up with a real address.
   - Run `npm run migrate` (it includes migration 007).
+- **Upgrade Next.js before hosting.** `npm audit --omit=dev` flags the frontend's `next` 14.2.5 (critical; several of the advisories apply to self-hosted apps) and the `postcss` it brings. This was already true on `main`; it needs its own branch and a full frontend re-test.
 
 ## Voice input (owner's decision)
 - **For now:** owners use their phone keyboard's microphone to dictate into the chat box. The app's own mic button does nothing yet.

@@ -67,6 +67,14 @@ function Overview({ o }: { o: AdminOverview }) {
             : `${usd(ai.costPerChatUser)} per owner who chatted in the last 30 days (${ai.chatUsers} ${ai.chatUsers === 1 ? 'owner' : 'owners'}).`}
           {ai.failed > 0 && ` The assistant couldn't answer ${ai.failed} ${ai.failed === 1 ? 'time' : 'times'}.`}
         </p>
+        {o.limit && (
+          <p className="mt-1 text-[13px] text-white/45">
+            Daily limit: {o.limit.daily} messages per owner (CHAT_DAILY_LIMIT on the server).{' '}
+            {o.limit.ownerDays === 0
+              ? 'Nobody has reached it in the last 30 days.'
+              : `Reached ${o.limit.ownerDays} ${o.limit.ownerDays === 1 ? 'time' : 'times'} by ${o.limit.owners} ${o.limit.owners === 1 ? 'owner' : 'owners'} in the last 30 days.`}
+          </p>
+        )}
       </section>
 
       <section>

@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  AdminOverview, AdminUser, AlertSettings, CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AdminOverview, AdminUser, AlertSettings, DailyUsage, CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -215,8 +215,10 @@ export const chatApi = {
   listMessages: (sessionId: string) =>
     api.get<{ data: ChatMessage[] }>(`/api/v1/chat/sessions/${sessionId}/messages`).then((r) => r.data.data),
 
+  usage: () => api.get<DailyUsage>('/api/v1/chat/usage').then((r) => r.data),
+
   sendMessage: (sessionId: string, content: string) =>
-    api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>(
+    api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; dailyUsage: DailyUsage }>(
       `/api/v1/chat/sessions/${sessionId}/messages`,
       { content },
     ),

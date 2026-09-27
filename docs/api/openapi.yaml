@@ -241,6 +241,18 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /chat/usage:
+    get:
+      tags: [chat]
+      summary: Messages to the assistant used and left today
+      description: |
+        Each owner can send CHAT_DAILY_LIMIT messages a day (default 20; resets at midnight in
+        BUSINESS_TIME_ZONE). Only answered messages count. limit and remaining are null when there
+        is no limit (CHAT_DAILY_LIMIT=0, or an admin).
+      responses:
+        '200': { description: Usage, content: { application/json: { schema: { $ref: '#/components/schemas/DailyUsage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # ── ADMIN (business dashboard) ─────────────
   /admin/overview:
     get:
@@ -1044,7 +1056,8 @@ paths:
       summary: Send a message and get an AI response
       description: |
         Sends the user's message to Claude with shop context assembled from recent transactions.
-        The response may include structured transaction data that the backend persists automatically.
+        The response may include structured transaction data that the backend persists automatically,
+        and dailyUsage (see DailyUsage) with the messages left today.
       x-rateLimit: '60 requests per minute'
       requestBody:
         required: true
@@ -1070,8 +1083,14 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          description: |
+            DAILY_LIMIT: the owner has used today's messages (see /chat/usage). Nothing is saved.
+            The message says when they come back and that the Add transaction form still works.
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          description: AI_UNAVAILABLE. The owner's message is saved; the failed reply doesn't count toward the daily limit.
 
   # ── REPORTS ──────────────────────────────────
   /reports/receipt:
@@ -1696,9 +1715,24 @@ components:
           type: boolean
           description: Only present, as true, for admins (who can open the business dashboard). Set on the server only.
 
+    DailyUsage:
+      type: object
+      properties:
+        used: { type: integer }
+        limit: { type: integer, nullable: true }
+        remaining: { type: integer, nullable: true }
+
     AdminOverview:
       type: object
       properties:
+        limit:
+          type: object
+          nullable: true
+          description: Days in the last 30 on which an owner used the whole daily limit; null when there is no limit.
+          properties:
+            daily: { type: integer }
+            ownerDays: { type: integer }
+            owners: { type: integer }
         today: { type: string, format: date }
         windowStart: { type: string, format: date, description: First day of the 30-day window }
         users:

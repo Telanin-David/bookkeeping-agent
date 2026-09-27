@@ -9,6 +9,13 @@ export interface User {
   isAdmin?: boolean;
 }
 
+/** Messages to the assistant today; limit and remaining are null when there's no limit. */
+export interface DailyUsage {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+}
+
 // ── Business dashboard (admins only) ──────────────────────────
 export interface AdminOverview {
   today: string;
@@ -24,6 +31,7 @@ export interface AdminOverview {
   accuracy: { recorded: number; corrected: number; rate: number | null };
   returning: { afterDays: number; eligible: number; returned: number }[];
   emails: { sent: number; failed: number };
+  limit: { daily: number; ownerDays: number; owners: number } | null;
 }
 
 export interface AdminUser {
