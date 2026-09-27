@@ -7,38 +7,57 @@ import { formatCurrency, formatDate, typeLabel, cn } from '@/lib/utils';
 interface TransactionTableProps {
   data: Transaction[];
   onRowClick?: (tx: Transaction) => void;
-  /** Shown for unpaid receivables/payables. The row id is passed while its request runs. */
-  onMarkPaid?: (tx: Transaction) => void;
-  markingPaidId?: string | null;
+  /** Opens the payment screen for a credit sale or bill on credit. */
+  onRecordPayment?: (tx: Transaction) => void;
 }
 
 const isDebt = (tx: Transaction) => tx.type === 'receivable' || tx.type === 'payable';
+
+const isPartPaid = (tx: Transaction) => isDebt(tx) && tx.amountPaid > 0 && tx.balance > 0;
 
 /** Plain words for the status: a settled debt or cash sale is "Paid". */
 export function statusLabel(tx: Transaction): string {
   if (tx.status === 'settled') return 'Paid';
   if (tx.status === 'overdue') return 'Overdue';
+  if (isPartPaid(tx)) return 'Part-paid';
   return isDebt(tx) ? 'Unpaid' : 'Pending';
 }
 
-function MarkPaidButton({ tx, onMarkPaid, markingPaidId }: { tx: Transaction } & Pick<TransactionTableProps, 'onMarkPaid' | 'markingPaidId'>) {
-  if (!onMarkPaid || !isDebt(tx) || tx.status === 'settled') return null;
+/** "₦5,000.00 paid · ₦15,000.00 left" for a debt that has been paid in part. */
+function PaidSoFar({ tx }: { tx: Transaction }) {
+  if (!isPartPaid(tx)) return null;
+  return (
+    <p className="text-[12px] tabular-nums text-white/45">
+      {formatCurrency(tx.amountPaid, tx.currency)} paid · {formatCurrency(tx.balance, tx.currency)} left
+    </p>
+  );
+}
+
+function PaymentButton({ tx, onRecordPayment }: { tx: Transaction } & Pick<TransactionTableProps, 'onRecordPayment'>) {
+  if (!onRecordPayment || !isDebt(tx)) return null;
+  // A paid debt keeps a quieter button so a mistaken payment can still be undone.
+  const paid = tx.balance <= 0;
+  if (paid && tx.amountPaid <= 0) return null;
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onMarkPaid(tx); }}
-      disabled={markingPaidId === tx.id}
-      className="h-8 rounded-full bg-white/[0.08] px-3.5 text-[13px] font-medium text-white/85 ring-1 ring-inset ring-white/[0.1] transition hover:bg-white/[0.14] disabled:opacity-50"
+      onClick={(e) => { e.stopPropagation(); onRecordPayment(tx); }}
+      className={cn(
+        'h-8 shrink-0 rounded-full px-3.5 text-[13px] font-medium transition',
+        paid
+          ? 'text-white/45 hover:bg-white/[0.06] hover:text-white/75'
+          : 'bg-white/[0.08] text-white/85 ring-1 ring-inset ring-white/[0.1] hover:bg-white/[0.14]',
+      )}
     >
-      {markingPaidId === tx.id ? 'Saving…' : 'Mark paid'}
+      {paid ? 'Payments' : 'Record payment'}
     </button>
   );
 }
 
-export default function TransactionTable({ data, onRowClick, onMarkPaid, markingPaidId }: TransactionTableProps) {
+export default function TransactionTable({ data, onRowClick, onRecordPayment }: TransactionTableProps) {
   return (
     <>
-      {/* Phones: one card per transaction, so the amount, status and "Mark paid" are
+      {/* Phones: one card per transaction, so the amount, status and "Record payment" are
           always on screen — a wide table would hide them off the right edge. */}
       <ul className="space-y-2 md:hidden">
         {data.length === 0 && <li className="glass-card rounded-2xl py-10 text-center text-sm text-white/30">No transactions yet</li>}
@@ -56,8 +75,11 @@ export default function TransactionTable({ data, onRowClick, onMarkPaid, marking
               {[formatDate(tx.date), tx.counterparty, typeLabel(tx.type)].filter(Boolean).join(' · ')}
             </p>
             <div className="mt-2.5 flex items-center justify-between gap-2">
-              <Badge>{statusLabel(tx)}</Badge>
-              <MarkPaidButton tx={tx} onMarkPaid={onMarkPaid} markingPaidId={markingPaidId} />
+              <div className="flex min-w-0 flex-col items-start gap-1">
+                <Badge>{statusLabel(tx)}</Badge>
+                <PaidSoFar tx={tx} />
+              </div>
+              <PaymentButton tx={tx} onRecordPayment={onRecordPayment} />
             </div>
           </li>
         ))}
@@ -73,9 +95,12 @@ export default function TransactionTable({ data, onRowClick, onMarkPaid, marking
               key: 'status',
               header: 'Status',
               render: (r) => (
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <Badge>{statusLabel(r)}</Badge>
-                  <MarkPaidButton tx={r} onMarkPaid={onMarkPaid} markingPaidId={markingPaidId} />
+                <div className="flex items-center justify-between gap-3 whitespace-nowrap">
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge>{statusLabel(r)}</Badge>
+                    <PaidSoFar tx={r} />
+                  </div>
+                  <PaymentButton tx={r} onRecordPayment={onRecordPayment} />
                 </div>
               ),
             },

@@ -52,14 +52,22 @@
 - **Deliverable 7** made reports real. Before it, the report form sent `from`/`to` while the API expects `dateFrom`/`dateTo`, so every download failed; the endpoints also returned a line of text labelled as a PDF.
   - **PDFs** (`services/pdf/`, pdfkit):
     - Profit & Loss (A4)
-    - Credit Report (A4): who owes the shop, and the shop's unpaid bills
+    - Credit Report (A4), as of the end date: who owed the shop that day, payments received in the period, the shop's unpaid bills and payments to suppliers
     - 80 mm receipts and invoices
     - All carry the shop's logo; invoices carry the signature. Long tables continue across pages with the header repeated and "Page x of y".
   - **Fonts:** text is set in Geist, the web app's font, bundled in `apps/backend/assets/fonts` with its OFL licence. Any character Geist lacks (₦, and Yoruba letters like ṣ) is drawn from DejaVu Sans, also bundled. Don't switch to a font without ₦.
-  - **Accounting rule (owner's decision): accrual.** A credit sale is income on the day of the sale; a bill on credit is a cost on the day received. The P&L shows how much of each is still unpaid.
-    - A debt being paid is recorded by marking it `settled`, never as a new sale; otherwise the income would be counted twice.
-    - Added for this: a "Mark paid" button on Transactions, and a `mark_debt_paid` chat tool. The system prompt tells the agent to settle debts rather than record sales, and part-payments aren't supported yet.
-    - The app still records no payment dates, so the Credit Report shows the current status of debts recorded in the period, not a historical "as of" snapshot.
+  - **Accounting rule (owner's decision): accrual.** A credit sale is income on the day of the sale; a bill on credit is a cost on the day received. The P&L shows how much of each was still unpaid at the end of the period.
+    - A debt being paid is recorded as a payment against it, never as a new sale; otherwise the income would be counted twice.
+  - **Payments towards debts** (migration `005_debt_payments.sql`):
+    - `debt_payments` holds each payment (amount, `paid_on` date). Existing paid debts were backfilled with one payment dated their last update.
+    - The `transactions_with_payments` view adds `amount_paid`; the API returns `amountPaid` and `balance` on every transaction. All transaction reads go through the view.
+    - A debt's status follows its payments: `settled` once they cover the amount, back to unpaid when one is undone. Money is compared in kobo, and the debt row is locked (`FOR UPDATE`) while a payment is recorded, so two payments at once can't overpay it.
+    - Endpoints: `GET/POST /shops/{id}/transactions/{txId}/payments`, `DELETE …/payments/{paymentId}`. Refusals are 422 with plain messages: more than is owed, dated in the future or before the debt, already paid, not a debt.
+    - The old `PATCH status: settled` still works: it pays whatever is left, dated today. `PATCH status: pending` removes the payments. A debt can't be lowered below what's been paid, or turned into a cash sale while it has payments.
+    - The Credit Report is now a true snapshot as of its end date, because payments carry dates. The P&L's "unpaid" figure is as of the period end, too.
+    - Frontend: "Record payment" on Transactions opens a screen showing owed, paid and still owed, the payment history with Undo, and an amount (default: the rest) and date (default: today in Lagos). Rows show "Part-paid" and "₦x paid · ₦y left". Invoices, on screen and PDF, show "Paid so far" and "Balance due".
+    - Chat: the `record_debt_payment` tool replaces `mark_debt_paid`; it takes an optional amount and date, so "Mama Nkechi paid ₦5,000 yesterday" is recorded against her debt. **Not yet tried against the real Claude API**, because no `ANTHROPIC_API_KEY` is set in the dev environment; the tool is covered by unit tests with a mocked client.
+  - **Transactions filters fixed:** the list sent `from`/`to` (ignored by the API) and the API ignored `status`, so the date and status filters did nothing. Both work now.
   - **Stock report is not available yet.** There are no products or quantities, so `POST /reports/stock` returns 501 and the UI hides it. The owner wants real shelf counting with low-stock warnings, planned as its own deliverable next.
   - **Branding upload** (`PUT/DELETE /shops/{id}/branding/{logo|signature}`, migration `004_shop_branding.sql`):
     - PNG and JPEG only, checked from the file's bytes, because those are the formats pdfkit can embed.
@@ -71,12 +79,12 @@
     - "Today", due-date lateness and receipt times now use `BUSINESS_TIME_ZONE` (default `Africa/Lagos`) instead of UTC. The chat agent used UTC "today", so it dated sales as yesterday between midnight and 1am.
   - **Frontend:**
     - Receipt page has "Share PDF" (the phone share sheet, e.g. WhatsApp; download on desktop).
-    - Transactions show as cards on phones, so amount, status and "Mark paid" aren't off-screen.
+    - Transactions show as cards on phones, so amount, status and "Record payment" aren't off-screen.
     - Plain labels replace jargon: "Credit sale"/"Bill on credit" for receivable/payable, and "Paid"/"Unpaid" for the statuses.
     - An invoice for a paid credit sale now says "Paid", not "Balance due".
     - Chat list no longer shows "1 Jan 1970" or creates duplicate empty chats.
     - The shared `Table` component's typing is fixed, so frontend `tsc` is now clean with 0 errors.
-  - **Suggested, not done:** the Claude API guidance recommends server-side refusal fallbacks (`fallbacks: "default"`) for `claude-opus-5`. This needs the chat loop moved to the beta messages endpoint, so it was left for a separate change.
+  - **Refusal fallbacks:** the chat loop calls `client.beta.messages.create` with the `server-side-fallback-2026-07-01` beta and `fallbacks: "default"`, so if `claude-opus-5` declines a turn, the API retries it on the fallback model instead of returning a refusal. `afterFallback()` drops any text from before the switch. Categorisation still uses the regular endpoint with `claude-haiku-4-5`.
 
 ## Rules
 - Never commit/push to `main` directly.

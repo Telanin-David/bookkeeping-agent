@@ -9,6 +9,7 @@ export function receiptNumber(tx: Transaction) {
 export function receiptStatus(tx: Transaction) {
   if (tx.status === 'settled') return 'Paid';
   if (tx.status === 'overdue') return 'Overdue';
+  if (tx.amountPaid > 0) return 'Part-paid';
   return 'Balance due';
 }
 
@@ -78,7 +79,14 @@ export default function Receipt({ tx, shop }: { tx: Transaction; shop: Shop }) {
         <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-black">Total</span>
         <span className="text-[20px] font-semibold tabular-nums tracking-[-0.02em] text-black">{formatCurrency(tx.amount, tx.currency)}</span>
       </div>
-      <div className="mt-2">
+      <div className="mt-2 space-y-1.5">
+        {/* A part-paid invoice shows how much has come in and what is left. */}
+        {isInvoice && tx.amountPaid > 0 && tx.balance > 0 && (
+          <>
+            <Row label="Paid so far" value={formatCurrency(tx.amountPaid, tx.currency)} />
+            <Row label="Balance due" value={formatCurrency(tx.balance, tx.currency)} strong />
+          </>
+        )}
         <Row label="Status" value={receiptStatus(tx)} strong />
       </div>
 

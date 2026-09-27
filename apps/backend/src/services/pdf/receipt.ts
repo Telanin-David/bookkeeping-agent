@@ -18,6 +18,7 @@ export function receiptNumber(tx: Transaction): string {
 export function receiptStatus(tx: Transaction): string {
   if (tx.status === 'settled') return 'Paid';
   if (tx.status === 'overdue') return 'Overdue';
+  if (tx.amountPaid > 0) return 'Part-paid';
   return 'Balance due';
 }
 
@@ -70,6 +71,11 @@ function draw(pdf: Pdf, tx: Transaction, shop: Shop, images: ReceiptImages): num
   pdf.text('TOTAL', PAD, y + 3, { size: 9, weight: 'semibold' });
   pdf.text(amount, PAD, y, { size: 14, weight: 'semibold', align: 'right', width: INNER });
   y += 24;
+  // A part-paid invoice shows how much has come in and what is left.
+  if (isInvoice && tx.amountPaid > 0 && tx.balance > 0) {
+    row('Paid so far', money(tx.amountPaid, tx.currency));
+    row('Balance due', money(tx.balance, tx.currency), true);
+  }
   row('Status', receiptStatus(tx), true);
 
   if (isInvoice) {

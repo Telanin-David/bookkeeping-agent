@@ -1,8 +1,8 @@
 import type { Shop, Transaction } from '../../types';
-import type { CategoryLine } from '../db';
+import type { CategoryLine, DebtAsOf, PaymentLine } from '../db';
 import { Report, type Cell } from './report';
 import { MUTED } from './layout';
-import { money, day, period, dateTime } from './format';
+import { money, day, shortDay, period, dateTime } from './format';
 import { daysBetween } from '../../utils/dates';
 
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
@@ -46,8 +46,8 @@ export async function renderProfitAndLoss({ shop, logo, from, to, lines }: Profi
   const unpaidBills = sum(bills.map((l) => l.unpaid));
 
   report.summary([
-    { label: 'Income', value: money(income, c), note: unpaidCredit > 0 ? `${money(unpaidCredit, c)} not yet paid to you` : undefined },
-    { label: 'Costs', value: money(costs, c), note: unpaidBills > 0 ? `${money(unpaidBills, c)} you haven't paid yet` : undefined },
+    { label: 'Income', value: money(income, c), note: unpaidCredit > 0 ? `${money(unpaidCredit, c)} unpaid on ${day(to)}` : undefined },
+    { label: 'Costs', value: money(costs, c), note: unpaidBills > 0 ? `${money(unpaidBills, c)} unpaid on ${day(to)}` : undefined },
     { label: net >= 0 ? 'Net profit' : 'Net loss', value: money(Math.abs(net), c) },
   ]);
 
@@ -64,7 +64,7 @@ export async function renderProfitAndLoss({ shop, logo, from, to, lines }: Profi
       );
       report.keyLine('Cash sales', money(sum(sales.map((l) => l.total)), c), { size: 9, indent: 0 });
       report.keyLine('Sales on credit', money(sum(creditSales.map((l) => l.total)), c), { size: 9 });
-      if (unpaidCredit > 0) report.keyLine('…of which customers still owe you', money(unpaidCredit, c), { size: 9, color: MUTED, indent: 12 });
+      if (unpaidCredit > 0) report.keyLine(`…of which customers still owed you on ${day(to)}`, money(unpaidCredit, c), { size: 9, color: MUTED, indent: 12 });
       report.y += 10;
     } else {
       report.empty('No sales in this period.');
@@ -80,7 +80,7 @@ export async function renderProfitAndLoss({ shop, logo, from, to, lines }: Profi
       );
       report.keyLine('Paid expenses', money(sum(expenses.map((l) => l.total)), c), { size: 9 });
       report.keyLine('Bills on credit', money(sum(bills.map((l) => l.total)), c), { size: 9 });
-      if (unpaidBills > 0) report.keyLine("…of which you haven't paid yet", money(unpaidBills, c), { size: 9, color: MUTED, indent: 12 });
+      if (unpaidBills > 0) report.keyLine(`…of which you still owed on ${day(to)}`, money(unpaidBills, c), { size: 9, color: MUTED, indent: 12 });
       report.y += 10;
     } else {
       report.empty('No expenses in this period.');
@@ -95,8 +95,9 @@ export async function renderProfitAndLoss({ shop, logo, from, to, lines }: Profi
 
   report.paragraph(
     'How this is counted: a sale counts as income on the day it was made, even if the customer pays later, and a bill ' +
-    'counts as a cost on the day you received it. Money still owed is shown above and listed in the Credit Report. ' +
-    'When a customer pays an old debt, mark that debt as paid — do not record the payment as a new sale, or it would be counted twice.',
+    'counts as a cost on the day you received it. Money still owed at the end of the period is shown above and listed in the ' +
+    'Credit Report. When a customer pays an old debt, record the payment on that debt — do not record it as a new sale, or it ' +
+    'would be counted twice.',
   );
   return report.finish();
 }
@@ -108,76 +109,83 @@ export interface CreditReportInput {
   logo: Buffer | null;
   from: string;
   to: string;
-  today: string;
-  receivables: Transaction[];
-  payables: Transaction[];
-  receivableTotalAllTime: number;
-  payableTotalAllTime: number;
+  /** Balances are worked out at the end of this day (the report's end date, or today if earlier). */
+  asOf: string;
+  receivables: DebtAsOf[];
+  payables: DebtAsOf[];
+  collected: PaymentLine[];
+  paidOut: PaymentLine[];
+  /** Owed today across all dates, for context when `asOf` is in the past. */
+  receivableTotalToday: number;
+  payableTotalToday: number;
 }
 
-function dueStatus(tx: Transaction, today: string): { text: string; lateDays: number } {
+function dueStatus(tx: Transaction, asOf: string): { text: string; lateDays: number } {
   if (!tx.dueDate) return { text: 'No due date', lateDays: 0 };
-  const diff = daysBetween(tx.dueDate, today);
+  const diff = daysBetween(tx.dueDate, asOf);
   if (diff > 0) return { text: `${plural(diff, 'day')} late`, lateDays: diff };
   if (diff === 0) return { text: 'Due today', lateDays: 0 };
   return { text: `Due in ${plural(-diff, 'day')}`, lateDays: 0 };
 }
 
-const nameOf = (tx: Transaction, fallback: string) => tx.counterparty?.trim() || fallback;
+const nameOf = (tx: { counterparty?: string }, fallback: string) => tx.counterparty?.trim() || fallback;
 
-function debtRows(debts: Transaction[], today: string, c: string, fallbackName: string): Cell[][] {
+function debtRows(debts: DebtAsOf[], asOf: string, c: string, fallbackName: string): Cell[][] {
   return debts.map((tx) => {
-    const status = dueStatus(tx, today);
+    const status = dueStatus(tx, asOf);
     return [
       nameOf(tx, fallbackName),
       tx.description?.trim() || '—',
-      day(tx.date),
-      tx.dueDate ? day(tx.dueDate) : '—',
+      shortDay(tx.date, asOf),
+      tx.dueDate ? shortDay(tx.dueDate, asOf) : '—',
       status.lateDays > 0 ? { text: status.text, weight: 'semibold' } : { text: status.text, color: MUTED },
-      money(tx.amount, c),
+      tx.paidAsOf > 0 ? money(tx.paidAsOf, c) : { text: '—', color: MUTED },
+      money(tx.balanceAsOf, c),
     ];
   });
 }
 
 const DEBT_COLUMNS = [
-  { label: 'Name', width: 2.6 }, { label: 'Item', width: 3 }, { label: 'Recorded', width: 1.9 },
-  { label: 'Due', width: 1.9 }, { label: 'Status', width: 1.9 }, { label: 'Amount', width: 2.2, align: 'right' as const },
+  { label: 'Name', width: 2.6 }, { label: 'Item', width: 2.6 }, { label: 'Recorded', width: 1.4 },
+  { label: 'Due', width: 1.4 }, { label: 'Status', width: 2 },
+  { label: 'Paid', width: 1.8, align: 'right' as const }, { label: 'Still owed', width: 2, align: 'right' as const },
 ];
 
 export async function renderCreditReport(input: CreditReportInput): Promise<Buffer> {
-  const { shop, logo, from, to, today, receivables, payables } = input;
+  const { shop, logo, from, to, asOf, receivables, payables, collected, paidOut } = input;
   const c = shop.currency;
-  const report = new Report(shop, 'Credit Report', period(from, to), logo);
+  const report = new Report(shop, 'Credit Report', `As of ${day(asOf)}`, logo);
 
-  const owed = sum(receivables.map((t) => t.amount));
-  const overdue = receivables.filter((t) => dueStatus(t, today).lateDays > 0);
+  const owed = sum(receivables.map((t) => t.balanceAsOf));
+  const overdue = receivables.filter((t) => dueStatus(t, asOf).lateDays > 0);
+  const collectedTotal = sum(collected.map((p) => p.amount));
   const customers = new Map<string, { debts: number; total: number; oldestDue: string | null; late: number }>();
   for (const tx of receivables) {
     const key = nameOf(tx, 'Unnamed customer');
     const row = customers.get(key) ?? { debts: 0, total: 0, oldestDue: null, late: 0 };
     row.debts += 1;
-    row.total += tx.amount;
+    row.total += tx.balanceAsOf;
     if (tx.dueDate && (!row.oldestDue || tx.dueDate < row.oldestDue)) row.oldestDue = tx.dueDate;
-    row.late = Math.max(row.late, dueStatus(tx, today).lateDays);
+    row.late = Math.max(row.late, dueStatus(tx, asOf).lateDays);
     customers.set(key, row);
   }
 
   report.summary([
-    { label: 'Owed to you', value: money(owed, c), note: `${plural(receivables.length, 'unpaid sale')} in this period` },
-    { label: 'Overdue', value: money(sum(overdue.map((t) => t.amount)), c), note: `${plural(overdue.length, 'debt')} past the due date` },
-    { label: 'Customers owing', value: String(customers.size) },
+    { label: 'Owed to you', value: money(owed, c), note: `${plural(customers.size, 'customer')}, ${plural(receivables.length, 'unpaid sale')}` },
+    { label: 'Overdue', value: money(sum(overdue.map((t) => t.balanceAsOf)), c), note: `${plural(overdue.length, 'debt')} past the due date` },
+    { label: 'Collected', value: money(collectedTotal, c), note: `${plural(collected.length, 'payment')} in this period` },
   ]);
 
-  report.heading('Who owes you', `Payment status as of ${day(today)}`);
+  report.heading('Who owes you', `On ${day(asOf)}`);
   if (receivables.length === 0) {
-    report.empty('Nobody owes you for sales recorded in this period.');
+    report.empty('Nobody owed you money on this date.');
   } else {
     const rows = [...customers.entries()].sort((a, b) => b[1].late - a[1].late || b[1].total - a[1].total);
     report.table(
       [
         { label: 'Customer', width: 4 }, { label: 'Unpaid sales', width: 1.7, align: 'right' },
         { label: 'Earliest due', width: 2.2, align: 'right' }, { label: 'Most late', width: 1.9, align: 'right' },
-        { label: 'Amount owed', width: 2.4, align: 'right' },
+        { label: 'Still owed', width: 2.4, align: 'right' },
       ],
       rows.map(([name, r]) => [
         name, String(r.debts), r.oldestDue ? day(r.oldestDue) : '—',
@@ -187,29 +195,45 @@ export async function renderCreditReport(input: CreditReportInput): Promise<Buff
       { totalRow: ['Total', String(receivables.length), '', '', money(owed, c)] },
     );
 
-    report.heading('Unpaid sales', 'Soonest due first');
-    report.table(DEBT_COLUMNS, debtRows(receivables, today, c, 'Unnamed customer'), { totalRow: ['Total', '', '', '', '', money(owed, c)] });
+    report.heading('Unpaid and part-paid sales', 'Soonest due first');
+    report.table(DEBT_COLUMNS, debtRows(receivables, asOf, c, 'Unnamed customer'), {
+      totalRow: ['Total', '', '', '', '', money(sum(receivables.map((t) => t.paidAsOf)), c), money(owed, c)],
+    });
   }
-  if (input.receivableTotalAllTime > owed) {
-    report.paragraph(`Across all dates, customers owe you ${money(input.receivableTotalAllTime, c)} in total.`, { size: 9 });
+  if (asOf !== to || Math.abs(input.receivableTotalToday - owed) >= 0.01) {
+    report.paragraph(`Today, customers owe you ${money(input.receivableTotalToday, c)} in total.`, { size: 9 });
   }
 
-  report.heading('What you owe', 'Unpaid bills from suppliers');
-  if (payables.length === 0) {
-    report.empty('You have no unpaid bills recorded in this period.');
+  report.heading('Payments received', period(from, to));
+  if (collected.length === 0) {
+    report.empty('No customer paid a debt in this period.');
   } else {
-    const due = sum(payables.map((t) => t.amount));
-    report.table(DEBT_COLUMNS.map((col, i) => (i === 0 ? { ...col, label: 'Supplier' } : col)),
-      debtRows(payables, today, c, 'Unnamed supplier'), { totalRow: ['Total', '', '', '', '', money(due, c)] });
+    report.table(
+      [{ label: 'Date', width: 1.8 }, { label: 'Customer', width: 3 }, { label: 'For', width: 3.8 }, { label: 'Amount', width: 2.2, align: 'right' }],
+      collected.map((p) => [day(p.paidOn), nameOf(p, 'Unnamed customer'), p.description?.trim() || '—', money(p.amount, c)]),
+      { totalRow: ['Total', '', '', money(collectedTotal, c)] },
+    );
   }
-  if (input.payableTotalAllTime > sum(payables.map((t) => t.amount))) {
-    report.paragraph(`Across all dates, you owe suppliers ${money(input.payableTotalAllTime, c)} in total.`, { size: 9 });
+
+  const due = sum(payables.map((t) => t.balanceAsOf));
+  report.heading('What you owe', `Unpaid bills on ${day(asOf)}`);
+  if (payables.length === 0) {
+    report.empty('You owed no supplier money on this date.');
+  } else {
+    report.table(DEBT_COLUMNS.map((col, i) => (i === 0 ? { ...col, label: 'Supplier' } : col)),
+      debtRows(payables, asOf, c, 'Unnamed supplier'),
+      { totalRow: ['Total', '', '', '', '', money(sum(payables.map((t) => t.paidAsOf)), c), money(due, c)] });
+  }
+  const paidOutTotal = sum(paidOut.map((p) => p.amount));
+  if (paidOutTotal > 0) report.keyLine(`Paid to suppliers, ${period(from, to)}`, money(paidOutTotal, c), { size: 9 });
+  if (asOf !== to || Math.abs(input.payableTotalToday - due) >= 0.01) {
+    report.paragraph(`Today, you owe suppliers ${money(input.payableTotalToday, c)} in total.`, { size: 9 });
   }
 
   report.paragraph(
-    `This report lists debts recorded between ${day(from)} and ${day(to)} that were still unpaid when it was generated ` +
-    `(${dateTime(new Date())}). Paid debts are left out. When a customer pays you, mark that debt as paid in ` +
-    'Transactions, or tell the assistant (for example "Mrs Adebayo has paid").',
+    `Balances are what was still owed at the end of ${day(asOf)}: payments are counted on the day they were made, ` +
+    'so a payment made after that date is not included. Record every payment — full or part — on the debt itself ' +
+    '(in Transactions, or tell the assistant, for example "Mrs Adebayo paid ₦5,000 today"), never as a new sale.',
   );
   return report.finish();
 }

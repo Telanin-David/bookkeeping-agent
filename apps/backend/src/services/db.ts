@@ -2,7 +2,7 @@ import { db } from '../config';
 import {
   User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, AlertHistory, ExcelImport, PaginatedResponse,
-  TransactionType, TransactionStatus, AlertStatus, ImportStatus, BrandingKind,
+  TransactionType, TransactionStatus, AlertStatus, ImportStatus, BrandingKind, DebtPayment,
 } from '../types';
 
 // ── Users ─────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ export async function setShopBranding(
 
 // ── Transactions ──────────────────────────────────────────────
 export async function listTransactions(shopId: string, userId: string, opts: {
-  type?: TransactionType; category?: string;
+  type?: TransactionType; status?: TransactionStatus; category?: string;
   dateFrom?: string; dateTo?: string;
   page: number; limit: number;
 }): Promise<PaginatedResponse<Transaction>> {
@@ -246,6 +246,7 @@ export async function listTransactions(shopId: string, userId: string, opts: {
   const values: unknown[] = [shopId, userId];
   let i = 3;
   if (opts.type)     { conditions.push(`type = $${i++}`);                    values.push(opts.type); }
+  if (opts.status)   { conditions.push(`status = $${i++}`);                  values.push(opts.status); }
   if (opts.category) { conditions.push(`category ILIKE $${i++}`);            values.push(`%${opts.category}%`); }
   if (opts.dateFrom) { conditions.push(`date >= $${i++}`);                   values.push(opts.dateFrom); }
   if (opts.dateTo)   { conditions.push(`date <= $${i++}`);                   values.push(opts.dateTo); }
@@ -253,7 +254,7 @@ export async function listTransactions(shopId: string, userId: string, opts: {
   const where = `WHERE ${conditions.join(' AND ')}`;
   const offset = (opts.page - 1) * opts.limit;
   const [{ rows }, { rows: countRows }] = await Promise.all([
-    db.query(`SELECT * FROM transactions ${where} ORDER BY date DESC, created_at DESC LIMIT $${i} OFFSET $${i + 1}`, [...values, opts.limit, offset]),
+    db.query(`SELECT * FROM transactions_with_payments ${where} ORDER BY date DESC, created_at DESC LIMIT $${i} OFFSET $${i + 1}`, [...values, opts.limit, offset]),
     db.query(`SELECT COUNT(*) FROM transactions ${where}`, values),
   ]);
   return { data: rows.map(mapTransaction), total: parseInt(countRows[0].count), page: opts.page, limit: opts.limit };
@@ -261,7 +262,7 @@ export async function listTransactions(shopId: string, userId: string, opts: {
 
 export async function findTransactionById(id: string, shopId: string, userId: string): Promise<Transaction | null> {
   const { rows } = await db.query(
-    'SELECT * FROM transactions WHERE id = $1 AND shop_id = $2 AND user_id = $3',
+    'SELECT * FROM transactions_with_payments WHERE id = $1 AND shop_id = $2 AND user_id = $3',
     [id, shopId, userId],
   );
   return rows[0] ? mapTransaction(rows[0]) : null;
@@ -304,11 +305,11 @@ export async function updateTransaction(id: string, shopId: string, userId: stri
   if (data.status !== undefined)      { sets.push(`status = $${i++}`);       values.push(data.status); }
   if (sets.length === 0) return findTransactionById(id, shopId, userId);
   values.push(id, shopId, userId);
-  const { rows } = await db.query(
-    `UPDATE transactions SET ${sets.join(', ')} WHERE id = $${i++} AND shop_id = $${i++} AND user_id = $${i} RETURNING *`,
+  const { rowCount } = await db.query(
+    `UPDATE transactions SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND shop_id = $${i++} AND user_id = $${i}`,
     values,
   );
-  return rows[0] ? mapTransaction(rows[0]) : null;
+  return rowCount ? findTransactionById(id, shopId, userId) : null;
 }
 
 export async function deleteTransaction(id: string, shopId: string, userId: string): Promise<boolean> {
@@ -332,32 +333,140 @@ export async function searchTransactions(shopId: string, userId: string, opts: {
   if (opts.unpaidOnly)    { conditions.push(`status <> 'settled'`); }
   const limit = Math.min(opts.limit ?? 10, 25);
   const { rows } = await db.query(
-    `SELECT * FROM transactions WHERE ${conditions.join(' AND ')} ORDER BY date DESC, created_at DESC LIMIT $${i}`,
+    `SELECT * FROM transactions_with_payments WHERE ${conditions.join(' AND ')} ORDER BY date DESC, created_at DESC LIMIT $${i}`,
     [...values, limit],
   );
   return rows.map(mapTransaction);
 }
 
+// ── Debt payments (migration 005) ───────────────────────────────
+// Money is compared in kobo (integer hundredths) so ₦0.10 + ₦0.20 never misses ₦0.30.
+const kobo = (naira: number) => Math.round(naira * 100);
+
+export type PaymentResult =
+  | { ok: true; transaction: Transaction; payment: DebtPayment }
+  | { ok: false; reason: 'not_found' | 'not_a_debt' | 'already_paid' | 'before_debt' | 'in_future' }
+  | { ok: false; reason: 'more_than_owed'; balance: number };
+
 /**
- * Marks an unpaid debt (receivable or payable) as paid. Returns null if it doesn't exist
- * for this shop, isn't a debt, or was already paid — the payment is not a new sale, so
- * settling never creates a transaction.
+ * Records a payment towards a receivable or payable, and marks the debt paid once its
+ * payments cover it. `amount` defaults to everything still owed. The debt row is locked
+ * so two payments at once can't both see the old balance and overpay it.
  */
-export async function markDebtPaid(id: string, shopId: string, userId: string): Promise<Transaction | null> {
-  const { rows } = await db.query(
-    `UPDATE transactions SET status = 'settled', updated_at = NOW()
-     WHERE id = $1 AND shop_id = $2 AND user_id = $3
-       AND type IN ('receivable', 'payable') AND status <> 'settled'
-     RETURNING *`,
-    [id, shopId, userId],
+export async function recordDebtPayment(
+  transactionId: string, shopId: string, userId: string, opts: { amount?: number; paidOn: string; today: string },
+): Promise<PaymentResult> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT id, type, amount, status, date FROM transactions
+       WHERE id = $1 AND shop_id = $2 AND user_id = $3 FOR UPDATE`,
+      [transactionId, shopId, userId],
+    );
+    const tx = rows[0] as { type: string; amount: string; status: TransactionStatus; date: string } | undefined;
+    const fail = async (result: PaymentResult) => { await client.query('ROLLBACK'); return result; };
+    if (!tx) return fail({ ok: false, reason: 'not_found' });
+    if (tx.type !== 'receivable' && tx.type !== 'payable') return fail({ ok: false, reason: 'not_a_debt' });
+    if (opts.paidOn < tx.date) return fail({ ok: false, reason: 'before_debt' });
+    if (opts.paidOn > opts.today) return fail({ ok: false, reason: 'in_future' });
+
+    const { rows: paidRows } = await client.query(
+      'SELECT COALESCE(SUM(amount), 0) AS paid FROM debt_payments WHERE transaction_id = $1', [transactionId],
+    );
+    const owedKobo = kobo(parseFloat(tx.amount)) - kobo(parseFloat(paidRows[0].paid as string));
+    if (owedKobo <= 0) return fail({ ok: false, reason: 'already_paid' });
+    const payKobo = opts.amount === undefined ? owedKobo : kobo(opts.amount);
+    if (payKobo > owedKobo) return fail({ ok: false, reason: 'more_than_owed', balance: owedKobo / 100 });
+
+    const { rows: inserted } = await client.query(
+      `INSERT INTO debt_payments (transaction_id, shop_id, user_id, amount, paid_on)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [transactionId, shopId, userId, payKobo / 100, opts.paidOn],
+    );
+    const status: TransactionStatus = payKobo === owedKobo ? 'settled' : (tx.status === 'settled' ? 'pending' : tx.status);
+    await client.query('UPDATE transactions SET status = $1, updated_at = NOW() WHERE id = $2', [status, transactionId]);
+    await client.query('COMMIT');
+    const transaction = (await findTransactionById(transactionId, shopId, userId))!;
+    return { ok: true, transaction, payment: mapPayment(inserted[0]) };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Removes payments (one by id, or all of them to reopen the debt) and puts the debt's
+ * status back in line with what is still paid. Null if the debt isn't found.
+ */
+export async function removeDebtPayments(
+  transactionId: string, shopId: string, userId: string, paymentId?: string,
+): Promise<{ transaction: Transaction; removed: number } | null> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT amount, status FROM transactions WHERE id = $1 AND shop_id = $2 AND user_id = $3 FOR UPDATE',
+      [transactionId, shopId, userId],
+    );
+    if (!rows[0]) { await client.query('ROLLBACK'); return null; }
+    const { rowCount } = paymentId
+      ? await client.query('DELETE FROM debt_payments WHERE id = $1 AND transaction_id = $2', [paymentId, transactionId])
+      : await client.query('DELETE FROM debt_payments WHERE transaction_id = $1', [transactionId]);
+    await syncDebtStatus(client, transactionId);
+    await client.query('COMMIT');
+    return { transaction: (await findTransactionById(transactionId, shopId, userId))!, removed: rowCount ?? 0 };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Sets a debt's status from its payments: settled when covered, otherwise not settled. */
+async function syncDebtStatus(client: { query: typeof db.query }, transactionId: string): Promise<void> {
+  await client.query(
+    `UPDATE transactions t SET status = CASE
+         WHEN COALESCE((SELECT SUM(amount) FROM debt_payments WHERE transaction_id = t.id), 0) >= t.amount THEN 'settled'
+         WHEN t.status = 'settled' THEN 'pending'
+         ELSE t.status END,
+       updated_at = NOW()
+     WHERE t.id = $1 AND t.type IN ('receivable', 'payable')`,
+    [transactionId],
   );
-  return rows[0] ? mapTransaction(rows[0]) : null;
+}
+
+/** For edits made outside the payment functions (e.g. the debt's amount changed). */
+export async function resyncDebtStatus(transactionId: string): Promise<void> {
+  await syncDebtStatus(db, transactionId);
+}
+
+export async function listDebtPayments(transactionId: string, shopId: string, userId: string): Promise<DebtPayment[]> {
+  const { rows } = await db.query(
+    `SELECT * FROM debt_payments WHERE transaction_id = $1 AND shop_id = $2 AND user_id = $3
+     ORDER BY paid_on, created_at`,
+    [transactionId, shopId, userId],
+  );
+  return rows.map(mapPayment);
+}
+
+function mapPayment(row: Record<string, unknown>): DebtPayment {
+  return {
+    id: row['id'] as string,
+    transactionId: row['transaction_id'] as string,
+    amount: parseFloat(row['amount'] as string),
+    paidOn: row['paid_on'] as string,
+    createdAt: row['created_at'] as Date,
+  };
 }
 
 export async function findTransactionsByIds(ids: string[], shopId: string, userId: string): Promise<Transaction[]> {
   if (ids.length === 0) return [];
   const { rows } = await db.query(
-    'SELECT * FROM transactions WHERE id = ANY($1) AND shop_id = $2 AND user_id = $3',
+    'SELECT * FROM transactions_with_payments WHERE id = ANY($1) AND shop_id = $2 AND user_id = $3',
     [ids, shopId, userId],
   );
   return rows.map(mapTransaction);
@@ -405,19 +514,23 @@ export interface CategoryLine {
 
 /**
  * Profit & loss lines for a period, on the accrual basis: every transaction counts on its
- * own date, including sales and purchases on credit. Grouped by type and category.
+ * own date, including sales and purchases on credit. `unpaid` is what was still owed on
+ * those debts at the end of the period (payments dated after it don't count yet).
  */
 export async function getProfitAndLossLines(shopId: string, userId: string, from: string, to: string): Promise<CategoryLine[]> {
   const { rows } = await db.query(
-    `SELECT type,
-            COALESCE(NULLIF(TRIM(category), ''), 'Uncategorised') AS category,
+    `SELECT t.type,
+            COALESCE(NULLIF(TRIM(t.category), ''), 'Uncategorised') AS category,
             COUNT(*) AS count,
-            SUM(amount) AS total,
-            SUM(CASE WHEN status <> 'settled' THEN amount ELSE 0 END) AS unpaid
-     FROM transactions
-     WHERE shop_id = $1 AND user_id = $2 AND date BETWEEN $3 AND $4
+            SUM(t.amount) AS total,
+            SUM(CASE WHEN t.type IN ('receivable', 'payable') THEN t.amount - COALESCE(p.paid, 0) ELSE 0 END) AS unpaid
+     FROM transactions t
+     LEFT JOIN (
+       SELECT transaction_id, SUM(amount) AS paid FROM debt_payments WHERE paid_on <= $4 GROUP BY transaction_id
+     ) p ON p.transaction_id = t.id
+     WHERE t.shop_id = $1 AND t.user_id = $2 AND t.date BETWEEN $3 AND $4
      GROUP BY 1, 2
-     ORDER BY 1, SUM(amount) DESC`,
+     ORDER BY 1, SUM(t.amount) DESC`,
     [shopId, userId, from, to],
   );
   return rows.map((r) => ({
@@ -429,25 +542,66 @@ export async function getProfitAndLossLines(shopId: string, userId: string, from
   }));
 }
 
-/** Unpaid receivables or payables recorded in the period, soonest due first. */
-export async function getOpenDebts(
-  shopId: string, userId: string, type: 'receivable' | 'payable', from: string, to: string,
-): Promise<Transaction[]> {
+export type DebtAsOf = Transaction & { paidAsOf: number; balanceAsOf: number };
+
+/**
+ * Receivables or payables that were still (partly) owed at the end of `asOf`: recorded on
+ * or before it, less the payments made by then. Soonest due first.
+ */
+export async function getDebtsAsOf(
+  shopId: string, userId: string, type: 'receivable' | 'payable', asOf: string,
+): Promise<DebtAsOf[]> {
   const { rows } = await db.query(
-    `SELECT * FROM transactions
-     WHERE shop_id = $1 AND user_id = $2 AND type = $3 AND status <> 'settled'
-       AND date BETWEEN $4 AND $5
-     ORDER BY due_date NULLS LAST, date, created_at`,
-    [shopId, userId, type, from, to],
+    `SELECT t.*, COALESCE(p.paid, 0) AS paid_as_of
+     FROM transactions_with_payments t
+     LEFT JOIN (
+       SELECT transaction_id, SUM(amount) AS paid FROM debt_payments WHERE paid_on <= $4 GROUP BY transaction_id
+     ) p ON p.transaction_id = t.id
+     WHERE t.shop_id = $1 AND t.user_id = $2 AND t.type = $3 AND t.date <= $4
+       AND t.amount > COALESCE(p.paid, 0)
+     ORDER BY t.due_date NULLS LAST, t.date, t.created_at`,
+    [shopId, userId, type, asOf],
   );
-  return rows.map(mapTransaction);
+  return rows.map((r) => {
+    const tx = mapTransaction(r);
+    const paidAsOf = parseFloat(r['paid_as_of'] as string);
+    return { ...tx, paidAsOf, balanceAsOf: Math.round((tx.amount - paidAsOf) * 100) / 100 };
+  });
 }
 
-/** Total still unpaid across all dates — shown beside the period figure for context. */
+export interface PaymentLine {
+  paidOn: string;
+  amount: number;
+  counterparty?: string;
+  description?: string;
+  transactionId: string;
+}
+
+/** Payments received (receivables) or made (payables) between two dates, in date order. */
+export async function getPaymentsInPeriod(
+  shopId: string, userId: string, type: 'receivable' | 'payable', from: string, to: string,
+): Promise<PaymentLine[]> {
+  const { rows } = await db.query(
+    `SELECT p.paid_on, p.amount, t.counterparty, t.description, t.id AS transaction_id
+     FROM debt_payments p JOIN transactions t ON t.id = p.transaction_id
+     WHERE p.shop_id = $1 AND p.user_id = $2 AND t.type = $3 AND p.paid_on BETWEEN $4 AND $5
+     ORDER BY p.paid_on, p.created_at`,
+    [shopId, userId, type, from, to],
+  );
+  return rows.map((r) => ({
+    paidOn: r['paid_on'] as string,
+    amount: parseFloat(r['amount'] as string),
+    counterparty: (r['counterparty'] as string | null) ?? undefined,
+    description: (r['description'] as string | null) ?? undefined,
+    transactionId: r['transaction_id'] as string,
+  }));
+}
+
+/** Everything still owed today across all dates — shown beside the report figure for context. */
 export async function getOpenDebtTotal(shopId: string, userId: string, type: 'receivable' | 'payable'): Promise<number> {
   const { rows } = await db.query(
-    `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-     WHERE shop_id = $1 AND user_id = $2 AND type = $3 AND status <> 'settled'`,
+    `SELECT COALESCE(SUM(amount - amount_paid), 0) AS total FROM transactions_with_payments
+     WHERE shop_id = $1 AND user_id = $2 AND type = $3`,
     [shopId, userId, type],
   );
   return parseFloat(rows[0]['total'] as string);
@@ -619,6 +773,17 @@ function mapShop(row: Record<string, unknown>): Shop {
   };
 }
 
+function paidAndBalance(row: Record<string, unknown>): { amountPaid: number; balance: number } {
+  const amount = parseFloat(row['amount'] as string);
+  // Rows read through transactions_with_payments carry amount_paid. A row straight from an
+  // INSERT doesn't, but a new transaction has no payments yet: a debt owes all of it, a
+  // cash sale/expense is paid in full.
+  const paid = row['amount_paid'] !== undefined
+    ? parseFloat(row['amount_paid'] as string)
+    : (row['status'] === 'settled' && row['type'] !== 'receivable' && row['type'] !== 'payable' ? amount : 0);
+  return { amountPaid: paid, balance: Math.round((amount - paid) * 100) / 100 };
+}
+
 function mapTransaction(row: Record<string, unknown>): Transaction {
   return {
     id: row['id'] as string,
@@ -633,6 +798,7 @@ function mapTransaction(row: Record<string, unknown>): Transaction {
     date: row['date'] as string,
     dueDate: (row['due_date'] as string | null) ?? undefined,
     status: row['status'] as Transaction['status'],
+    ...paidAndBalance(row),
     aiCategorized: row['ai_categorized'] as boolean,
     importId: row['import_id'] as string | undefined,
     createdAt: row['created_at'] as Date,

@@ -46,9 +46,22 @@ export interface Transaction {
   date: string;
   dueDate?: string;
   status: TransactionStatus;
+  /** Paid so far — payments towards a debt, or the full amount for a cash sale/expense. */
+  amountPaid: number;
+  /** Still owed (0 for cash sales/expenses and paid debts). */
+  balance: number;
   aiCategorized: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One payment towards a credit sale (receivable) or bill on credit (payable). */
+export interface DebtPayment {
+  id: string;
+  transactionId: string;
+  amount: number;
+  paidOn: string;
+  createdAt: string;
 }
 
 export interface ChatSession {

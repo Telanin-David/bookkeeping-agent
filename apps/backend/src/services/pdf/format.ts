@@ -28,6 +28,13 @@ export function dateTime(at: Date): string {
   }).format(at);
 }
 
+const shortDayFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/** For narrow table columns: '17 Sept' — the year is added only when it differs from the reference date's. */
+export function shortDay(isoDate: string, refIsoDate: string): string {
+  return isoDate.slice(0, 4) === refIsoDate.slice(0, 4) ? shortDayFmt.format(new Date(`${isoDate}T00:00:00Z`)) : day(isoDate);
+}
+
 export function period(from: string, to: string): string {
   return from === to ? day(from) : `${day(from)} – ${day(to)}`;
 }

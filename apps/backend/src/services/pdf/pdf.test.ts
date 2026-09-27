@@ -10,7 +10,8 @@ function tx(overrides: Partial<Transaction> = {}): Transaction {
   return {
     id: 'a1b2c3d4-0000-0000-0000-00000000abcd', shopId: 'shop-1', userId: 'user-1', type: 'sale', amount: 45000,
     currency: 'NGN', description: '3 bags of rice', category: 'Groceries', counterparty: 'Ṣadé Ọlá',
-    date: '2026-09-25', status: 'settled', aiCategorized: false, createdAt: new Date(), updatedAt: new Date(),
+    date: '2026-09-25', status: 'settled', amountPaid: 45000, balance: 0, aiCategorized: false,
+    createdAt: new Date(), updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -41,9 +42,10 @@ describe('PDF rendering', () => {
     expect(empty.subarray(0, 5).toString()).toBe('%PDF-');
   });
 
-  it('labels a paid credit sale "Paid", an unpaid one "Balance due"', () => {
+  it('labels a credit sale by what has been paid', () => {
     expect(receiptStatus(tx({ type: 'receivable', status: 'settled' }))).toBe('Paid');
-    expect(receiptStatus(tx({ type: 'receivable', status: 'pending' }))).toBe('Balance due');
-    expect(receiptStatus(tx({ type: 'receivable', status: 'overdue' }))).toBe('Overdue');
+    expect(receiptStatus(tx({ type: 'receivable', status: 'pending', amountPaid: 0, balance: 45000 }))).toBe('Balance due');
+    expect(receiptStatus(tx({ type: 'receivable', status: 'pending', amountPaid: 5000, balance: 40000 }))).toBe('Part-paid');
+    expect(receiptStatus(tx({ type: 'receivable', status: 'overdue', amountPaid: 0, balance: 45000 }))).toBe('Overdue');
   });
 });

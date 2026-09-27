@@ -95,16 +95,21 @@ router.post('/credit', limiter(10), validate(dateRangeSchema), ownShop, async (r
     const shop = await loadShop(req);
     const { dateFrom, dateTo } = req.body;
     const userId = req.user!.id;
-    const [receivables, payables, receivableTotalAllTime, payableTotalAllTime, logo] = await Promise.all([
-      db.getOpenDebts(shop.id, userId, 'receivable', dateFrom, dateTo),
-      db.getOpenDebts(shop.id, userId, 'payable', dateFrom, dateTo),
+    const today = todayIso();
+    // Balances at the end of the period — or today, if the period hasn't ended yet.
+    const asOf = dateTo < today ? dateTo : today;
+    const [receivables, payables, collected, paidOut, receivableTotalToday, payableTotalToday, logo] = await Promise.all([
+      db.getDebtsAsOf(shop.id, userId, 'receivable', asOf),
+      db.getDebtsAsOf(shop.id, userId, 'payable', asOf),
+      db.getPaymentsInPeriod(shop.id, userId, 'receivable', dateFrom, dateTo),
+      db.getPaymentsInPeriod(shop.id, userId, 'payable', dateFrom, dateTo),
       db.getOpenDebtTotal(shop.id, userId, 'receivable'),
       db.getOpenDebtTotal(shop.id, userId, 'payable'),
       loadBrandingImage(shop.logoUrl),
     ]);
     const pdf = await renderCreditReport({
-      shop, logo, from: dateFrom, to: dateTo, today: todayIso(),
-      receivables, payables, receivableTotalAllTime, payableTotalAllTime,
+      shop, logo, from: dateFrom, to: dateTo, asOf,
+      receivables, payables, collected, paidOut, receivableTotalToday, payableTotalToday,
     });
     await sendPdf(res, `${safeFilename(shop.name)}-credit-report-${dateFrom}-to-${dateTo}.pdf`, pdf, await emailFor(req), 'Credit');
   } catch (err) { next(err); }
