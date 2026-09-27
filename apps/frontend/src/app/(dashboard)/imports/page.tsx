@@ -84,7 +84,16 @@ export default function ImportsPage() {
   return (
     <PageWrapper title="Import from a spreadsheet">
       <div className="max-w-2xl space-y-6">
-        <ol className="flex flex-wrap items-center gap-2 text-[13px]">
+        {/* Phones: where you are, and a bar for how far along. */}
+        <div className="sm:hidden">
+          <p className="text-[13px] text-white/45">
+            Step {STEPS.findIndex(([s]) => s === step) + 1} of {STEPS.length} · <span className="font-medium text-white/85">{STEPS.find(([s]) => s === step)?.[1]}</span>
+          </p>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.08]">
+            <div className="h-full rounded-full bg-white/60 transition-all duration-300" style={{ width: `${((STEPS.findIndex(([s]) => s === step) + 1) / STEPS.length) * 100}%` }} />
+          </div>
+        </div>
+        <ol className="hidden flex-wrap items-center gap-2 text-[13px] sm:flex">
           {STEPS.map(([s, label], i) => (
             <li key={s} className="flex items-center gap-2">
               {i > 0 && <span className="text-white/20">›</span>}
@@ -118,10 +127,10 @@ export default function ImportsPage() {
                 <p className="text-lg font-semibold text-white/90">Imported {result.imported} {result.imported === 1 ? 'transaction' : 'transactions'}</p>
                 {result.skipped > 0 && <p className="text-[14px] text-white/55">{result.skipped} {result.skipped === 1 ? 'row was' : 'rows were'} left out.</p>}
                 <p className="text-[13px] text-white/45">Credit sales past their due date now show as overdue, with an alert.</p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Link href="/transactions"><Button>See transactions</Button></Link>
-                  <Button variant="secondary" onClick={reset}>Import another file</Button>
-                  <Button variant="ghost" onClick={() => undo(result.importId, preview?.filename ?? 'this file')} loading={busy}>Undo this import</Button>
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap">
+                  <Link href="/transactions" className="flex"><Button size="lg" className="flex-1">See transactions</Button></Link>
+                  <Button size="lg" variant="secondary" onClick={reset}>Import another file</Button>
+                  <Button size="lg" variant="ghost" onClick={() => undo(result.importId, preview?.filename ?? 'this file')} loading={busy}>Undo this import</Button>
                 </div>
               </div>
             )}

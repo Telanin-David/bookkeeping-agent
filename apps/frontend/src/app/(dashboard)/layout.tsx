@@ -42,14 +42,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (hidden && (status === 'anonymous' || (status === 'authenticated' && !isAdmin))) notFound();
   if (!isAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-ink-950">
-        <span className="text-sm text-white/30">Loading…</span>
+      // While the app checks the sign-in: a dark screen, with the name fading in only if it
+      // takes a moment, instead of "Loading…" flashing up on every start.
+      <div className="flex h-[100dvh] items-center justify-center bg-ink-950" role="status" aria-label="Loading">
+        <span className="anim-fade-in-late font-display text-[19px] font-semibold tracking-[-0.03em] text-white/35">Bookkeeping AI</span>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-ink-950 print:block print:h-auto print:overflow-visible print:bg-white">
+    <div className="flex h-[100dvh] overflow-hidden bg-ink-950 print:block print:h-auto print:overflow-visible print:bg-white">
       {/* Desktop sidebar */}
       <div className="hidden md:flex print:hidden">
         <Sidebar />

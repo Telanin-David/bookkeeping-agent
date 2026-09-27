@@ -1,6 +1,8 @@
 'use client';
 import { useState, type FormEvent } from 'react';
+import { CaretDown } from '@phosphor-icons/react';
 import Button from '@/components/ui/Button';
+import FormActions from '@/components/ui/FormActions';
 import { cn } from '@/lib/utils';
 import type { ImportField, ImportMapping, ImportPreview } from '@/types';
 
@@ -34,7 +36,9 @@ const ROW_KINDS: { value: NonNullable<ImportMapping['defaultType']>; label: stri
   { value: 'sign', label: 'Positive is money in, negative is money out' },
 ];
 
-const selectCls = 'glass-input w-full rounded-xl bg-transparent px-3 py-2 text-sm';
+// Same dropdown look as the rest of the app: our own arrow, with room around it.
+const selectCls = 'glass-input min-h-[2.75rem] w-full cursor-pointer appearance-none rounded-xl bg-transparent py-2.5 pl-3.5 pr-10 text-base sm:text-sm';
+const caret = <CaretDown size={15} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-white/45" aria-hidden />;
 
 export default function ColumnMapper({ preview, initial, loading, error, onSubmit, onCancel }: ColumnMapperProps) {
   const [mapping, setMapping] = useState<ImportMapping>(initial);
@@ -78,15 +82,18 @@ export default function ColumnMapper({ preview, initial, loading, error, onSubmi
               <span className="text-xs font-medium uppercase tracking-wide text-white/40">
                 {label}{hint && <span className="ml-1 normal-case tracking-normal text-white/25">· {hint}</span>}
               </span>
-              <select
-                aria-label={label}
-                value={mapping[field] ?? ''}
-                onChange={(e) => set(field, e.target.value)}
-                className={cn(selectCls, mapping[field] ? 'text-white/90' : 'text-white/35')}
-              >
-                <option value="" className="bg-ink-900">Not in my file</option>
-                {preview.headers.map((h) => <option key={h} value={h} className="bg-ink-900">{h}</option>)}
-              </select>
+              <span className="relative">
+                <select
+                  aria-label={label}
+                  value={mapping[field] ?? ''}
+                  onChange={(e) => set(field, e.target.value)}
+                  className={cn(selectCls, mapping[field] ? 'text-white/90' : 'text-white/35')}
+                >
+                  <option value="" className="bg-ink-900">Not in my file</option>
+                  {preview.headers.map((h) => <option key={h} value={h} className="bg-ink-900">{h}</option>)}
+                </select>
+                {caret}
+              </span>
             </label>
           ))}
         </div>
@@ -94,23 +101,26 @@ export default function ColumnMapper({ preview, initial, loading, error, onSubmi
         {needsKind && (
           <label className="flex flex-col gap-1 border-t border-white/[0.06] pt-3">
             <span className="text-xs font-medium uppercase tracking-wide text-white/40">What are the rows?</span>
-            <select
-              aria-label="What are the rows?"
-              value={mapping.defaultType ?? 'sale'}
-              onChange={(e) => setMapping((m) => ({ ...m, defaultType: e.target.value as ImportMapping['defaultType'] }))}
-              className={selectCls}
-            >
-              {ROW_KINDS.map((k) => <option key={k.value} value={k.value} className="bg-ink-900">{k.label}</option>)}
-            </select>
+            <span className="relative">
+              <select
+                aria-label="What are the rows?"
+                value={mapping.defaultType ?? 'sale'}
+                onChange={(e) => setMapping((m) => ({ ...m, defaultType: e.target.value as ImportMapping['defaultType'] }))}
+                className={selectCls}
+              >
+                {ROW_KINDS.map((k) => <option key={k.value} value={k.value} className="bg-ink-900">{k.label}</option>)}
+              </select>
+              {caret}
+            </span>
           </label>
         )}
       </div>
 
       {error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>Start again</Button>
-        <Button type="submit" loading={loading}>Check the rows</Button>
-      </div>
+      <FormActions>
+        <Button type="button" size="lg" variant="ghost" onClick={onCancel}>Start again</Button>
+        <Button type="submit" size="lg" loading={loading}>Check the rows</Button>
+      </FormActions>
     </form>
   );
 }

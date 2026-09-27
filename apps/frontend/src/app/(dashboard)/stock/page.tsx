@@ -6,7 +6,10 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import Spinner from '@/components/ui/Spinner';
+import IconButton from '@/components/ui/IconButton';
+import ActionSheet from '@/components/ui/ActionSheet';
+import { ListSkeleton } from '@/components/ui/Skeleton';
+import { ClipboardText, Package, Plus } from '@phosphor-icons/react';
 import ProductForm from '@/components/stock/ProductForm';
 import ProductModal from '@/components/stock/ProductModal';
 import ShelfCount from '@/components/stock/ShelfCount';
@@ -25,6 +28,7 @@ export default function StockPage() {
   const [counting, setCounting] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
   const [lowOnly, setLowOnly] = useState(false);
+  const [menu, setMenu] = useState(false);
 
   const low = products.filter((p) => p.isLow);
   const shown = lowOnly ? low : products;
@@ -33,14 +37,20 @@ export default function StockPage() {
     <PageWrapper
       title="Stock"
       actions={(
-        <div className="flex gap-2">
-          {products.length > 0 && <Button variant="secondary" onClick={() => setCounting(true)}>Count shelf</Button>}
-          <Button onClick={() => setAdding(true)}>+ Add product</Button>
-        </div>
+        <>
+          <div className="hidden gap-2 sm:flex">
+            {products.length > 0 && <Button variant="secondary" onClick={() => setCounting(true)}>Count shelf</Button>}
+            <Button onClick={() => setAdding(true)}>+ Add product</Button>
+          </div>
+          {/* Phones: one button; its choices open in a list. With nothing to count yet, it just adds. */}
+          <IconButton className="sm:hidden" aria-label="Add or count stock" onClick={() => (products.length > 0 ? setMenu(true) : setAdding(true))}>
+            <Plus size={20} weight="bold" />
+          </IconButton>
+        </>
       )}
     >
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-white/30"><Spinner className="h-4 w-4 text-white/20" /> Loading…</div>
+        <ListSkeleton />
       ) : products.length === 0 ? (
         <div className="glass-card max-w-lg rounded-2xl p-6">
           <p className="text-[15px] text-white/85">Keep track of what&apos;s on your shelves</p>
@@ -96,6 +106,15 @@ export default function StockPage() {
       <Modal open={adding} onClose={() => setAdding(false)} title="Add a product">
         {adding && <ProductForm onCancel={() => setAdding(false)} onSubmit={async (values) => { await create.mutateAsync(values); setAdding(false); }} />}
       </Modal>
+      <ActionSheet
+        open={menu}
+        onClose={() => setMenu(false)}
+        title="Stock"
+        actions={[
+          { label: 'Add a product', description: 'Something new you sell', icon: Package, onSelect: () => setAdding(true) },
+          { label: 'Count the shelf', description: 'Check what is really there, and correct the records', icon: ClipboardText, onSelect: () => setCounting(true) },
+        ]}
+      />
       <ProductModal shopId={shopId} product={selected} onClose={() => setSelected(null)} />
       <ShelfCount shopId={shopId} products={products} open={counting} onClose={() => setCounting(false)} />
     </PageWrapper>

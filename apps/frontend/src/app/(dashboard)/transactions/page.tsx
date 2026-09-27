@@ -9,7 +9,9 @@ import TransactionForm from '@/components/transactions/TransactionForm';
 import PaymentModal from '@/components/transactions/PaymentModal';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
-import Spinner from '@/components/ui/Spinner';
+import IconButton from '@/components/ui/IconButton';
+import { ListSkeleton } from '@/components/ui/Skeleton';
+import { Plus } from '@phosphor-icons/react';
 import type { Transaction, TransactionType, TransactionStatus } from '@/types';
 import type { NewTransactionBody } from '@/lib/api';
 
@@ -39,12 +41,17 @@ export default function TransactionsPage() {
   return (
     <PageWrapper
       title="Transactions"
-      actions={<Button onClick={() => setShowForm(true)}>+ Add transaction</Button>}
+      actions={(
+        <>
+          <Button className="hidden sm:inline-flex" onClick={() => setShowForm(true)}>+ Add transaction</Button>
+          <IconButton className="sm:hidden" aria-label="Add a transaction" onClick={() => setShowForm(true)}><Plus size={20} weight="bold" /></IconButton>
+        </>
+      )}
     >
       <div className="space-y-4">
         <TransactionFilters value={filters} onChange={setFilters} />
         {isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-white/30"><Spinner className="h-4 w-4 text-white/20" /> Loading…</div>
+          <ListSkeleton />
         ) : (
           <TransactionTable data={data?.data ?? []} onRecordPayment={setPaying} />
         )}

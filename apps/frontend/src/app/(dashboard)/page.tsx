@@ -8,7 +8,7 @@ import { useProducts } from '@/hooks/useStock';
 import Link from 'next/link';
 import { quantityText } from '@/lib/quantity';
 import PageWrapper from '@/components/layout/PageWrapper';
-import Spinner from '@/components/ui/Spinner';
+import { Skeleton } from '@/components/ui/Skeleton';
 import Badge from '@/components/ui/Badge';
 import { formatCurrency, formatDate, typeLabel } from '@/lib/utils';
 
@@ -73,8 +73,13 @@ export default function DashboardPage() {
         </div>
 
         {txLoading ? (
-          <div className="flex items-center gap-2 px-5 py-8 text-sm text-white/30">
-            <Spinner className="h-4 w-4 text-white/20" /> Loading…
+          <div className="space-y-4 px-5 py-4" role="status" aria-label="Loading">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center justify-between gap-4">
+                <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-2/5" /><Skeleton className="h-3 w-1/4" /></div>
+                <Skeleton className="h-3.5 w-20" />
+              </div>
+            ))}
           </div>
         ) : txData?.data.length === 0 ? (
           <p className="px-5 py-8 text-sm text-white/30">No transactions yet.</p>

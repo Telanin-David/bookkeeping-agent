@@ -6,9 +6,9 @@ import { errorMessage } from '@/lib/errors';
 import { DEMO_USER_ID } from '@/lib/demo';
 import { useAuthStore } from '@/store/auth';
 import PageWrapper from '@/components/layout/PageWrapper';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-import Spinner from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 
 const WHAT_IS_EMAILED = [
@@ -75,7 +75,7 @@ export default function AlertSettingsPage() {
         {isDemo ? (
           <div className="glass-card rounded-2xl p-5 text-[14px] text-white/55">Alert emails are for real accounts, so there&apos;s nothing to set in demo mode.</div>
         ) : isLoading || !data ? (
-          <div className="flex items-center gap-2 text-sm text-white/30"><Spinner className="h-4 w-4 text-white/20" /> Loading…</div>
+          <ListSkeleton rows={2} />
         ) : (
           <>
             <div className="glass-card rounded-2xl p-5">

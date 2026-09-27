@@ -10,6 +10,9 @@
     -webkit-tap-highlight-color: transparent;
     letter-spacing: -0.011em;
     background-color: #09090b;
+    /* Native controls (date pickers, dropdown lists, scrollbars) in their dark style, so a
+       date field's calendar icon is light instead of black on the dark background. */
+    color-scheme: dark;
   }
 
   body {
@@ -21,6 +24,13 @@
     font-family: 'Bricolage Grotesque Variable', var(--font-geist-sans), system-ui, sans-serif;
     letter-spacing: -0.025em;
   }
+
+  /* Date fields: a softer calendar icon that brightens on hover, and the date itself
+     left-aligned (iOS centres it) at a steady height even when empty. */
+  input[type='date'] { min-height: 2.75rem; }
+  input[type='date']::-webkit-date-and-time-value { text-align: left; }
+  input[type='date']::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; transition: opacity 150ms; }
+  input[type='date']::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
 
   ::-webkit-scrollbar { width: 3px; height: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -103,6 +113,46 @@
     border-color: rgba(255, 255, 255, 0.22);
   }
   .btn-primary:disabled { opacity: 0.35; }
+}
+
+/* ── Motion ─────────────────────────────────────────────────────
+   Short and eased, so the app feels quick rather than animated. */
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sheet-up   { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-down { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes pop-in  { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+@layer utilities {
+  /* Each page's content settles in instead of popping. */
+  .anim-page { animation: page-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .anim-fade-in  { animation: fade-in 200ms ease-out both; }
+  .anim-fade-out { animation: fade-out 200ms ease-in both; }
+  /* Shown only if loading takes a moment, so quick loads show nothing at all. */
+  .anim-fade-in-late { animation: fade-in 300ms ease-out 250ms both; }
+
+  /* Panels: slide up from the bottom on phones, rise into place on wider screens. */
+  .anim-sheet-in  { animation: sheet-up 340ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+  .anim-sheet-out { animation: sheet-down 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+  @media (min-width: 640px) {
+    .anim-sheet-in  { animation: pop-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    .anim-sheet-out { animation: pop-out 160ms ease-in both; }
+  }
+
+  /* Placeholder shapes while a page's data loads. */
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.045) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.045) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-page, .anim-fade-in, .anim-fade-out, .anim-fade-in-late, .anim-sheet-in, .anim-sheet-out { animation-duration: 1ms; animation-delay: 0ms; }
+  .skeleton { animation: none; }
 }
 
 @media print {
