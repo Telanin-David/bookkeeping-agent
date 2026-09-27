@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import MobileNav from '@/components/layout/MobileNav';
+import VerifyEmailBanner from '@/components/layout/VerifyEmailBanner';
 import { useShops } from '@/hooks/useShops';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAlertsStore } from '@/store/alerts';
@@ -59,6 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <MobileNav />
         </div>
 
+        <VerifyEmailBanner />
         <main className="flex flex-1 overflow-hidden print:block print:overflow-visible">{children}</main>
       </div>
     </div>

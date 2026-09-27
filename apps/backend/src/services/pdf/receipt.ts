@@ -17,7 +17,7 @@ export function receiptNumber(tx: Transaction): string {
 
 export function receiptStatus(tx: Transaction): string {
   if (tx.status === 'settled') return 'Paid';
-  if (tx.status === 'overdue') return 'Overdue';
+  if (tx.status === 'overdue') return tx.amountPaid > 0 ? 'Part-paid, overdue' : 'Overdue';
   if (tx.amountPaid > 0) return 'Part-paid';
   return 'Balance due';
 }

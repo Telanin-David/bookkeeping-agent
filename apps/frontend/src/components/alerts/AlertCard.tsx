@@ -7,6 +7,14 @@ import Button from '@/components/ui/Button';
 import { formatDateTime, capitalize } from '@/lib/utils';
 import type { Alert } from '@/types';
 
+/** Everyday names; "overdue receivable" is accounting jargon. */
+const TYPE_LABELS: Partial<Record<Alert['type'], string>> = {
+  overdue_receivable: 'Customer owes you',
+  bill_due: 'Bill due',
+  low_stock: 'Low stock',
+  duplicate: 'Recorded twice?',
+};
+
 interface AlertCardProps {
   alert: Alert;
   onAcknowledge: () => Promise<unknown>;
@@ -32,7 +40,7 @@ export default function AlertCard({ alert, onAcknowledge, onDismiss }: AlertCard
         <div className="flex-1 min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <Badge>{capitalize(alert.status)}</Badge>
-            <Badge>{capitalize(alert.type.replace(/_/g, ' '))}</Badge>
+            <Badge>{TYPE_LABELS[alert.type] ?? capitalize(alert.type)}</Badge>
           </div>
           <p className="text-sm text-white/75 leading-relaxed">{alert.message}</p>
           {alert.type === 'low_stock' && alert.status !== 'resolved' && (

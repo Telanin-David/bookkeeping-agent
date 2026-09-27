@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AlertSettings, CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -73,6 +73,22 @@ export const authApi = {
 
   logout: () =>
     api.post('/api/v1/auth/logout'),
+
+  /** From the link in the confirmation email. Works signed in or out. */
+  verifyEmail: (token: string) =>
+    api.post<{ verified: true }>('/api/v1/auth/verify-email', { token }),
+
+  resendVerification: () =>
+    api.post<{ sent?: true; email?: string; alreadyVerified?: true }>('/api/v1/auth/resend-verification').then((r) => r.data),
+};
+
+// ── Account ───────────────────────────────────────────────────
+export const accountApi = {
+  alertSettings: () =>
+    api.get<AlertSettings>('/api/v1/account/alert-settings').then((r) => r.data),
+
+  updateAlertSettings: (body: Partial<Pick<AlertSettings, 'emailAlerts' | 'quietStart' | 'quietEnd'>>) =>
+    api.patch<AlertSettings>('/api/v1/account/alert-settings', body).then((r) => r.data),
 };
 
 // ── Shops ─────────────────────────────────────────────────────

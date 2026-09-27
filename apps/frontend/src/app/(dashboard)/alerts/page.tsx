@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAlerts, useAlertAction } from '@/hooks/useAlerts';
 import PageWrapper from '@/components/layout/PageWrapper';
 import AlertCard from '@/components/alerts/AlertCard';
@@ -13,7 +14,10 @@ export default function AlertsPage() {
   const { apply } = useAlertAction();
 
   return (
-    <PageWrapper title="Alerts">
+    <PageWrapper
+      title="Alerts"
+      actions={<Link href="/settings/alerts" className="rounded-xl px-3 py-2 text-[14px] text-white/60 transition hover:bg-white/[0.06] hover:text-white/90">Email settings</Link>}
+    >
       <div className="mb-5 inline-flex max-w-full overflow-x-auto rounded-full glass p-1" role="tablist">
         {(['active', 'acknowledged', 'dismissed', 'resolved', ''] as const).map((s) => (
           <button
