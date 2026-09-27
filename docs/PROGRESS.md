@@ -266,7 +266,21 @@
   - Add the provider's SPF and DKIM records to the sending domain's DNS, or alerts land in spam.
   - Send a test by signing up with a real address.
   - Run `npm run migrate` (it includes migration 007).
-- **Upgrade Next.js before hosting.** `npm audit --omit=dev` flags the frontend's `next` 14.2.5 (critical; several of the advisories apply to self-hosted apps) and the `postcss` it brings. This was already true on `main`; it needs its own branch and a full frontend re-test.
+- **Next.js upgraded** (`fix/nextjs-upgrade`): 14.2.5 → **16.3.6**, React 18 → **19.3**.
+  - `npm audit --omit=dev` now reports **0 vulnerabilities**. It had flagged critical ones, including remote code execution in image optimisation.
+  - 14.2.35, the last 14.x release, was not enough: many advisories are only fixed from 15.5.24.
+  - **Duplicate copies removed:** the lock file had kept an old top-level Next.js 14, React 18 and React 18 types, which `geist` and the icon/query libraries were loading beside the new ones. They were removed so there is exactly one Next.js, one React and one set of React types.
+  - **Code changes:**
+    - The receipt page reads its id with `useParams()`, since page `params` became a promise.
+    - The chat box file-picker ref type was updated for React 19.
+  - **Config:**
+    - `next.config.mjs` loses `eslint` (gone in 16) and `typescript.ignoreBuildErrors`, so builds now fail on type errors.
+    - `engines.node >=20.9.0`, which Next.js 16 requires, so Vercel picks a new enough Node.
+  - **Lint:** `next lint` is gone, so there is a flat `eslint.config.mjs` with Next's rules (it had never had a config). The React-Compiler-only rules warn rather than error: 9 warnings, all patterns that work without the compiler.
+  - **Checked:**
+    - `tsc` clean and `next build` succeeds.
+    - Every browser suite passes on the production build: login 11/11, payments 18/18, part-paid 5/5, stock 16/16, alerts 10/10, import 11/11, daily limit 6/6, business dashboard 11/11, hidden from owners 11/11.
+    - Screens render as before.
 
 ## Voice input (owner's decision)
 - **For now:** owners use their phone keyboard's microphone to dictate into the chat box. The app's own mic button does nothing yet.

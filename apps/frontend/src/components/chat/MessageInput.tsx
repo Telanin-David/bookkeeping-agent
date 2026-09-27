@@ -78,7 +78,7 @@ export default function MessageInput({ onSend, disabled, footer }: MessageInputP
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
 
-  function pick(ref: React.RefObject<HTMLInputElement>) {
+  function pick(ref: React.RefObject<HTMLInputElement | null>) {
     setMenuOpen(false);
     ref.current?.click();
   }

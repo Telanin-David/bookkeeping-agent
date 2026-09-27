@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Printer, ShareNetwork } from '@phosphor-icons/react';
 import { reportsApi, downloadName, blobErrorMessage } from '@/lib/api';
 import { isDemoShop } from '@/lib/demo';
@@ -10,10 +10,12 @@ import { useTransaction } from '@/hooks/useTransactions';
 import Receipt from '@/components/receipts/Receipt';
 import Spinner from '@/components/ui/Spinner';
 
-export default function ReceiptPage({ params }: { params: { id: string } }) {
+export default function ReceiptPage() {
   const router = useRouter();
+  // Next.js 16 hands page props' params over as a promise; the hook reads the address directly.
+  const { id } = useParams<{ id: string }>();
   const shop = useShopsStore((s) => s.activeShop());
-  const { data: tx, isLoading, isError } = useTransaction(shop?.id ?? '', params.id);
+  const { data: tx, isLoading, isError } = useTransaction(shop?.id ?? '', id);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState('');
   // The PDF is made by the server; demo mode has none, so it keeps Print only.
