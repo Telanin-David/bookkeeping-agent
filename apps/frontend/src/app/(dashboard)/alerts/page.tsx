@@ -14,15 +14,15 @@ export default function AlertsPage() {
 
   return (
     <PageWrapper title="Alerts">
-      <div className="mb-5 inline-flex rounded-full glass p-1" role="tablist">
-        {(['active', 'acknowledged', 'dismissed', ''] as const).map((s) => (
+      <div className="mb-5 inline-flex max-w-full overflow-x-auto rounded-full glass p-1" role="tablist">
+        {(['active', 'acknowledged', 'dismissed', 'resolved', ''] as const).map((s) => (
           <button
             key={s}
             role="tab"
             aria-selected={statusFilter === s}
             onClick={() => setStatusFilter(s)}
             className={cn(
-              'h-9 rounded-full px-4 text-[14px] font-medium transition',
+              'h-9 shrink-0 rounded-full px-3 text-[13px] font-medium transition sm:px-4 sm:text-[14px]',
               statusFilter === s ? 'bg-white/[0.12] text-white shadow-[0_1px_0_rgba(255,255,255,0.08)_inset]' : 'text-white/50 hover:text-white/80',
             )}
           >

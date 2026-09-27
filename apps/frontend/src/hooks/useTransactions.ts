@@ -39,7 +39,13 @@ export function useCreateTransaction(shopId: string) {
   return useMutation({
     mutationFn: (body: Parameters<typeof transactionsApi.create>[1]) =>
       transactionsApi.create(shopId, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions', shopId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      // A sale or purchase with products moves stock, which can raise or clear a low-stock alert.
+      qc.invalidateQueries({ queryKey: ['products', shopId] });
+      qc.invalidateQueries({ queryKey: ['movements', shopId] });
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+    },
   });
 }
 
@@ -60,7 +66,12 @@ export function useDeleteTransaction(shopId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (txId: string) => transactionsApi.delete(shopId, txId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions', shopId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['products', shopId] });
+      qc.invalidateQueries({ queryKey: ['movements', shopId] });
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+    },
   });
 }
 

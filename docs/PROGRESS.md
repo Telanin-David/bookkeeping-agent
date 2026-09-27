@@ -11,6 +11,7 @@
 | 5 | Claude Integration & System Prompt | ✅ Done | `feat/deliverable-5-claude-integration` | merged to main (#16) |
 | 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | merged to main (#18, #19) |
 | 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | merged to main (#20) |
+| 7b | Stock & Shelf Counting (owner's request) | 🟡 In review | `feat/stock-tracking` | — |
 | 8 | Alert Detection & Routing System | ⬜ Not started | — | — |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
@@ -85,6 +86,38 @@
     - Chat list no longer shows "1 Jan 1970" or creates duplicate empty chats.
     - The shared `Table` component's typing is fixed, so frontend `tsc` is now clean with 0 errors.
   - **Refusal fallbacks:** the chat loop calls `client.beta.messages.create` with the `server-side-fallback-2026-07-01` beta and `fallbacks: "default"`, so if `claude-opus-5` declines a turn, the API retries it on the fallback model instead of returning a refusal. `afterFallback()` drops any text from before the switch. Categorisation still uses the regular endpoint with `claude-haiku-4-5`.
+
+- **Stock & shelf counting** (owner's request, built after Deliverable 7; migration `006_stock.sql`):
+  - **Products:** name, unit (bag, carton, litre…), quantity on hand, an optional "warn me at" level, and optional cost and selling prices. Names are unique per shop, ignoring case. Removing a product keeps its history.
+  - **Every change is a movement** (`stock_movements`): opening stock, restock, sale, shelf count or adjustment. `products.quantity` is always the sum of its movements; a Postgres trigger keeps it in step, including when a sale is deleted and its movements go with it.
+  - **Sales and purchases carry stock:** a transaction can list `items` (product + quantity). Sales and credit sales take stock off the shelf; expenses and bills on credit put it on. The transaction and its stock are saved together or not at all.
+    - Deleting the transaction puts the stock back.
+    - Changing its date moves the stock change with it.
+    - A transaction with items can't be flipped between a sale and a purchase.
+  - **Selling more than is recorded is allowed.** The quantity goes negative and the product shows as out of stock. The alternative, refusing the sale, would lose real income from the books because a restock wasn't recorded. A shelf count puts it right.
+  - **Shelf count:** the owner types what is actually on the shelf, and the app shows the difference ("2 bags missing"). The count stores what was counted, not the difference. The difference is always re-derived from the records before the count (`rebaseCounts`). So when a sale dated yesterday is entered after this morning's count, it isn't taken off the shelf twice.
+  - **Low-stock alerts:**
+    - One `low_stock` alert per spell of low stock. It is raised when the quantity falls to the warning level, updated while it stays low, and shown again if the product runs out even after "running low" was dismissed.
+    - It is marked `resolved` (a new alert status) once the product is restocked above the level or removed.
+    - These are in-app only. Email, SMS and WhatsApp delivery is Deliverable 8.
+  - **Stock report PDF** (`POST /reports/stock`, no longer 501):
+    - products running low or out
+    - per product: start, in, sold, count differences, other changes, end, and value at cost
+    - the shelf counts in the period
+  - **Frontend:**
+    - **Stock page:** add products; per product, a details view with add stock, remove stock (with a reason), edit and history with Undo; a shelf count screen; a "Running low" filter.
+    - **Add stock:** can also record what was paid, as an expense or a bill on credit with the supplier, so profit stays right.
+    - **Transaction form:** optional product lines, which fill in the amount (from the selling or cost price) and the description.
+    - **Elsewhere:** a "Running low" card on the dashboard, a Resolved tab and a "Go to stock" link on alerts, and the Stock Report option on Reports.
+    - Demo mode has sample products.
+    - Fixed on the dashboard: bills on credit showed as "+" income and credit sales weren't counted as income.
+  - **Chat:**
+    - `record_transaction` takes `items` by product name. The name is matched exactly (any case), or to a single product containing it; otherwise the tool refuses and lists the real names.
+    - New tools: `check_stock`, `adjust_stock` and `record_shelf_count`.
+    - Covered by unit tests with a mocked client; the live AI test is deferred (see below).
+  - **Known simplifications:**
+    - Stock bought is a cost when bought, not when sold (no cost-of-goods-sold). Buying a lot of stock in one month lowers that month's profit even though the goods are still on the shelf.
+    - No unit conversion (buying cartons, selling pieces). Such a product needs to be tracked in one unit.
 
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday"), and the refusal fallback.

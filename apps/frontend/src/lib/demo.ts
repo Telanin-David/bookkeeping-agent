@@ -1,4 +1,7 @@
-import type { Alert, DebtPayment, Transaction, TransactionType, TransactionStatus } from '@/types';
+import type {
+  Alert, CountLine, DebtPayment, Product, StockMovement, Transaction, TransactionType, TransactionStatus,
+} from '@/types';
+import { todayInLagos } from '@/lib/utils';
 
 export const DEMO_SHOP_ID = 'demo-shop-1';
 export const DEMO_USER_ID = 'demo-user-1';
@@ -97,3 +100,89 @@ export function setDemoAlertStatus(id: string, status: Alert['status']): Alert {
   found.updatedAt = new Date().toISOString();
   return found;
 }
+
+// ── Demo stock ────────────────────────────────────────────────
+// In memory, like the rest of the demo data. Simpler than the server: a shelf count's
+// difference is fixed when it's entered.
+const today = () => todayInLagos();
+
+function product(id: string, name: string, unit: string, quantity: number, lowStockLevel: number | null, costPrice: number | null, sellingPrice: number | null): Product {
+  const at = new Date(Date.now() - 30 * DAY).toISOString();
+  return {
+    id, shopId: DEMO_SHOP_ID, name, unit, quantity, lowStockLevel, costPrice, sellingPrice,
+    isLow: lowStockLevel !== null && quantity <= lowStockLevel, lastCountedOn: null, archived: false, createdAt: at, updatedAt: at,
+  };
+}
+
+const demoProducts: Product[] = [
+  product('demo-prod-rice',   'Rice (50kg)',        'bag',    14, 4,  62000, 68000),
+  product('demo-prod-beans',  'Beans (Oloyin)',     'bag',    3,  4,  55000, 60000),
+  product('demo-prod-indomie','Indomie Super Pack', 'carton', 22, 8,  9800,  10500),
+  product('demo-prod-oil',    'Groundnut oil',      'litre',  0,  10, 2100,  2500),
+  product('demo-prod-sugar',  'Sugar (St Louis)',   'box',    9,  3,  1500,  1800),
+];
+const demoMovements: StockMovement[] = demoProducts.map((p) => ({
+  id: `demo-mv-${p.id}`, productId: p.id, productName: p.name, kind: 'opening', change: p.quantity,
+  counted: null, transactionId: null, note: null, occurredOn: p.createdAt.slice(0, 10), createdAt: p.createdAt,
+}));
+
+function findDemoProduct(id: string): Product {
+  const found = demoProducts.find((p) => p.id === id && !p.archived);
+  if (!found) throw new Error('Product not found');
+  return found;
+}
+
+function moveDemoStock(p: Product, m: Omit<StockMovement, 'id' | 'productId' | 'productName' | 'createdAt' | 'transactionId'>): StockMovement {
+  const movement: StockMovement = { ...m, id: `demo-mv-${Date.now()}-${demoMovements.length}`, productId: p.id, productName: p.name, transactionId: null, createdAt: new Date().toISOString() };
+  demoMovements.push(movement);
+  p.quantity = Math.round((p.quantity + m.change) * 100) / 100;
+  p.isLow = p.lowStockLevel !== null && p.quantity <= p.lowStockLevel;
+  p.updatedAt = movement.createdAt;
+  return movement;
+}
+
+export const demoStock = {
+  list: (): Product[] => demoProducts.filter((p) => !p.archived).sort((a, b) => a.name.localeCompare(b.name)),
+  create(input: { name: string; unit?: string; openingQuantity?: number; lowStockLevel?: number | null; costPrice?: number | null; sellingPrice?: number | null }): Product {
+    if (demoProducts.some((p) => !p.archived && p.name.toLowerCase() === input.name.trim().toLowerCase())) {
+      throw new Error(`You already have a product called "${input.name.trim()}".`);
+    }
+    const p = product(`demo-prod-${Date.now()}`, input.name.trim(), input.unit?.trim() || 'piece', 0, input.lowStockLevel ?? null, input.costPrice ?? null, input.sellingPrice ?? null);
+    demoProducts.push(p);
+    if (input.openingQuantity) moveDemoStock(p, { kind: 'opening', change: input.openingQuantity, counted: null, note: null, occurredOn: today() });
+    return p;
+  },
+  update(id: string, changes: Partial<Pick<Product, 'name' | 'unit' | 'lowStockLevel' | 'costPrice' | 'sellingPrice'>>): Product {
+    const p = findDemoProduct(id);
+    Object.assign(p, changes);
+    p.isLow = p.lowStockLevel !== null && p.quantity <= p.lowStockLevel;
+    return p;
+  },
+  remove(id: string): void { findDemoProduct(id).archived = true; },
+  movements: (id: string): StockMovement[] =>
+    demoMovements.filter((m) => m.productId === id).sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) || b.createdAt.localeCompare(a.createdAt)),
+  adjust(id: string, body: { kind: 'restock' | 'adjustment'; change: number; occurredOn?: string; note?: string }) {
+    const p = findDemoProduct(id);
+    const movement = moveDemoStock(p, { kind: body.kind, change: body.change, counted: null, note: body.note ?? null, occurredOn: body.occurredOn ?? today() });
+    return { product: p, movement };
+  },
+  undo(movementId: string): Product {
+    const i = demoMovements.findIndex((m) => m.id === movementId);
+    if (i < 0) throw new Error('Stock change not found');
+    const [m] = demoMovements.splice(i, 1);
+    const p = findDemoProduct(m!.productId);
+    p.quantity = Math.round((p.quantity - m!.change) * 100) / 100;
+    p.isLow = p.lowStockLevel !== null && p.quantity <= p.lowStockLevel;
+    return p;
+  },
+  count(items: { productId: string; counted: number }[]): CountLine[] {
+    return items.map(({ productId, counted }) => {
+      const p = findDemoProduct(productId);
+      const expected = p.quantity;
+      const difference = Math.round((counted - expected) * 100) / 100;
+      moveDemoStock(p, { kind: 'count', change: difference, counted, note: null, occurredOn: today() });
+      p.lastCountedOn = today();
+      return { product: { ...p }, counted, expected, difference };
+    });
+  },
+};

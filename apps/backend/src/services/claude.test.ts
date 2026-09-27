@@ -8,13 +8,24 @@ jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
 })));
 
 jest.mock('./db');
+jest.mock('./stock');
 
 // Imported after the mocks above so the mocked modules are what claude.ts actually gets.
 import * as db from './db';
+import * as stock from './stock';
 import { sendChatMessage, categorizeTransaction, type ChatContext } from './claude';
-import type { Transaction } from '../types';
+import type { Product, Transaction } from '../types';
 
 const mockDb = db as jest.Mocked<typeof db>;
+const mockStock = stock as jest.Mocked<typeof stock>;
+
+function fakeProduct(overrides: Partial<Product> = {}): Product {
+  return {
+    id: 'prod-rice', shopId: 'shop-1', name: 'Rice (50kg)', unit: 'bag', quantity: 10, lowStockLevel: 3,
+    costPrice: 62000, sellingPrice: 68000, isLow: false, lastCountedOn: null, archived: false,
+    createdAt: new Date(), updatedAt: new Date(), ...overrides,
+  };
+}
 
 const ctx: ChatContext = {
   shopId: 'shop-1',
@@ -242,6 +253,81 @@ describe('sendChatMessage', () => {
 
     expect(result.reply).toMatch(/rephrase/i);
     expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** The first tool_result sent back to the model. */
+function firstToolResult() {
+  const messages = mockCreate.mock.calls[1][0].messages;
+  return messages.find((m: { content: unknown }) => Array.isArray(m.content) && m.content[0]?.type === 'tool_result').content[0];
+}
+
+describe('stock tools', () => {
+  const products = [fakeProduct(), fakeProduct({ id: 'prod-beans', name: 'Beans (Oloyin)' }), fakeProduct({ id: 'prod-brown', name: 'Brown beans' })];
+
+  it('records a sale with the products sold, resolving names to the stock list', async () => {
+    mockStock.listProducts.mockResolvedValue(products);
+    mockStock.createTransactionWithItems.mockResolvedValue(fakeTransaction({ id: 'tx-9' }));
+    mockStock.getTransactionItems.mockResolvedValue([]);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', {
+        type: 'sale', amount: 136000, description: '2 bags of rice', category: 'Groceries',
+        items: [{ product: 'rice (50KG)', quantity: 2 }],
+      }))
+      .mockResolvedValueOnce(textResponse('Recorded — 8 bags of rice left.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'sold 2 bags of rice for 136k' }]);
+
+    expect(result.extractedTransactionIds).toEqual(['tx-9']);
+    expect(mockStock.createTransactionWithItems).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'sale', amount: 136000 }), [{ productId: 'prod-rice', quantity: 2 }],
+    );
+    expect(mockDb.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('records nothing when a product is not on the stock list, and tells the model the real names', async () => {
+    mockStock.listProducts.mockResolvedValue(products);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', {
+        type: 'sale', amount: 5000, description: 'sugar', category: 'Groceries', items: [{ product: 'Sugar', quantity: 1 }],
+      }))
+      .mockResolvedValueOnce(textResponse('Sugar isn’t on your stock list.'));
+
+    await sendChatMessage(ctx, [{ role: 'user', content: 'sold sugar' }]);
+
+    expect(mockStock.createTransactionWithItems).not.toHaveBeenCalled();
+    expect(mockDb.createTransaction).not.toHaveBeenCalled();
+    const toolResult = firstToolResult();
+    expect(toolResult.is_error).toBe(true);
+    expect(toolResult.content).toContain('Rice (50kg)');
+  });
+
+  it('asks which product when a name matches several', async () => {
+    mockStock.listProducts.mockResolvedValue(products);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('adjust_stock', { product: 'beans', change: -1, reason: 'Damaged' }))
+      .mockResolvedValueOnce(textResponse('Which beans?'));
+
+    await sendChatMessage(ctx, [{ role: 'user', content: 'a bag of beans got wet' }]);
+
+    expect(mockStock.adjustStock).not.toHaveBeenCalled();
+    const toolResult = firstToolResult();
+    expect(toolResult.content).toContain('matches several products');
+  });
+
+  it('records a shelf count and returns what was missing', async () => {
+    mockStock.listProducts.mockResolvedValue(products);
+    mockStock.recordShelfCount.mockResolvedValue([{ product: fakeProduct({ quantity: 9 }), counted: 9, expected: 11, difference: -2 }]);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_shelf_count', { counts: [{ product: 'Rice (50kg)', counted: 9 }] }))
+      .mockResolvedValueOnce(textResponse('2 bags of rice are missing.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'I counted 9 bags of rice' }]);
+
+    expect(result.reply).toBe('2 bags of rice are missing.');
+    expect(mockStock.recordShelfCount).toHaveBeenCalledWith('shop-1', 'user-1', expect.objectContaining({ items: [{ productId: 'prod-rice', counted: 9 }] }));
+    const toolResult = JSON.parse(firstToolResult().content);
+    expect(toolResult.results[0]).toMatchObject({ product: 'Rice (50kg)', recordsSaid: 11, difference: -2 });
   });
 });
 

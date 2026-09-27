@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import * as db from './db';
+import * as stock from './stock';
 import { todayIso, addDays } from '../utils/dates';
 import { Transaction, TransactionType } from '../types';
 
@@ -45,6 +46,11 @@ When the owner says a customer has paid money they owed ("Mama Nkechi has paid",
 
 Pass amount only for a part-payment; leave it out when they paid everything still owed. Pass paidOn only if they said when it was paid ("yesterday"), resolved to a date. The debt's balance field says what is still owed; if they paid more than that, don't record anything — tell them what is actually owed. If you can't tell which debt they mean, ask. If no matching unpaid debt exists, say so and ask whether they want to record it as a new sale instead. After recording, tell them what is still owed, if anything.
 
+## Stock
+The shop may keep a stock list: products with how many are on the shelf. When the owner records a sale or a purchase of goods that are on the stock list, pass them as items on record_transaction with the quantity — that is what keeps the shelf count right. Use product names as check_stock returns them; if you aren't sure which product they mean, call check_stock first. Never invent a product: if something isn't on the stock list, record the transaction without items.
+
+For "how many bags of rice do I have?" or "what's running low?", call check_stock. When they bought stock and said what they paid, that is record_transaction (expense, or payable if on credit) with items. Use adjust_stock only for goods that left the shelf without being sold (damaged, expired, used in the shop, given away) or arrived with nothing to pay. When they report counting their shelf ("I counted 9 bags of rice"), call record_shelf_count, then tell them plainly what was missing or extra.
+
 ## Receipts and invoices
 When the owner asks for a receipt or invoice ("give me a receipt for Mama Nkechi", "print an invoice for that credit sale"), first call find_transactions to locate the real transaction — never invent an id. Once you have identified the one transaction they mean, call show_receipt with its id, then briefly confirm what you're showing them.
 
@@ -65,6 +71,19 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
         counterparty: { type: 'string', description: 'Customer or supplier name, only if the owner actually named one' },
         date: { type: 'string', description: 'YYYY-MM-DD, resolved from any relative date the owner used. Omit to use today.' },
         dueDate: { type: 'string', description: 'YYYY-MM-DD. Only for receivable/payable, and only if a due date was mentioned or implied.' },
+        items: {
+          type: 'array',
+          description: 'Products from the stock list that were sold (sale/receivable: taken off the shelf) or bought (expense/payable: put on the shelf), with how many. Only for products on the stock list.',
+          items: {
+            type: 'object',
+            properties: {
+              product: { type: 'string', description: 'Product name as on the stock list' },
+              quantity: { type: 'number', description: 'How many, in the product’s own unit' },
+            },
+            required: ['product', 'quantity'],
+            additionalProperties: false,
+          },
+        },
       },
       required: ['type', 'amount', 'description'],
       additionalProperties: false,
@@ -111,6 +130,56 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'check_stock',
+    description: 'Look up the shop’s stock list: each product’s quantity on the shelf, unit, prices, and whether it is running low. Use before answering any stock question and to find exact product names.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        product: { type: 'string', description: 'Part of a product name to look for. Omit for all products.' },
+        lowOnly: { type: 'boolean', description: 'Only products at or below their warning level' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'adjust_stock',
+    description: 'Change a product’s quantity for something that is neither a sale nor a purchase: goods damaged, expired, used or given away (negative), or goods that arrived with nothing to pay (positive).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        product: { type: 'string', description: 'Product name as on the stock list' },
+        change: { type: 'number', description: 'How many came in (positive) or left the shelf (negative)' },
+        reason: { type: 'string', description: 'Short reason in the owner’s words, e.g. "Damaged", "Expired"' },
+        date: { type: 'string', description: 'YYYY-MM-DD. Omit for today.' },
+      },
+      required: ['product', 'change'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'record_shelf_count',
+    description: 'Record what the owner actually counted on the shelf for one or more products. The stock is set to what was counted, and the result says how many were missing or extra compared with the records.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        counts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              product: { type: 'string', description: 'Product name as on the stock list' },
+              counted: { type: 'number', description: 'How many are actually on the shelf' },
+            },
+            required: ['product', 'counted'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['counts'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'show_receipt',
     description: 'Present a printable receipt or invoice for one specific transaction already confirmed to be the right one via find_transactions.',
     input_schema: {
@@ -152,6 +221,30 @@ function isTransactionType(value: unknown): value is TransactionType {
   return typeof value === 'string' && (TRANSACTION_TYPES as readonly string[]).includes(value);
 }
 
+/**
+ * Finds the stock-list product the model named: an exact name first (any case), then a
+ * single product whose name contains it. Anything else is an error that lists the real
+ * names, so the model can ask the owner or try again.
+ */
+async function resolveProduct(ctx: ChatContext, name: unknown): Promise<{ id: string; name: string; unit: string }> {
+  if (typeof name !== 'string' || !name.trim()) throw new Error('product name is required');
+  const products = await stock.listProducts(ctx.shopId, ctx.userId);
+  const wanted = name.trim().toLowerCase();
+  const exact = products.find((p) => p.name.toLowerCase() === wanted);
+  if (exact) return exact;
+  const partial = products.filter((p) => p.name.toLowerCase().includes(wanted));
+  if (partial.length === 1) return partial[0]!;
+  const names = (partial.length > 1 ? partial : products).map((p) => p.name);
+  if (names.length === 0) throw new Error('This shop has no products on its stock list yet');
+  throw new Error(partial.length > 1
+    ? `"${name}" matches several products: ${names.join(', ')}. Ask which one.`
+    : `No product called "${name}" is on the stock list. Products: ${names.slice(0, 50).join(', ')}`);
+}
+
+function isPositive(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0;
+}
+
 async function executeTool(name: string, input: unknown, ctx: ChatContext, state: ToolState): Promise<unknown> {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
 
@@ -175,7 +268,15 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         }
       }
 
-      const tx = await db.createTransaction({
+      // Resolve products before saving anything, so a wrong name records nothing.
+      const rawItems = Array.isArray(args['items']) ? args['items'] as Record<string, unknown>[] : [];
+      const items = [];
+      for (const item of rawItems) {
+        if (!isPositive(item['quantity'])) throw new Error('each item needs a positive quantity');
+        items.push({ productId: (await resolveProduct(ctx, item['product'])).id, quantity: item['quantity'] });
+      }
+
+      const data = {
         shopId: ctx.shopId,
         userId: ctx.userId,
         type,
@@ -187,9 +288,10 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         date: typeof args['date'] === 'string' ? args['date'] : todayIso(),
         dueDate: typeof args['dueDate'] === 'string' ? args['dueDate'] : undefined,
         aiCategorized,
-      });
+      };
+      const tx = items.length ? await stock.createTransactionWithItems(data, items) : await db.createTransaction(data);
       state.createdTransactionIds.push(tx.id);
-      return tx;
+      return items.length ? { ...tx, items: await stock.getTransactionItems(tx.id) } : tx;
     }
 
     case 'find_transactions': {
@@ -231,6 +333,54 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         ? args['from']
         : addDays(to, -30);
       return db.getSpendingSummary(ctx.shopId, ctx.userId, from, to);
+    }
+
+    case 'check_stock': {
+      const products = await stock.listProducts(ctx.shopId, ctx.userId, {
+        search: typeof args['product'] === 'string' ? args['product'] : undefined,
+        lowOnly: args['lowOnly'] === true,
+      });
+      return {
+        count: products.length,
+        products: products.map((p) => ({
+          name: p.name, unit: p.unit, onShelf: p.quantity, warnAt: p.lowStockLevel, runningLow: p.isLow,
+          sellingPrice: p.sellingPrice, costPrice: p.costPrice, lastCounted: p.lastCountedOn,
+        })),
+      };
+    }
+
+    case 'adjust_stock': {
+      const product = await resolveProduct(ctx, args['product']);
+      const change = args['change'];
+      if (typeof change !== 'number' || !Number.isFinite(change) || change === 0) throw new Error('change must be a non-zero number');
+      const today = todayIso();
+      const result = await stock.adjustStock(ctx.shopId, ctx.userId, product.id, {
+        kind: 'adjustment', change, today,
+        occurredOn: typeof args['date'] === 'string' ? args['date'] : today,
+        note: typeof args['reason'] === 'string' ? args['reason'] : undefined,
+      });
+      return { recorded: true, product: result.product.name, onShelfNow: result.product.quantity, runningLow: result.product.isLow };
+    }
+
+    case 'record_shelf_count': {
+      const counts = Array.isArray(args['counts']) ? args['counts'] as Record<string, unknown>[] : [];
+      if (counts.length === 0) throw new Error('counts must list at least one product');
+      const items = [];
+      for (const c of counts) {
+        const counted = c['counted'];
+        if (typeof counted !== 'number' || !Number.isFinite(counted) || counted < 0) throw new Error('counted must be 0 or more');
+        items.push({ productId: (await resolveProduct(ctx, c['product'])).id, counted });
+      }
+      const today = todayIso();
+      const lines = await stock.recordShelfCount(ctx.shopId, ctx.userId, { items, occurredOn: today, today });
+      return {
+        recorded: true,
+        results: lines.map((l) => ({
+          product: l.product.name, unit: l.product.unit, counted: l.counted, recordsSaid: l.expected,
+          // negative: missing; positive: more than recorded
+          difference: l.difference,
+        })),
+      };
     }
 
     case 'show_receipt': {

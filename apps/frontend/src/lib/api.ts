@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  DebtPayment, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -107,6 +107,10 @@ export const shopsApi = {
 export type BrandingKind = 'logo' | 'signature';
 
 // ── Transactions ──────────────────────────────────────────────
+export type NewTransactionBody =
+  Omit<Transaction, 'id' | 'shopId' | 'userId' | 'aiCategorized' | 'amountPaid' | 'balance' | 'items' | 'createdAt' | 'updatedAt'>
+  & { items?: TransactionItemInput[] };
+
 export const transactionsApi = {
   list: (shopId: string, params?: {
     type?: string; status?: string; category?: string;
@@ -122,7 +126,7 @@ export const transactionsApi = {
   get: (shopId: string, txId: string) =>
     api.get<Transaction>(`/api/v1/shops/${shopId}/transactions/${txId}`),
 
-  create: (shopId: string, body: Omit<Transaction, 'id' | 'shopId' | 'userId' | 'aiCategorized' | 'amountPaid' | 'balance' | 'createdAt' | 'updatedAt'>) =>
+  create: (shopId: string, body: NewTransactionBody) =>
     api.post<Transaction>(`/api/v1/shops/${shopId}/transactions`, body),
 
   update: (shopId: string, txId: string, body: Partial<Transaction>) =>
@@ -142,6 +146,40 @@ export const transactionsApi = {
 
   removePayment: (shopId: string, txId: string, paymentId: string) =>
     api.delete<Transaction>(`/api/v1/shops/${shopId}/transactions/${txId}/payments/${paymentId}`).then((r) => r.data),
+};
+
+// ── Stock ─────────────────────────────────────────────────────
+export type ProductFields = {
+  name: string; unit?: string; lowStockLevel?: number | null; costPrice?: number | null; sellingPrice?: number | null;
+};
+
+export const stockApi = {
+  listProducts: (shopId: string) =>
+    api.get<{ data: Product[] }>(`/api/v1/shops/${shopId}/stock/products`).then((r) => r.data.data),
+
+  createProduct: (shopId: string, body: ProductFields & { openingQuantity?: number }) =>
+    api.post<Product>(`/api/v1/shops/${shopId}/stock/products`, body).then((r) => r.data),
+
+  updateProduct: (shopId: string, productId: string, body: Partial<ProductFields>) =>
+    api.patch<Product>(`/api/v1/shops/${shopId}/stock/products/${productId}`, body).then((r) => r.data),
+
+  /** Takes it off the stock list; its history stays for past sales and reports. */
+  removeProduct: (shopId: string, productId: string) =>
+    api.delete(`/api/v1/shops/${shopId}/stock/products/${productId}`),
+
+  listMovements: (shopId: string, productId: string) =>
+    api.get<{ data: StockMovement[] }>(`/api/v1/shops/${shopId}/stock/products/${productId}/movements`).then((r) => r.data.data),
+
+  /** restock: more came in (change > 0). adjustment: damaged, expired, used… (usually < 0). */
+  adjust: (shopId: string, productId: string, body: { kind: 'restock' | 'adjustment'; change: number; occurredOn?: string; note?: string }) =>
+    api.post<{ product: Product; movement: StockMovement }>(`/api/v1/shops/${shopId}/stock/products/${productId}/movements`, body)
+      .then((r) => r.data),
+
+  undoMovement: (shopId: string, movementId: string) =>
+    api.delete<Product>(`/api/v1/shops/${shopId}/stock/movements/${movementId}`).then((r) => r.data),
+
+  count: (shopId: string, body: { items: { productId: string; counted: number }[]; occurredOn?: string; note?: string }) =>
+    api.post<{ data: CountLine[] }>(`/api/v1/shops/${shopId}/stock/counts`, body).then((r) => r.data.data),
 };
 
 // ── Chat ──────────────────────────────────────────────────────

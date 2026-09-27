@@ -24,6 +24,8 @@ tags:
     description: Ledger entries — sales, expenses, receivables, payables
   - name: chat
     description: AI chat sessions
+  - name: stock
+    description: Products, stock movements, shelf counts and low-stock alerts
   - name: reports
     description: PDF report generation
   - name: alerts
@@ -632,6 +634,190 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  # ── STOCK ────────────────────────────────────
+  /shops/{shopId}/stock/products:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+    get:
+      tags: [stock]
+      summary: List products on the stock list
+      parameters:
+        - { name: lowOnly, in: query, schema: { type: boolean }, description: Only products at or below their warning level }
+        - { name: search, in: query, schema: { type: string }, description: Part of a product name }
+        - { name: includeArchived, in: query, schema: { type: boolean }, description: Include removed products }
+      responses:
+        '200':
+          description: Products, by name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [stock]
+      summary: Add a product
+      description: '`openingQuantity` is what is on the shelf now. 409 if a live product already has the name (any case).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ProductFields'
+                - type: object
+                  required: [name]
+                  properties:
+                    openingQuantity: { type: number, minimum: 0 }
+      responses:
+        '201': { description: Product added, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: A product with that name already exists }
+
+  /shops/{shopId}/stock/products/{productId}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [stock]
+      summary: Get a product
+      responses:
+        '200': { description: Product, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [stock]
+      summary: Edit a product (name, unit, warning level, prices)
+      description: Quantities change only through movements, counts and transactions. Setting `lowStockLevel` to null turns the warning off.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductFields' } } }
+      responses:
+        '200': { description: Updated product, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: A product with that name already exists }
+    delete:
+      tags: [stock]
+      summary: Remove a product from the stock list
+      description: Its history is kept, so past sales and reports still show it. Its low-stock alert is resolved and its name can be reused.
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shops/{shopId}/stock/products/{productId}/movements:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [stock]
+      summary: A product's stock history, newest first
+      responses:
+        '200':
+          description: Movements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/StockMovement' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [stock]
+      summary: Add or remove stock by hand
+      description: |
+        `restock` adds stock that came in with nothing to record as a purchase (to record what was paid,
+        create an expense or payable with `items` instead). `adjustment` is anything else, usually
+        negative: damaged, expired, used in the shop. 422 for a future date or a zero change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, change]
+              properties:
+                kind: { type: string, enum: [restock, adjustment] }
+                change: { type: number, description: '+ into stock, − out of stock; restock must be positive' }
+                occurredOn: { type: string, format: date, description: Omit for today }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+                  movement: { $ref: '#/components/schemas/StockMovement' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: Refused (see description) }
+
+  /shops/{shopId}/stock/movements/{movementId}:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+      - { name: movementId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [stock]
+      summary: Undo a hand-entered stock change or shelf count
+      description: Stock moved by a sale or purchase can't be undone here (422); edit or delete that transaction instead.
+      responses:
+        '200': { description: The product after the undo, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: The change came from a transaction }
+
+  /shops/{shopId}/stock/counts:
+    parameters:
+      - $ref: '#/components/parameters/shopId'
+    post:
+      tags: [stock]
+      summary: Record a shelf count
+      description: |
+        What is actually on the shelf. Each product's stock becomes the counted quantity, and the reply
+        gives what the records expected and the difference (negative: missing). The difference is always
+        worked out from the records before the count, so a sale dated before the count but entered
+        afterwards isn't taken off twice. 400 if a product appears twice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [productId, counted]
+                    properties:
+                      productId: { type: string, format: uuid }
+                      counted: { type: number, minimum: 0 }
+                occurredOn: { type: string, format: date, description: Omit for today }
+                note: { type: string }
+      responses:
+        '201':
+          description: Count results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product: { $ref: '#/components/schemas/Product' }
+                        counted: { type: number }
+                        expected: { type: number }
+                        difference: { type: number }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # ── CHAT ─────────────────────────────────────
   /chat/sessions:
     get:
@@ -858,9 +1044,11 @@ paths:
   /reports/stock:
     post:
       tags: [reports]
-      summary: Generate a stock/inventory report PDF
+      summary: Generate a stock report PDF
       description: |
-        Not available yet — returns 501 until stock tracking (products and quantities) exists.
+        Stock as of `dateTo` (or today, if later): products running low or out, and per product the
+        quantity at the start, stock bought or added, sold, shelf-count differences, other adjustments,
+        the quantity at the end and its value at cost price. Lists the shelf counts in the period.
       x-rateLimit: '10 requests per minute per user'
       requestBody:
         required: true
@@ -882,12 +1070,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-        '501':
-          description: Stock tracking isn't available yet
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -938,7 +1120,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, acknowledged, dismissed]
+            enum: [active, acknowledged, dismissed, resolved]
         - name: page
           in: query
           schema:
@@ -1543,6 +1725,16 @@ components:
         balance:
           type: number
           description: Still owed (0 when paid, and for cash sales/expenses).
+        items:
+          type: array
+          description: Products sold or bought (GET one and POST responses only)
+          items:
+            type: object
+            properties:
+              productId: { type: string, format: uuid }
+              name: { type: string }
+              unit: { type: string }
+              quantity: { type: number }
         aiCategorized:
           type: boolean
         importId:
@@ -1555,6 +1747,53 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    ProductFields:
+      type: object
+      properties:
+        name: { type: string, maxLength: 200 }
+        unit: { type: string, maxLength: 30, description: 'bag, carton, piece, litre… (default: piece)' }
+        lowStockLevel: { type: number, minimum: 0, nullable: true, description: Warn at or below this; null for no warning }
+        costPrice: { type: number, minimum: 0, nullable: true }
+        sellingPrice: { type: number, minimum: 0, nullable: true }
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        shopId: { type: string, format: uuid }
+        name: { type: string }
+        unit: { type: string }
+        quantity: { type: number, description: On hand according to the records; below 0 if sales outran recorded stock }
+        lowStockLevel: { type: number, nullable: true }
+        costPrice: { type: number, nullable: true }
+        sellingPrice: { type: number, nullable: true }
+        isLow: { type: boolean }
+        lastCountedOn: { type: string, format: date, nullable: true }
+        archived: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    StockMovement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        kind: { type: string, enum: [opening, restock, sale, count, adjustment] }
+        change: { type: number, description: '+ into stock, − out of stock' }
+        counted: { type: number, nullable: true, description: For a shelf count, what was counted }
+        transactionId: { type: string, format: uuid, nullable: true }
+        note: { type: string, nullable: true }
+        occurredOn: { type: string, format: date }
+        createdAt: { type: string, format: date-time }
+
+    TransactionItemInput:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: string, format: uuid }
+        quantity: { type: number, minimum: 0.01 }
 
     DebtPayment:
       type: object
@@ -1601,6 +1840,16 @@ components:
         dueDate:
           type: string
           format: date
+        items:
+          type: array
+          maxItems: 50
+          description: |
+            Products sold (sale/receivable: taken off the shelf) or bought (expense/payable: put on it).
+            Saved together with the transaction. Deleting the transaction puts the stock back; changing
+            its date moves the stock change with it. A transaction with items can't be switched between
+            a sale and a purchase.
+          items:
+            $ref: '#/components/schemas/TransactionItemInput'
 
     UpdateTransactionRequest:
       type: object
@@ -1750,10 +1999,11 @@ components:
           format: uuid
         type:
           type: string
-          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly]
+          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock]
         status:
           type: string
-          enum: [active, acknowledged, dismissed]
+          enum: [active, acknowledged, dismissed, resolved]
+          description: '`resolved` is set by the app, e.g. when a low product is restocked'
         message:
           type: string
         metadata:

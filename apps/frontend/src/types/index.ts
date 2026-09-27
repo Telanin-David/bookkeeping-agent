@@ -51,8 +51,66 @@ export interface Transaction {
   /** Still owed (0 for cash sales/expenses and paid debts). */
   balance: number;
   aiCategorized: boolean;
+  /** Products sold or bought, when the transaction was recorded with them. */
+  items?: TransactionItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Stock ─────────────────────────────────────────────────────
+export type StockMovementKind = 'opening' | 'restock' | 'sale' | 'count' | 'adjustment';
+
+export interface Product {
+  id: string;
+  shopId: string;
+  name: string;
+  /** What one of it is called: bag, carton, piece, litre… */
+  unit: string;
+  /** On hand, according to the records. Below 0 means sales outran recorded stock. */
+  quantity: number;
+  /** Warn at or below this; null = never warn. */
+  lowStockLevel: number | null;
+  costPrice: number | null;
+  sellingPrice: number | null;
+  isLow: boolean;
+  lastCountedOn: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  productName?: string;
+  kind: StockMovementKind;
+  /** + into stock, − out of stock. */
+  change: number;
+  counted: number | null;
+  transactionId: string | null;
+  note: string | null;
+  occurredOn: string;
+  createdAt: string;
+}
+
+/** One product's result in a shelf count. */
+export interface CountLine {
+  product: Product;
+  counted: number;
+  expected: number;
+  /** Negative: missing. Positive: more than recorded. */
+  difference: number;
+}
+
+/** A product line on a sale (stock out) or purchase (stock in). */
+export interface TransactionItemInput {
+  productId: string;
+  quantity: number;
+}
+
+export interface TransactionItem extends TransactionItemInput {
+  name: string;
+  unit: string;
 }
 
 /** One payment towards a credit sale (receivable) or bill on credit (payable). */
@@ -89,9 +147,13 @@ export type AlertType =
   | 'high_payable'
   | 'overdue_receivable'
   | 'unusual_expense'
-  | 'budget_exceeded';
+  | 'budget_exceeded'
+  | 'duplicate'
+  | 'anomaly'
+  | 'low_stock';
 
-export type AlertStatus = 'active' | 'acknowledged' | 'dismissed';
+/** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
+export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';
 
 export interface Alert {
   id: string;
