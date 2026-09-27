@@ -5,7 +5,7 @@ import './globals.css';
 import Providers from './providers';
 
 export const metadata: Metadata = {
-  title:       'Bookkeeping Agent',
+  title:       'Bookkeeping AI',
   description: 'AI-powered bookkeeping for small shop owners',
 };
 
