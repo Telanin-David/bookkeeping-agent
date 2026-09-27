@@ -14,7 +14,7 @@
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
 | 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
-| 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main |
+| 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
