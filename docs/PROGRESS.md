@@ -13,7 +13,7 @@
 | 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | merged to main (#20) |
 | 7b | Stock & Shelf Counting (owner's request) | ✅ Done | `feat/stock-tracking` | merged to main (#21) |
 | 8 | Alert Detection & Routing System (email) | ✅ Done | `feat/deliverable-8-alerts` | merged to main (#22) |
-| 9 | Excel Import & Validation Pipeline | 🟡 In review | `feat/deliverable-9-import` | — |
+| 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -151,7 +151,7 @@
     - A banner asking the owner to confirm their email.
     - The Alerts page links to email settings and uses everyday labels ("Customer owes you", "Bill due", "Low stock", "Recorded twice?").
   - **Known limit:** a low-stock alert that was already emailed as "running low" is not emailed again when the product runs out. The app does re-show it as active.
-  - **Fixed afterwards (`fix/bcrypt-6`):** `npm audit` flagged `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp` (an install-time risk). bcrypt is now 6; `npm audit` reports 0 vulnerabilities. Passwords hashed by bcrypt 5 still verify: an account created before the upgrade logs in, and a wrong password is refused.
+  - **Fixed afterwards (`fix/bcrypt-6`):** `npm audit` flagged `tar`, used through `bcrypt` 5 → `@mapbox/node-pre-gyp` (an install-time risk). bcrypt is now 6 and `npm audit` no longer reports `tar`. (It does report the frontend's Next.js; see "Before hosting".) Passwords hashed by bcrypt 5 still verify: an account created before the upgrade logs in, and a wrong password is refused.
 
 - **Deliverable 9: spreadsheet import.** Before this, only the upload worked; preview, check and import were placeholders that saved nothing. Migration `008_import_undo.sql`.
   - **Flow:**
