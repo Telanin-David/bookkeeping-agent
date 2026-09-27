@@ -74,8 +74,11 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
     const { content, type, mediaUrl } = req.body;
     const userMsg = await db.addChatMessage(session.id, 'user', content, type, mediaUrl);
 
-    const priorMessages = await db.listChatMessages(session.id, 1, HISTORY_LIMIT);
-    const history: Anthropic.MessageParam[] = priorMessages.data.map((m) => ({
+    // The newest messages, ending with the one just sent. The API needs the first one to be
+    // the owner's, so a window that starts on an assistant reply drops that reply.
+    const recent = await db.listRecentChatMessages(session.id, HISTORY_LIMIT);
+    const start = recent.findIndex((m) => m.role === 'user');
+    const history: Anthropic.MessageParam[] = recent.slice(start).map((m) => ({
       role: m.role,
       content: m.content,
     }));
