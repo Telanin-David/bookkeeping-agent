@@ -8,28 +8,26 @@ import { Transaction, TransactionType } from '../types';
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-// Opus 5 for the chat agent (accuracy matters — this creates real financial records).
-// Haiku 4.5 for one-shot category classification, where speed/cost matter more.
-const CHAT_MODEL = 'claude-opus-5';
+// Haiku 4.5 by default for the chat agent (the cheapest current model; each turn is short
+// and tool-driven), and always for one-shot category classification.
+const CHAT_MODEL = config.anthropic.chatModel;
 const CATEGORIZE_MODEL = 'claude-haiku-4-5';
 
-// Chat + a bounded tool loop; not "hard reasoning" work, so medium effort over high/xhigh.
-const CHAT_EFFORT: Anthropic.Beta.BetaOutputConfig['effort'] = 'medium';
-
-// Claude Opus 5's safety classifiers can occasionally decline a harmless request (a
-// "refusal"). With server-side fallbacks the API re-runs a declined request on the model
-// Anthropic recommends for that kind of refusal, in the same call, instead of the owner
-// getting "I couldn't help with that". 'default' picks the fallback model automatically.
-const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+// US$ per million tokens (input, output), for the usage log only. A 5-minute cache write
+// costs 1.25x input and a cache read 0.1x.
+const PRICES: Record<string, [number, number]> = {
+  'claude-haiku-4-5': [1, 5],
+  'claude-sonnet-5': [2, 10],
+  'claude-opus-5': [5, 25],
+};
 
 // Guards against a runaway tool-calling loop driving up cost on a stuck conversation.
 const MAX_TOOL_ITERATIONS = 6;
 
 const TRANSACTION_TYPES = ['sale', 'expense', 'receivable', 'payable'] as const;
 
-// Static across every request — the cache_control breakpoint below caches this
-// (and the tools array, which renders before it) so only the small per-shop
-// context block and the actual messages are paid for at full price each turn.
+// Static across every request, so it (and the tools array, which renders before it) sits at
+// the front of the prompt where the cache can reuse it.
 const SYSTEM_PROMPT = `You are the bookkeeping agent inside Bookkeeping AI, a chat-first app that helps small shop owners in Nigeria track their sales, expenses, and money owed to or by them — entirely through conversation, in plain everyday language, not accounting jargon.
 
 ## Recording transactions
@@ -58,7 +56,7 @@ When the owner asks for a receipt or invoice ("give me a receipt for Mama Nkechi
 ## Tone
 Warm, direct, and brief — the owner is running a shop, not reading a report. Use the shop's actual currency for every amount. If a request is genuinely outside what you can do here (it isn't about this shop's transactions), say so plainly.`;
 
-const TOOLS: Anthropic.Beta.BetaTool[] = [
+const TOOLS: Anthropic.Tool[] = [
   {
     name: 'record_transaction',
     description: 'Record one sale, expense, receivable (a customer owes the shop), or payable (the shop owes a supplier) that the owner just described. Call once per distinct transaction.',
@@ -401,34 +399,60 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
   }
 }
 
-/**
- * A response's content as it should be acted on and echoed back. When a fallback model
- * took over mid-answer, `fallback` blocks mark the switch: before the last one, only text
- * is kept (the declined model's tool calls and thinking are dropped, per the fallback
- * rules); everything after it is the fallback model's own answer and is kept as-is.
- */
-export function afterFallback(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlock[] {
-  let boundary = -1;
-  content.forEach((b, i) => { if (b.type === 'fallback') boundary = i; });
-  if (boundary === -1) return content;
-  return content.filter((b, i) => i > boundary || (i < boundary && b.type === 'text'));
+type Usage = { calls: number; input: number; cacheWrite: number; cacheRead: number; output: number };
+
+function addUsage(total: Usage, u: Anthropic.Usage): void {
+  total.calls += 1;
+  total.input += u.input_tokens;
+  total.cacheWrite += u.cache_creation_input_tokens ?? 0;
+  total.cacheRead += u.cache_read_input_tokens ?? 0;
+  total.output += u.output_tokens;
 }
 
-export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Beta.BetaMessageParam[]): Promise<ClaudeChatResult> {
-  const messages: Anthropic.Beta.BetaMessageParam[] = [...history];
+/** Estimated US$ cost of one owner message, or null for a model without a price above. */
+export function usageCost(model: string, u: Usage): number | null {
+  const price = PRICES[model];
+  if (!price) return null;
+  const [inPrice, outPrice] = price;
+  return (u.input * inPrice + u.cacheWrite * inPrice * 1.25 + u.cacheRead * inPrice * 0.1 + u.output * outPrice) / 1e6;
+}
+
+/** One line per owner message, so real usage (and the monthly bill) can be read off the logs. */
+function logUsage(ctx: ChatContext, u: Usage): void {
+  if (u.calls === 0) return;
+  const cost = usageCost(CHAT_MODEL, u);
+  console.info(`chat usage shop=${ctx.shopId} model=${CHAT_MODEL} calls=${u.calls} input=${u.input} ` +
+    `cache_write=${u.cacheWrite} cache_read=${u.cacheRead} output=${u.output}` +
+    (cost === null ? '' : ` cost_usd=${cost.toFixed(5)}`));
+}
+
+export async function sendChatMessage(ctx: ChatContext, history: Anthropic.MessageParam[]): Promise<ClaudeChatResult> {
+  const usage: Usage = { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+  try {
+    return await chatLoop(ctx, history, usage);
+  } finally {
+    logUsage(ctx, usage);
+  }
+}
+
+async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usage: Usage): Promise<ClaudeChatResult> {
+  const messages: Anthropic.MessageParam[] = [...history];
   const state: ToolState = { createdTransactionIds: [], paidDebtIds: [] };
   // Every transaction this turn created or marked paid; the chat shows each one.
   const touched = () => [...new Set([...state.createdTransactionIds, ...state.paidDebtIds])];
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    let response: Anthropic.Beta.BetaMessage;
+    let response: Anthropic.Message;
     try {
-      response = await client.beta.messages.create({
+      response = await client.messages.create({
         model: CHAT_MODEL,
-        betas: [FALLBACK_BETA],
-        fallbacks: 'default',
         max_tokens: 4096,
-        output_config: { effort: CHAT_EFFORT },
+        // Caches everything up to the newest message. A turn that uses a tool calls the
+        // model again with the same start plus the tool's result, and that second call
+        // reads the start from the cache at a tenth of the price. (A marker on the system
+        // prompt alone does nothing on Haiku 4.5: it only caches 4,096+ tokens, and the
+        // prompt and tools come to about 2,500.)
+        cache_control: { type: 'ephemeral' },
         system: [
           { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
           { type: 'text', text: dynamicContext(ctx) },
@@ -451,6 +475,8 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Beta.
       };
     }
 
+    addUsage(usage, response.usage);
+
     if (response.stop_reason === 'refusal') {
       return {
         reply: "I couldn't help with that one — could you rephrase it?",
@@ -459,15 +485,12 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Beta.
       };
     }
 
-    // If the requested model declined partway and a fallback model took over, only the
-    // fallback's part is real: drop the declined attempt's tool calls (they must not run)
-    // and other internal blocks, as the API requires when echoing the turn back.
-    const content = afterFallback(response.content);
+    const content = response.content;
     messages.push({ role: 'assistant', content });
 
     if (response.stop_reason !== 'tool_use') {
       const reply = content
-        .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map((b) => b.text)
         .join('')
         .trim();
@@ -478,9 +501,9 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Beta.
       };
     }
 
-    const toolUseBlocks = content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
-    const toolResults: Anthropic.Beta.BetaToolResultBlockParam[] = await Promise.all(
-      toolUseBlocks.map(async (block): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
+    const toolUseBlocks = content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+    const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+      toolUseBlocks.map(async (block): Promise<Anthropic.ToolResultBlockParam> => {
         try {
           const output = await executeTool(block.name, block.input, ctx, state);
           return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(output) };

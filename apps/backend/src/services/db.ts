@@ -664,6 +664,16 @@ export async function listChatMessages(sessionId: string, page = 1, limit = 50):
   return { data: rows.map(mapMessage), total: parseInt(countRows[0].count), page, limit };
 }
 
+/** The newest `limit` messages of a session, oldest first: the conversation the assistant sees. */
+export async function listRecentChatMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
+  const { rows } = await db.query(
+    `SELECT * FROM (SELECT * FROM chat_messages WHERE session_id = $1 ORDER BY created_at DESC LIMIT $2) recent
+     ORDER BY created_at ASC`,
+    [sessionId, limit],
+  );
+  return rows.map(mapMessage);
+}
+
 // ── Alerts ────────────────────────────────────────────────────
 export async function listAlerts(userId: string, opts: { shopId?: string; status?: AlertStatus; page: number; limit: number }): Promise<PaginatedResponse<Alert>> {
   const conditions = ['user_id = $1'];

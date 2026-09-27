@@ -68,6 +68,9 @@ export const config = {
 
   anthropic: {
     apiKey: required('ANTHROPIC_API_KEY'),
+    // The model behind the chat assistant. Haiku 4.5 is the cheapest current model and
+    // handles this app's short, tool-driven turns; set CHAT_MODEL to try another one.
+    chatModel: process.env['CHAT_MODEL'] || 'claude-haiku-4-5',
   },
 
   // Outgoing email over SMTP, which every email provider offers (Brevo, Amazon SES,

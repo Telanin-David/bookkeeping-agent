@@ -1,10 +1,8 @@
 const mockCreate = jest.fn();
 
-// Chat goes through client.beta.messages (for server-side fallbacks); categorization uses
-// client.messages. One mock records both, in call order.
+// Chat and categorization both go through client.messages; one mock records both, in call order.
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockCreate },
-  beta: { messages: { create: mockCreate } },
 })));
 
 jest.mock('./db');
@@ -14,7 +12,7 @@ jest.mock('./alerts');
 // Imported after the mocks above so the mocked modules are what claude.ts actually gets.
 import * as db from './db';
 import * as stock from './stock';
-import { sendChatMessage, categorizeTransaction, type ChatContext } from './claude';
+import { sendChatMessage, categorizeTransaction, usageCost, type ChatContext } from './claude';
 import type { Product, Transaction } from '../types';
 
 const mockDb = db as jest.Mocked<typeof db>;
@@ -36,12 +34,14 @@ const ctx: ChatContext = {
   currency: 'NGN',
 };
 
+const usage = { input_tokens: 3000, output_tokens: 100, cache_creation_input_tokens: 4000, cache_read_input_tokens: 0 };
+
 function textResponse(text: string) {
-  return { stop_reason: 'end_turn', content: [{ type: 'text', text }] };
+  return { stop_reason: 'end_turn', content: [{ type: 'text', text }], usage };
 }
 
 function toolUseResponse(name: string, input: unknown, id = 'tool-1') {
-  return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name, input }] };
+  return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name, input }], usage };
 }
 
 function fakeTransaction(overrides: Partial<Transaction> = {}): Transaction {
@@ -175,35 +175,42 @@ describe('sendChatMessage', () => {
     expect(result.extractedTransactionIds).toEqual([]);
   });
 
-  it('asks for server-side refusal fallbacks on every chat request', async () => {
+  it('asks Haiku 4.5 by default, caching the prompt up to the newest message', async () => {
     mockCreate.mockResolvedValueOnce(textResponse('Hello!'));
     await sendChatMessage(ctx, [{ role: 'user', content: 'hi' }]);
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'claude-opus-5', fallbacks: 'default', betas: ['server-side-fallback-2026-07-01'],
-    }));
+    const params = mockCreate.mock.calls[0][0];
+    expect(params).toEqual(expect.objectContaining({ model: 'claude-haiku-4-5', cache_control: { type: 'ephemeral' } }));
+    // Haiku 4.5 rejects effort, and the fallback beta is for Opus 5 / Fable.
+    expect(params).not.toHaveProperty('output_config');
+    expect(params).not.toHaveProperty('fallbacks');
   });
 
-  it('after a mid-answer fallback, runs only the fallback model’s tool calls', async () => {
+  it('logs one usage line per owner message, summed over its tool calls', async () => {
+    const info = jest.spyOn(console, 'info').mockImplementation(() => {});
     mockDb.searchTransactions.mockResolvedValue([]);
     mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: 'tool_use',
-        content: [
-          { type: 'text', text: 'Let me look that up.' },
-          { type: 'tool_use', id: 'declined', name: 'record_transaction', input: { type: 'sale', amount: 1, description: 'x' } },
-          { type: 'fallback', from: { model: 'claude-opus-5' }, to: { model: 'claude-opus-4-8' } },
-          { type: 'tool_use', id: 'kept', name: 'find_transactions', input: { counterparty: 'Musa' } },
-        ],
-      })
-      .mockResolvedValueOnce(textResponse('Musa has no unpaid debts.'));
+      .mockResolvedValueOnce(toolUseResponse('find_transactions', {}))
+      .mockResolvedValueOnce({ ...textResponse('Nothing found.'), usage: { input_tokens: 200, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 4000 } });
 
-    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'does Musa owe me?' }]);
+    await sendChatMessage(ctx, [{ role: 'user', content: 'does Musa owe me?' }]);
 
-    expect(mockDb.createTransaction).not.toHaveBeenCalled(); // the declined model's call never runs
-    expect(mockDb.searchTransactions).toHaveBeenCalledTimes(1);
-    const echoed = mockCreate.mock.calls[1][0].messages.find((m: { role: string }) => m.role === 'assistant');
-    expect(echoed.content.map((b: { type: string; id?: string }) => b.id ?? b.type)).toEqual(['text', 'kept']);
-    expect(result.reply).toBe('Musa has no unpaid debts.');
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info.mock.calls[0][0]).toBe(
+      'chat usage shop=shop-1 model=claude-haiku-4-5 calls=2 input=3200 cache_write=4000 cache_read=4000 output=150 cost_usd=0.00935',
+    );
+    info.mockRestore();
+  });
+
+  it('still logs usage when a later call fails', async () => {
+    const info = jest.spyOn(console, 'info').mockImplementation(() => {});
+    mockDb.searchTransactions.mockResolvedValue([]);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('find_transactions', {}))
+      .mockRejectedValueOnce(new Error('overloaded'));
+
+    await expect(sendChatMessage(ctx, [{ role: 'user', content: 'hi' }])).rejects.toThrow('overloaded');
+    expect(info.mock.calls[0][0]).toMatch(/calls=1 /);
+    info.mockRestore();
   });
 
   it('never sets receiptTransactionId for a transaction id that does not belong to this shop', async () => {
@@ -248,7 +255,7 @@ describe('sendChatMessage', () => {
   });
 
   it('returns a plain fallback reply on a refusal instead of surfacing raw stop details', async () => {
-    mockCreate.mockResolvedValueOnce({ stop_reason: 'refusal', content: [] });
+    mockCreate.mockResolvedValueOnce({ stop_reason: 'refusal', content: [], usage });
 
     const result = await sendChatMessage(ctx, [{ role: 'user', content: 'something disallowed' }]);
 
@@ -340,5 +347,19 @@ describe('categorizeTransaction', () => {
 
     expect(category).toBe('Groceries');
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-4-5' }));
+  });
+});
+
+describe('usageCost', () => {
+  it('prices cache writes at 1.25x and reads at 0.1x the input price', () => {
+    // Haiku 4.5: $1 in, $5 out per million tokens.
+    expect(usageCost('claude-haiku-4-5', { calls: 1, input: 1_000_000, cacheWrite: 0, cacheRead: 0, output: 0 })).toBeCloseTo(1);
+    expect(usageCost('claude-haiku-4-5', { calls: 1, input: 0, cacheWrite: 1_000_000, cacheRead: 0, output: 0 })).toBeCloseTo(1.25);
+    expect(usageCost('claude-haiku-4-5', { calls: 1, input: 0, cacheWrite: 0, cacheRead: 1_000_000, output: 0 })).toBeCloseTo(0.1);
+    expect(usageCost('claude-haiku-4-5', { calls: 1, input: 0, cacheWrite: 0, cacheRead: 0, output: 1_000_000 })).toBeCloseTo(5);
+  });
+
+  it('gives no figure for a model it has no price for', () => {
+    expect(usageCost('some-other-model', { calls: 1, input: 1, cacheWrite: 0, cacheRead: 0, output: 1 })).toBeNull();
   });
 });
