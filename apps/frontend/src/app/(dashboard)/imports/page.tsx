@@ -1,76 +1,156 @@
 'use client';
 import { useState } from 'react';
-import { importsApi } from '@/lib/api';
+import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { importsApi, downloadName } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { isDemoShop } from '@/lib/demo';
+import { shareOrDownload } from '@/lib/share';
+import { useShopsStore } from '@/store/shops';
 import PageWrapper from '@/components/layout/PageWrapper';
 import FileUpload from '@/components/imports/FileUpload';
 import ColumnMapper from '@/components/imports/ColumnMapper';
 import ValidationSummary from '@/components/imports/ValidationSummary';
-import type { ExcelImport } from '@/types';
+import Button from '@/components/ui/Button';
+import { formatDateTime } from '@/lib/utils';
+import type { ImportCheck, ImportMapping, ImportPreview, ImportResult } from '@/types';
 
-type Step = 'upload' | 'map' | 'validate' | 'done';
-
-interface ValidationResult {
-  importId: string;
-  totalRows: number;
-  validRows: number;
-  errorRows: number;
-  qualityScore: number;
-  errors: { row: number; field: string; message: string }[];
-}
+type Step = 'upload' | 'map' | 'check' | 'done';
+const STEPS: [Step, string][] = [['upload', 'Upload'], ['map', 'Match columns'], ['check', 'Check'], ['done', 'Done']];
 
 export default function ImportsPage() {
-  const [step, setStep]           = useState<Step>('upload');
-  const [job, setJob]             = useState<ExcelImport | null>(null);
-  const [preview, setPreview]     = useState<string[]>([]);
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [confirmLoading, setConfirmLoading] = useState(false);
+  const shop = useShopsStore((s) => s.activeShop());
+  const shopId = shop?.id ?? '';
+  const demo = isDemoShop(shopId);
+  const qc = useQueryClient();
+  const [step, setStep] = useState<Step>('upload');
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [mapping, setMapping] = useState<ImportMapping>({});
+  const [check, setCheck] = useState<ImportCheck | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
 
-  async function onUploaded(uploaded: ExcelImport) {
-    setJob(uploaded);
-    const { data } = await importsApi.preview(uploaded.id);
-    setPreview(data.detectedColumns);
-    setStep('map');
+  const { data: history = [] } = useQuery({
+    queryKey: ['imports', shopId], queryFn: () => importsApi.list(shopId), enabled: !!shopId && !demo,
+  });
+
+  function reset() {
+    setStep('upload'); setPreview(null); setCheck(null); setResult(null); setError('');
   }
 
-  async function onMapped(mapping: Record<string, string>) {
-    const { data } = await importsApi.validate(job!.id, mapping);
-    setValidation(data as ValidationResult);
-    setStep('validate');
+  async function run(fn: () => Promise<void>, fallback: string) {
+    setBusy(true); setError('');
+    try { await fn(); } catch (err) { setError(errorMessage(err, fallback)); } finally { setBusy(false); }
   }
 
-  async function onConfirm() {
-    setConfirmLoading(true);
-    try {
-      await importsApi.confirm(job!.id);
-      setStep('done');
-    } finally {
-      setConfirmLoading(false);
-    }
+  const onUploaded = (p: ImportPreview) => { setPreview(p); setMapping(p.suggestedMapping); setStep('map'); setNote(''); };
+
+  const onMapped = (m: ImportMapping) => run(async () => {
+    setMapping(m);
+    setCheck(await importsApi.validate(preview!.importId, m));
+    setStep('check');
+  }, "Couldn't check the rows. Try again.");
+
+  const onConfirm = (includeDuplicates: boolean) => run(async () => {
+    setResult(await importsApi.confirm(preview!.importId, includeDuplicates));
+    setStep('done');
+    // Everything that shows transactions, stock-free totals and alerts is now out of date.
+    qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+    qc.invalidateQueries({ queryKey: ['alerts'] });
+    qc.invalidateQueries({ queryKey: ['imports', shopId] });
+  }, "Couldn't import. Nothing was saved; try again.");
+
+  async function undo(importId: string, filename: string) {
+    if (!window.confirm(`Remove everything imported from "${filename}"? Payments you recorded against those debts are removed too.`)) return;
+    await run(async () => {
+      const { removed } = await importsApi.undo(importId);
+      setNote(`Removed ${removed} ${removed === 1 ? 'transaction' : 'transactions'} imported from ${filename}.`);
+      if (result?.importId === importId) reset();
+      qc.invalidateQueries({ queryKey: ['transactions', shopId] });
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+      qc.invalidateQueries({ queryKey: ['imports', shopId] });
+    }, "Couldn't undo the import. Try again.");
+  }
+
+  async function downloadTemplate() {
+    await run(async () => {
+      const res = await importsApi.template();
+      await shareOrDownload(res.data, downloadName(res.headers, 'bookkeeping-import-template.xlsx'), 'Import template');
+    }, "Couldn't download the template.");
   }
 
   return (
-    <PageWrapper title="Import Excel / CSV">
-      <div className="max-w-xl space-y-6">
-        {/* Step indicator */}
-        <div className="flex items-center gap-2 text-sm">
-          {(['upload', 'map', 'validate', 'done'] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
+    <PageWrapper title="Import from a spreadsheet">
+      <div className="max-w-2xl space-y-6">
+        <ol className="flex flex-wrap items-center gap-2 text-[13px]">
+          {STEPS.map(([s, label], i) => (
+            <li key={s} className="flex items-center gap-2">
               {i > 0 && <span className="text-white/20">›</span>}
-              <span className={step === s ? 'font-semibold capitalize text-white/85' : 'capitalize text-white/35'}>{s}</span>
-            </div>
+              <span className={step === s ? 'font-semibold text-white/85' : 'text-white/35'}>{label}</span>
+            </li>
           ))}
-        </div>
+        </ol>
 
-        {step === 'upload'   && <FileUpload onUploaded={onUploaded} />}
-        {step === 'map'      && <ColumnMapper detectedColumns={preview} onSubmit={onMapped} />}
-        {step === 'validate' && validation && (
-          <ValidationSummary result={validation} onConfirm={onConfirm} loading={confirmLoading} />
-        )}
-        {step === 'done' && (
-          <div className="glass-card rounded-2xl p-8 text-center">
-            <p className="text-lg font-semibold text-white/75">Import complete!</p>
-            <p className="mt-1 text-sm text-white/50">Your transactions have been imported.</p>
-          </div>
+        {demo ? (
+          <div className="glass-card rounded-2xl p-5 text-[14px] text-white/55">Importing adds real records, so it isn&apos;t available in demo mode.</div>
+        ) : (
+          <>
+            {step === 'upload' && (
+              <div className="space-y-3">
+                <FileUpload onUploaded={onUploaded} />
+                <p className="text-[13px] text-white/45">
+                  Already keep your sales in Excel or Google Sheets? Upload it as it is: we&apos;ll match the columns.
+                  Starting fresh?{' '}
+                  <button type="button" onClick={downloadTemplate} className="text-white/75 underline underline-offset-2">Download a template</button>.
+                </p>
+              </div>
+            )}
+            {step === 'map' && preview && (
+              <ColumnMapper preview={preview} initial={mapping} loading={busy} error={error} onSubmit={onMapped} onCancel={reset} />
+            )}
+            {step === 'check' && check && (
+              <ValidationSummary result={check} loading={busy} error={error} onConfirm={onConfirm} onBack={() => { setError(''); setStep('map'); }} />
+            )}
+            {step === 'done' && result && (
+              <div className="glass-card space-y-3 rounded-2xl p-6">
+                <p className="text-lg font-semibold text-white/90">Imported {result.imported} {result.imported === 1 ? 'transaction' : 'transactions'}</p>
+                {result.skipped > 0 && <p className="text-[14px] text-white/55">{result.skipped} {result.skipped === 1 ? 'row was' : 'rows were'} left out.</p>}
+                <p className="text-[13px] text-white/45">Credit sales past their due date now show as overdue, with an alert.</p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Link href="/transactions"><Button>See transactions</Button></Link>
+                  <Button variant="secondary" onClick={reset}>Import another file</Button>
+                  <Button variant="ghost" onClick={() => undo(result.importId, preview?.filename ?? 'this file')} loading={busy}>Undo this import</Button>
+                </div>
+              </div>
+            )}
+            {note && <p className="text-[13px] text-white/60" role="status">{note}</p>}
+            {step !== 'map' && step !== 'check' && error && <p className="text-[13px] text-white/70" role="alert">{error}</p>}
+
+            {history.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">Past imports</p>
+                <ul className="glass-card divide-y divide-white/[0.05] rounded-2xl">
+                  {history.map((h) => (
+                    <li key={h.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] text-white/85">{h.filename}</p>
+                        <p className="text-[12px] text-white/40">
+                          {formatDateTime(h.createdAt)} · {h.status === 'undone' ? `undone (${h.importedRows ?? 0} removed)` : `${h.importedRows ?? 0} imported`}
+                        </p>
+                      </div>
+                      {h.status === 'confirmed' && (h.importedRows ?? 0) > 0 && (
+                        <button type="button" onClick={() => undo(h.id, h.filename)} disabled={busy} className="text-[13px] text-white/50 underline-offset-2 hover:text-white/85 hover:underline disabled:opacity-40">
+                          Undo
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </div>
     </PageWrapper>
