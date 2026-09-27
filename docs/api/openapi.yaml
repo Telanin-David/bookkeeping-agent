@@ -1372,12 +1372,46 @@ paths:
           $ref: '#/components/responses/InternalError'
 
   # ── IMPORTS ──────────────────────────────────
+  # Flow: upload (returns a preview with guessed columns) → validate (checks every row with
+  # the chosen columns) → confirm (imports, all or nothing) → undo if it was a mistake.
+  /imports/template:
+    get:
+      tags: [imports]
+      summary: Download an .xlsx template with the columns the import understands
+      responses:
+        '200':
+          description: Spreadsheet
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+
+  /imports:
+    get:
+      tags: [imports]
+      summary: A shop's finished (and undone) imports, newest first
+      parameters:
+        - { name: shopId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Imports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ImportJob' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /imports/upload:
     post:
       tags: [imports]
-      summary: Upload an Excel or CSV file for processing
-      description: Max 10 MB. Returns an importId to use in subsequent steps.
-      x-rateLimit: '10 requests per hour'
+      summary: Upload a spreadsheet (.xlsx or .csv) and get a preview
+      description: |
+        Up to 5 MB, first sheet only, up to 5,000 rows. The file type is read from its bytes;
+        old .xls files and anything else get a 422 saying how to fix it. The header row is found
+        among the first 10 rows (a title above it is fine). The file is stored under a
+        server-chosen name and deleted once imported.
+      x-rateLimit: '30 per hour per user'
       requestBody:
         required: true
         content:
@@ -1386,127 +1420,84 @@ paths:
               type: object
               required: [file, shopId]
               properties:
-                file:
-                  type: string
-                  format: binary
-                shopId:
-                  type: string
-                  format: uuid
+                file: { type: string, format: binary }
+                shopId: { type: string, format: uuid }
       responses:
-        '202':
-          description: File accepted; schema detection in progress
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportJob'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '413':
-          description: File too large (max 10 MB)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /imports/{importId}/validate:
-    parameters:
-      - $ref: '#/components/parameters/importId'
-    post:
-      tags: [imports]
-      summary: Run validation on an uploaded file
-      description: Validates all rows and returns per-row errors.
-      x-rateLimit: '10 requests per hour'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ImportColumnMapping'
-      responses:
-        '200':
-          description: Validation results
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportValidationResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Read; here is a preview
+          content: { application/json: { schema: { $ref: '#/components/schemas/ImportPreview' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { description: Larger than 5 MB }
+        '422': { description: Not a readable spreadsheet, no header row, or no rows }
 
   /imports/{importId}/preview:
-    parameters:
-      - $ref: '#/components/parameters/importId'
     get:
       tags: [imports]
-      summary: Preview first 20 rows with detected schema
-      x-rateLimit: '30 requests per minute'
+      summary: The preview again (headers, first rows, guessed columns)
+      parameters:
+        - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        '200':
-          description: Preview data + detected column mappings
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportPreview'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
+        '200': { description: Preview, content: { application/json: { schema: { $ref: '#/components/schemas/ImportPreview' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: The uploaded file is gone (already imported) }
 
-  /imports/{importId}/confirm:
-    parameters:
-      - $ref: '#/components/parameters/importId'
+  /imports/{importId}/validate:
     post:
       tags: [imports]
-      summary: Confirm and ingest validated rows into the database
-      description: Only rows that passed validation are ingested. Error rows are skipped unless `skipErrors` is false.
-      x-rateLimit: '5 requests per hour'
+      summary: Check every row with the chosen columns
+      description: |
+        Dates are read day first (25/09/2026) unless the column is clearly month first; Excel date
+        cells and serials, ISO and month names also work. Amounts may be written 5000, 5,000,
+        ₦5,000, NGN 5000, 5k or (1,000). Types are everyday words (sale, sold, expense, bought,
+        credit sale, owed, bill…); without a Type column, Money in / Money out columns or
+        defaultType decide. Rows matching a transaction already in the shop (same date, amount,
+        type and description) are counted as duplicates. Rows without any amount are skipped.
+      parameters:
+        - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
       requestBody:
         required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ImportMapping' } } }
+      responses:
+        '200': { description: Check result, content: { application/json: { schema: { $ref: '#/components/schemas/ImportCheck' } } } }
+        '400': { description: The mapping can't work (plain-English message) }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Already imported }
+
+  /imports/{importId}/confirm:
+    post:
+      tags: [imports]
+      summary: Import the checked rows (all or nothing)
+      description: |
+        Rows with problems are left out; duplicates too unless includeDuplicates. Credit sales and
+        bills get their Paid amount recorded as a payment dated the day of the sale. Debts already
+        past due are marked overdue and raise alerts. A second confirm returns 409.
+      parameters:
+        - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                skipErrors:
-                  type: boolean
-                  default: true
-                  description: If false, abort if any row has errors.
+                includeDuplicates: { type: boolean, default: false }
+      responses:
+        '200': { description: Imported, content: { application/json: { schema: { $ref: '#/components/schemas/ImportResult' } } } }
+        '400': { description: Not checked yet }
+        '409': { description: Already imported }
+
+  /imports/{importId}/undo:
+    post:
+      tags: [imports]
+      summary: Remove everything an import created
+      description: Payments recorded against its debts are removed with them. Only a finished import can be undone, once.
+      parameters:
+        - { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
         '200':
-          description: Ingestion summary
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: Import already confirmed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
+          description: Undone
+          content: { application/json: { schema: { type: object, properties: { removed: { type: integer } } } } }
+        '409': { description: Not a finished import, or already undone }
 
-# ─────────────────────────────────────────────
-# COMPONENTS
-# ─────────────────────────────────────────────
 components:
 
   securitySchemes:
@@ -2273,111 +2264,71 @@ components:
     ImportJob:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        shopId:
-          type: string
-          format: uuid
-        filename:
-          type: string
-        status:
-          type: string
-          enum: [uploaded, validating, validated, confirmed, failed]
-        rowCount:
-          type: integer
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
+        id: { type: string, format: uuid }
+        shopId: { type: string, format: uuid }
+        filename: { type: string }
+        status: { type: string, enum: [uploaded, validating, validated, confirmed, failed, undone] }
+        rowCount: { type: integer, nullable: true }
+        importedRows: { type: integer, nullable: true }
+        skippedRows: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
 
-    ImportColumnMapping:
+    ImportMapping:
       type: object
-      description: Maps detected file columns to known transaction fields
+      description: Spreadsheet header names for each field; leave out what the file doesn't have.
       properties:
-        date:
+        date: { type: string }
+        amount: { type: string }
+        moneyIn: { type: string }
+        moneyOut: { type: string }
+        description: { type: string }
+        type: { type: string }
+        counterparty: { type: string }
+        category: { type: string }
+        dueDate: { type: string }
+        paid: { type: string, description: 'yes / no / amount paid, for credit sales and bills' }
+        defaultType:
           type: string
-          description: Column name in file that maps to transaction date
-        amount:
-          type: string
-        description:
-          type: string
-        type:
-          type: string
-        counterparty:
-          type: string
-        category:
-          type: string
-
-    ImportValidationResult:
-      type: object
-      properties:
-        importId:
-          type: string
-          format: uuid
-        totalRows:
-          type: integer
-        validRows:
-          type: integer
-        errorRows:
-          type: integer
-        qualityScore:
-          type: number
-          format: float
-          description: 0.0–1.0 data quality score
-        errors:
-          type: array
-          items:
-            type: object
-            properties:
-              row:
-                type: integer
-              field:
-                type: string
-              message:
-                type: string
+          enum: [sale, expense, receivable, payable, sign]
+          description: What every row is when there's no Type or Money in/out column. sign = positive is money in, negative is money out.
 
     ImportPreview:
       type: object
       properties:
-        importId:
-          type: string
-          format: uuid
-        detectedColumns:
+        importId: { type: string, format: uuid }
+        filename: { type: string }
+        headers: { type: array, items: { type: string } }
+        sampleRows: { type: array, items: { type: array, items: { type: string } } }
+        totalRows: { type: integer }
+        truncated: { type: boolean }
+        suggestedMapping: { $ref: '#/components/schemas/ImportMapping' }
+
+    ImportCheck:
+      type: object
+      properties:
+        importId: { type: string, format: uuid }
+        totalRows: { type: integer }
+        validRows: { type: integer, description: Ready to import (not counting duplicates) }
+        errorRows: { type: integer }
+        duplicateRows: { type: integer }
+        emptyRows: { type: integer, description: Lines with no amount (titles, subtotals), skipped }
+        qualityScore: { type: number, description: 'Share of rows with an amount that are readable, 0–1' }
+        problems:
           type: array
-          items:
-            type: object
-            properties:
-              columnName:
-                type: string
-              detectedType:
-                type: string
-                enum: [date, amount, text, unknown]
-              suggestedMapping:
-                type: string
-        previewRows:
+          items: { type: object, properties: { row: { type: integer }, field: { type: string }, message: { type: string } } }
+        duplicates:
           type: array
-          maxItems: 20
-          items:
-            type: object
-            additionalProperties: true
+          items: { type: object, properties: { row: { type: integer }, date: { type: string, format: date }, amount: { type: number }, description: { type: string } } }
+        counts: { type: object, additionalProperties: { type: integer } }
+        moneyIn: { type: number }
+        moneyOut: { type: number }
+        dateRange: { type: object, nullable: true, properties: { from: { type: string, format: date }, to: { type: string, format: date } } }
+        truncated: { type: boolean }
 
     ImportResult:
       type: object
       properties:
-        importId:
-          type: string
-          format: uuid
-        rowsIngested:
-          type: integer
-        rowsSkipped:
-          type: integer
-        detectedPatterns:
-          type: object
-          properties:
-            topCategory:
-              type: string
-            estimatedMonthlyRevenue:
-              type: number
-            estimatedMonthlyExpenses:
-              type: number
+        importId: { type: string, format: uuid }
+        imported: { type: integer }
+        skipped: { type: integer }
+        counts: { type: object, additionalProperties: { type: integer } }

@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  AdminOverview, AdminUser, AlertSettings, DailyUsage, CountLine, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AdminOverview, AdminUser, AlertSettings, DailyUsage, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -265,30 +265,31 @@ export const alertsApi = {
 
 // ── Imports ───────────────────────────────────────────────────
 export const importsApi = {
+  /** Uploads and reads the file; the reply is a preview with guessed columns. */
   upload: (shopId: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
     form.append('shopId', shopId);
-    return api.post<ExcelImport>('/api/v1/imports/upload', form, {
+    return api.post<ImportPreview>('/api/v1/imports/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    }).then((r) => r.data);
   },
 
-  preview: (importId: string) =>
-    api.get<{ importId: string; detectedColumns: string[]; previewRows: Record<string, unknown>[] }>(
-      `/api/v1/imports/${importId}/preview`,
-    ),
+  /** Checks every row with these column choices. */
+  validate: (importId: string, mapping: ImportMapping) =>
+    api.post<ImportCheck>(`/api/v1/imports/${importId}/validate`, mapping).then((r) => r.data),
 
-  validate: (importId: string, columnMapping: Record<string, string>) =>
-    api.post<{ importId: string; totalRows: number; validRows: number; errorRows: number; qualityScore: number; errors: unknown[] }>(
-      `/api/v1/imports/${importId}/validate`,
-      columnMapping,
-    ),
+  confirm: (importId: string, includeDuplicates: boolean) =>
+    api.post<ImportResult>(`/api/v1/imports/${importId}/confirm`, { includeDuplicates }).then((r) => r.data),
 
-  confirm: (importId: string) =>
-    api.post<{ importId: string; rowsIngested: number; rowsSkipped: number; detectedPatterns: Record<string, unknown> }>(
-      `/api/v1/imports/${importId}/confirm`,
-    ),
+  undo: (importId: string) =>
+    api.post<{ removed: number }>(`/api/v1/imports/${importId}/undo`).then((r) => r.data),
+
+  list: (shopId: string) =>
+    api.get<{ data: ExcelImport[] }>('/api/v1/imports', { params: { shopId } }).then((r) => r.data.data),
+
+  template: () =>
+    api.get<Blob>('/api/v1/imports/template', { responseType: 'blob' }),
 };
 
 export default api;

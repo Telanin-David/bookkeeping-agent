@@ -212,12 +212,7 @@ export interface Alert {
   updatedAt: string;
 }
 
-export type ImportStatus =
-  | 'uploaded'
-  | 'validating'
-  | 'validated'
-  | 'confirmed'
-  | 'failed';
+export type ImportStatus = 'uploaded' | 'validating' | 'validated' | 'confirmed' | 'failed' | 'undone';
 
 export interface ExcelImport {
   id: string;
@@ -231,8 +226,51 @@ export interface ExcelImport {
   qualityScore?: number;
   columnMapping?: Record<string, string>;
   errorLog?: unknown[];
+  importedRows?: number;
+  skippedRows?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ImportField = 'date' | 'amount' | 'moneyIn' | 'moneyOut' | 'description' | 'type' | 'counterparty' | 'category' | 'dueDate' | 'paid';
+
+/** Which spreadsheet column holds each field, and what the rows are when no column says. */
+export type ImportMapping = Partial<Record<ImportField, string>> & {
+  defaultType?: 'sale' | 'expense' | 'receivable' | 'payable' | 'sign';
+};
+
+export interface ImportPreview {
+  importId: string;
+  filename: string;
+  headers: string[];
+  sampleRows: string[][];
+  totalRows: number;
+  truncated: boolean;
+  suggestedMapping: ImportMapping;
+}
+
+export interface ImportCheck {
+  importId: string;
+  totalRows: number;
+  validRows: number;
+  errorRows: number;
+  duplicateRows: number;
+  emptyRows: number;
+  qualityScore: number;
+  problems: { row: number; field: string; message: string }[];
+  duplicates: { row: number; date: string; amount: number; description?: string }[];
+  counts: Record<TransactionType, number>;
+  moneyIn: number;
+  moneyOut: number;
+  dateRange: { from: string; to: string } | null;
+  truncated: boolean;
+}
+
+export interface ImportResult {
+  importId: string;
+  imported: number;
+  skipped: number;
+  counts: Record<TransactionType, number>;
 }
 
 export interface PaginatedResponse<T> {

@@ -5,7 +5,7 @@ export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'du
 /** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
 export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';
 export type AlertChannel = 'email' | 'sms' | 'whatsapp' | 'in_app';
-export type ImportStatus = 'uploaded' | 'validating' | 'validated' | 'confirmed' | 'failed';
+export type ImportStatus = 'uploaded' | 'validating' | 'validated' | 'confirmed' | 'failed' | 'undone';
 export type MessageRole = 'user' | 'assistant';
 export type MessageType = 'text' | 'voice' | 'image';
 
@@ -180,6 +180,8 @@ export interface ExcelImport {
   qualityScore?: number;
   columnMapping?: Record<string, string>;
   errorLog?: unknown[];
+  importedRows?: number;
+  skippedRows?: number;
   createdAt: Date;
   updatedAt: Date;
 }
