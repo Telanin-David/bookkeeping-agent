@@ -4,6 +4,7 @@ import { requireAuth, requireShopOwnership } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
+import * as stock from '../services/stock';
 import { categorizeTransaction } from '../services/claude';
 import { todayIso } from '../utils/dates';
 
@@ -14,7 +15,7 @@ router.use(requireAuth);
 // user could write transactions into someone else's shop just by knowing its id.
 router.use(requireShopOwnership((req) => req.params['shopId']));
 
-const createSchema = z.object({
+const baseSchema = z.object({
   type: z.enum(['sale', 'expense', 'receivable', 'payable']),
   amount: z.number().positive(),
   currency: z.string().default('NGN'),
@@ -25,7 +26,16 @@ const createSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
-const updateSchema = createSchema.extend({
+// Products sold (stock off the shelf) or bought (stock onto it) in this transaction.
+const createSchema = baseSchema.extend({
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.number().positive().max(1_000_000),
+  })).max(50).optional(),
+});
+
+// Items can't be edited after the fact: delete the transaction and record it again.
+const updateSchema = baseSchema.extend({
   status: z.enum(['pending', 'settled', 'overdue']).optional(),
 }).partial();
 
@@ -60,14 +70,12 @@ router.post('/', validate(createSchema), async (req: Request, res: Response, nex
       }
     }
 
-    const tx = await db.createTransaction({
-      shopId: req.params['shopId']!,
-      userId: req.user!.id,
-      ...req.body,
-      category,
-      aiCategorized,
-    });
-    res.status(201).json(tx);
+    const { items, ...fields } = req.body as z.infer<typeof createSchema>;
+    const data = { shopId: req.params['shopId']!, userId: req.user!.id, ...fields, category, aiCategorized };
+    const tx = items?.length
+      ? await stock.createTransactionWithItems(data, items)
+      : await db.createTransaction(data);
+    res.status(201).json({ ...tx, items: items?.length ? await stock.getTransactionItems(tx.id) : [] });
   } catch (err) { next(err); }
 });
 
@@ -75,7 +83,7 @@ router.get('/:transactionId', async (req: Request, res: Response, next: NextFunc
   try {
     const tx = await db.findTransactionById(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
     if (!tx) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
-    res.json(tx);
+    res.json({ ...tx, items: await stock.getTransactionItems(tx.id) });
   } catch (err) { next(err); }
 });
 
@@ -100,8 +108,13 @@ router.patch('/:transactionId', validate(updateSchema), async (req: Request, res
       }
     }
 
+    if (changes.type && await stock.wouldFlipStock(txId, current.type, changes.type)) {
+      throw new AppError(400, 'BAD_REQUEST', 'This transaction moved stock, so it can’t be switched between a sale and a purchase. Delete it and record it again.');
+    }
+
     let tx = await db.updateTransaction(txId, shopId, userId, isDebt(current.type) ? changes : { ...changes, status });
     if (!tx) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
+    if (changes.date && changes.date !== current.date) await stock.moveTransactionItems(txId, changes.date);
 
     // A debt's status follows its payments. "Settled" pays off what's left today;
     // "pending" reopens it by removing its payments.
@@ -169,7 +182,8 @@ router.delete('/:transactionId/payments/:paymentId', async (req: Request, res: R
 
 router.delete('/:transactionId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const deleted = await db.deleteTransaction(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
+    // Any stock the transaction moved goes back with it.
+    const deleted = await stock.deleteTransactionWithStock(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
     if (!deleted) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
     res.status(204).send();
   } catch (err) { next(err); }

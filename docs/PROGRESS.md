@@ -10,7 +10,7 @@
 | 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | merged to main |
 | 5 | Claude Integration & System Prompt | ✅ Done | `feat/deliverable-5-claude-integration` | merged to main (#16) |
 | 6 | Authentication & Authorization System | ✅ Done | `feat/deliverable-6-auth` | merged to main (#18, #19) |
-| 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | — |
+| 7 | Report Generation & PDF Templates | ✅ Done | `feat/deliverable-7-reports` | merged to main (#20) |
 | 8 | Alert Detection & Routing System | ⬜ Not started | — | — |
 | 9 | Excel Import & Validation Pipeline | ⬜ Not started | — | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |

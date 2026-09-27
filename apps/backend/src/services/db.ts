@@ -268,16 +268,21 @@ export async function findTransactionById(id: string, shopId: string, userId: st
   return rows[0] ? mapTransaction(rows[0]) : null;
 }
 
-export async function createTransaction(data: {
+/** db itself, or a client inside a BEGIN … COMMIT. */
+export type Queryable = { query: typeof db.query };
+
+export type NewTransaction = {
   shopId: string; userId: string; type: TransactionType; amount: number;
   currency?: string; description?: string; category?: string;
   counterparty?: string; date: string; dueDate?: string; aiCategorized?: boolean;
   status?: TransactionStatus;
-}): Promise<Transaction> {
+};
+
+export async function createTransaction(data: NewTransaction, client: Queryable = db): Promise<Transaction> {
   // Sales and expenses change hands on the spot; only receivables/payables are still owed.
   // (The column's own default is 'pending', which printed cash sales as "Balance due".)
   const status = data.status ?? (data.type === 'sale' || data.type === 'expense' ? 'settled' : 'pending');
-  const { rows } = await db.query(
+  const { rows } = await client.query(
     `INSERT INTO transactions
        (shop_id, user_id, type, amount, currency, description, category, counterparty, date, due_date, ai_categorized, status)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
@@ -310,14 +315,6 @@ export async function updateTransaction(id: string, shopId: string, userId: stri
     values,
   );
   return rowCount ? findTransactionById(id, shopId, userId) : null;
-}
-
-export async function deleteTransaction(id: string, shopId: string, userId: string): Promise<boolean> {
-  const { rowCount } = await db.query(
-    'DELETE FROM transactions WHERE id = $1 AND shop_id = $2 AND user_id = $3',
-    [id, shopId, userId],
-  );
-  return (rowCount ?? 0) > 0;
 }
 
 /** Used by the chat agent's find_transactions tool — free-text search rather than exact filters. */
@@ -427,7 +424,7 @@ export async function removeDebtPayments(
 }
 
 /** Sets a debt's status from its payments: settled when covered, otherwise not settled. */
-async function syncDebtStatus(client: { query: typeof db.query }, transactionId: string): Promise<void> {
+async function syncDebtStatus(client: Queryable, transactionId: string): Promise<void> {
   await client.query(
     `UPDATE transactions t SET status = CASE
          WHEN COALESCE((SELECT SUM(amount) FROM debt_payments WHERE transaction_id = t.id), 0) >= t.amount THEN 'settled'
