@@ -9,12 +9,12 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import type { ReportType } from '@/types';
 
-// Receipts are per-transaction, so they live in the Receipts tab. The stock report
-// arrives with stock tracking — until then it isn't offered.
-type DateRangeReport = Exclude<ReportType, 'receipt' | 'stock'>;
+// Receipts are per-transaction, so they live in the Receipts tab.
+type DateRangeReport = Exclude<ReportType, 'receipt'>;
 const REPORT_TYPES: { value: DateRangeReport; label: string; hint: string }[] = [
   { value: 'pl',     label: 'Profit & Loss', hint: 'What you earned, what you spent, and your profit for the period.' },
   { value: 'credit', label: 'Credit Report', hint: 'Who owes you, how much and how late — plus bills you still owe.' },
+  { value: 'stock',  label: 'Stock Report',  hint: 'What is on your shelves, what is running low, and anything found missing at a count.' },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');

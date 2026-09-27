@@ -1,11 +1,11 @@
 'use client';
 import { useState, type FormEvent } from 'react';
-import { isAxiosError } from 'axios';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { usePayments, useRecordPayment, useRemovePayment, useTransaction } from '@/hooks/useTransactions';
 import { formatCurrency, formatDate, todayInLagos, cn } from '@/lib/utils';
+import { errorMessage } from '@/lib/errors';
 import type { Transaction } from '@/types';
 
 interface PaymentModalProps {
@@ -15,16 +15,7 @@ interface PaymentModalProps {
   onClose: () => void;
 }
 
-/** The server explains refusals in plain words ("That's more than is still owed…"); show them as-is. */
-function errorMessage(err: unknown): string {
-  if (isAxiosError(err)) {
-    const status = err.response?.status ?? 0;
-    const message: unknown = err.response?.data?.message;
-    if (status >= 400 && status < 500 && typeof message === 'string') return message;
-    return "Couldn't save that. Check your connection and try again.";
-  }
-  return err instanceof Error ? err.message : "Couldn't save that. Try again.";
-}
+const SAVE_FAILED = "Couldn't save that. Check your connection and try again.";
 
 function Figure({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -66,7 +57,7 @@ function PaymentForm({ shopId, tx: initial, onClose }: { shopId: string; tx: Tra
       await record.mutateAsync({ txId: tx.id, amount: value, paidOn });
       onClose();
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorMessage(err, SAVE_FAILED));
     }
   }
 
@@ -76,7 +67,7 @@ function PaymentForm({ shopId, tx: initial, onClose }: { shopId: string; tx: Tra
       const updated = await remove.mutateAsync({ txId: tx.id, paymentId });
       setAmount(String(updated.balance));
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorMessage(err, SAVE_FAILED));
     }
   }
 

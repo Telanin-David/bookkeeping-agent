@@ -10,6 +10,7 @@ import { errorHandler } from './middleware/errorHandler';
 import authRoutes        from './routes/auth';
 import shopRoutes        from './routes/shops';
 import transactionRoutes from './routes/transactions';
+import stockRoutes       from './routes/stock';
 import chatRoutes        from './routes/chat';
 import reportRoutes      from './routes/reports';
 import alertRoutes       from './routes/alerts';
@@ -39,6 +40,7 @@ app.get('/api/v1/health', (_req, res) => {
 app.use('/api/v1/auth',                        authRoutes);
 app.use('/api/v1/shops',                       shopRoutes);
 app.use('/api/v1/shops/:shopId/transactions',  transactionRoutes);
+app.use('/api/v1/shops/:shopId/stock',         stockRoutes);
 app.use('/api/v1/chat',                        chatRoutes);
 app.use('/api/v1/reports',                     reportRoutes);
 app.use('/api/v1/alerts',                      alertRoutes);

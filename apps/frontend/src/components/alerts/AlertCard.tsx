@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Check, X } from '@phosphor-icons/react';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -34,6 +35,11 @@ export default function AlertCard({ alert, onAcknowledge, onDismiss }: AlertCard
             <Badge>{capitalize(alert.type.replace(/_/g, ' '))}</Badge>
           </div>
           <p className="text-sm text-white/75 leading-relaxed">{alert.message}</p>
+          {alert.type === 'low_stock' && alert.status !== 'resolved' && (
+            <Link href="/stock" className="mt-1.5 inline-block text-[13px] text-white/55 underline-offset-2 hover:text-white/85 hover:underline">
+              Go to stock
+            </Link>
+          )}
           <p className="mt-1.5 text-xs text-white/30">{formatDateTime(alert.createdAt)}</p>
         </div>
         {alert.status === 'active' && (

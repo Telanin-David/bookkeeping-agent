@@ -1,8 +1,9 @@
 export type TransactionType = 'sale' | 'expense' | 'receivable' | 'payable';
 export type TransactionStatus = 'pending' | 'settled' | 'overdue';
 export type ShopType = 'retail' | 'wholesale' | 'services' | 'food' | 'other';
-export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'duplicate' | 'anomaly';
-export type AlertStatus = 'active' | 'acknowledged' | 'dismissed';
+export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'duplicate' | 'anomaly' | 'low_stock';
+/** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
+export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';
 export type AlertChannel = 'email' | 'sms' | 'whatsapp' | 'in_app';
 export type ImportStatus = 'uploaded' | 'validating' | 'validated' | 'confirmed' | 'failed';
 export type MessageRole = 'user' | 'assistant';
@@ -64,6 +65,51 @@ export interface Transaction {
   importId?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ── Stock ─────────────────────────────────────────────────────
+export type StockMovementKind = 'opening' | 'restock' | 'sale' | 'count' | 'adjustment';
+
+export interface Product {
+  id: string;
+  shopId: string;
+  name: string;
+  /** What one of it is called: bag, carton, piece, litre… */
+  unit: string;
+  /** On hand now, according to the records. Can go below 0 if sales outrun recorded stock. */
+  quantity: number;
+  /** Warn when the quantity falls to this or below; null = never warn. */
+  lowStockLevel: number | null;
+  costPrice: number | null;
+  sellingPrice: number | null;
+  /** At or below its low-stock level (or out). */
+  isLow: boolean;
+  /** Date of the last shelf count, if any. */
+  lastCountedOn: string | null;
+  archived: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  productName?: string;
+  kind: StockMovementKind;
+  /** + into stock, − out of stock. */
+  change: number;
+  /** For a shelf count: what was actually on the shelf. */
+  counted: number | null;
+  transactionId: string | null;
+  note: string | null;
+  occurredOn: string;
+  createdAt: Date;
+}
+
+/** A product line on a sale (stock out) or a purchase (stock in). */
+export interface TransactionItem {
+  productId: string;
+  quantity: number;
 }
 
 /** One payment towards a receivable (customer paying the shop) or payable (shop paying a supplier). */

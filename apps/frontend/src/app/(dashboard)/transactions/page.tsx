@@ -11,6 +11,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import type { Transaction, TransactionType, TransactionStatus } from '@/types';
+import type { NewTransactionBody } from '@/lib/api';
 
 interface Filters {
   type?: TransactionType;
@@ -30,7 +31,7 @@ export default function TransactionsPage() {
   // which would count the same income twice.
   const [paying, setPaying] = useState<Transaction | null>(null);
 
-  async function handleCreate(values: Omit<Transaction, 'id' | 'shopId' | 'userId' | 'aiCategorized' | 'amountPaid' | 'balance' | 'createdAt' | 'updatedAt'>) {
+  async function handleCreate(values: NewTransactionBody) {
     await createTx.mutateAsync(values);
     setShowForm(false);
   }

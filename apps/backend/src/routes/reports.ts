@@ -7,7 +7,8 @@ import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import { sendReportEmail } from '../services/email';
 import { loadBrandingImage } from '../services/storage';
-import { renderReceipt, renderProfitAndLoss, renderCreditReport, receiptNumber } from '../services/pdf';
+import * as stock from '../services/stock';
+import { renderReceipt, renderProfitAndLoss, renderCreditReport, renderStockReport, receiptNumber } from '../services/pdf';
 import { todayIso } from '../utils/dates';
 import type { Shop } from '../types';
 
@@ -115,11 +116,23 @@ router.post('/credit', limiter(10), validate(dateRangeSchema), ownShop, async (r
   } catch (err) { next(err); }
 });
 
-// A stock report needs products and quantities, which the app doesn't record yet — it
-// arrives with stock tracking. Until then say so plainly rather than print a made-up PDF.
-// Same checks as the other reports, so the future stock report inherits them.
-router.post('/stock', limiter(10), validate(dateRangeSchema), ownShop, (_req: Request, _res: Response, next: NextFunction) => {
-  next(new AppError(501, 'NOT_IMPLEMENTED', 'Stock reports will be available once stock tracking is added.'));
+// Stock as of the end of the period (or today), with what came in, went out and went
+// missing during it.
+router.post('/stock', limiter(10), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const shop = await loadShop(req);
+    const { dateFrom, dateTo } = req.body;
+    const userId = req.user!.id;
+    const today = todayIso();
+    const asOf = dateTo < today ? dateTo : today;
+    const [lines, counts, logo] = await Promise.all([
+      stock.getStockReport(shop.id, userId, dateFrom, asOf),
+      stock.getCountsInPeriod(shop.id, userId, dateFrom, dateTo),
+      loadBrandingImage(shop.logoUrl),
+    ]);
+    const pdf = await renderStockReport({ shop, logo, from: dateFrom, to: dateTo, asOf, lines, counts });
+    await sendPdf(res, `${safeFilename(shop.name)}-stock-report-${dateFrom}-to-${dateTo}.pdf`, pdf, await emailFor(req), 'Stock');
+  } catch (err) { next(err); }
 });
 
 export default router;
