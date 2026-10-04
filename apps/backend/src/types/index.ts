@@ -162,6 +162,8 @@ export interface ChatMessage {
   extractedTransactionIds: string[];
   /** Set when this message presents a receipt/invoice for an existing transaction. */
   receiptTransactionId?: string;
+  /** What the assistant changed while writing this message, one line each; undefined on messages from before this was kept. */
+  actions?: string[];
   createdAt: Date;
 }
 

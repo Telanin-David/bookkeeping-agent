@@ -3,12 +3,14 @@ const mockCreate = jest.fn();
 // Chat and categorization both go through client.messages; one mock records both, in call order.
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockCreate },
+  beta: { messages: { create: mockCreate } },
 })));
 
 jest.mock('./db');
 jest.mock('./stock');
 jest.mock('./alerts');
 jest.mock('./staff');
+jest.mock('./transactionChanges');
 jest.mock('./profit', () => ({ ...jest.requireActual('./profit'), getMonthlyProfit: jest.fn() }));
 
 // Imported after the mocks above so the mocked modules are what claude.ts actually gets.
@@ -16,13 +18,16 @@ import * as db from './db';
 import * as stock from './stock';
 import * as staff from './staff';
 import * as profit from './profit';
-import { sendChatMessage, categorizeTransaction, usageCost, type ChatContext } from './claude';
+import * as changes from './transactionChanges';
+import { AppError } from '../middleware/errorHandler';
+import { sendChatMessage, categorizeTransaction, usageCost, actionNote, type ChatContext } from './claude';
 import type { Product, Transaction } from '../types';
 
 const mockDb = db as jest.Mocked<typeof db>;
 const mockStock = stock as jest.Mocked<typeof stock>;
 const mockStaff = staff as jest.Mocked<typeof staff>;
 const mockProfit = profit as jest.Mocked<typeof profit>;
+const mockChanges = changes as jest.Mocked<typeof changes>;
 
 function fakeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -181,14 +186,34 @@ describe('sendChatMessage', () => {
     expect(result.extractedTransactionIds).toEqual([]);
   });
 
-  it('asks Haiku 4.5 by default, caching the prompt up to the newest message', async () => {
+  it('asks Sonnet 5.5 by default with refusal fallbacks, caching the prompt up to the newest message', async () => {
     mockCreate.mockResolvedValueOnce(textResponse('Hello!'));
     await sendChatMessage(ctx, [{ role: 'user', content: 'hi' }]);
     const params = mockCreate.mock.calls[0][0];
-    expect(params).toEqual(expect.objectContaining({ model: 'claude-haiku-4-5', cache_control: { type: 'ephemeral' } }));
-    // Haiku 4.5 rejects effort, and the fallback beta is for Opus 5 / Fable.
+    expect(params).toEqual(expect.objectContaining({
+      model: 'claude-sonnet-5-5',
+      cache_control: { type: 'ephemeral' },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+    }));
+    // Effort stays at the model's default, the setting the live test passed with.
     expect(params).not.toHaveProperty('output_config');
-    expect(params).not.toHaveProperty('fallbacks');
+  });
+
+  it("acts only on the fallback model's answer after a refusal fallback", async () => {
+    mockCreate.mockResolvedValueOnce({
+      stop_reason: 'end_turn',
+      usage,
+      content: [
+        { type: 'text', text: 'Let me ' },
+        { type: 'tool_use', id: 'declined', name: 'record_transaction', input: { type: 'sale', amount: 1, description: 'x' } },
+        { type: 'fallback', from: { model: 'claude-sonnet-5-5' }, to: { model: 'claude-opus-5-5' } },
+        { type: 'text', text: 'How much did you sell it for?' },
+      ],
+    });
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'I sold rice' }]);
+    expect(mockDb.createTransaction).not.toHaveBeenCalled();
+    expect(result.reply).toBe('Let me How much did you sell it for?');
   });
 
   it('logs one usage line per owner message, summed over its tool calls', async () => {
@@ -202,7 +227,7 @@ describe('sendChatMessage', () => {
 
     expect(info).toHaveBeenCalledTimes(1);
     expect(info.mock.calls[0][0]).toBe(
-      'chat usage shop=shop-1 model=claude-haiku-4-5 calls=2 input=3200 cache_write=4000 cache_read=4000 output=150 cost_usd=0.00935',
+      'chat usage shop=shop-1 model=claude-sonnet-5-5 calls=2 input=3200 cache_write=4000 cache_read=4000 output=150 cost_usd=0.01870',
     );
     info.mockRestore();
   });
@@ -272,7 +297,7 @@ describe('sendChatMessage', () => {
     expect(mockDb.createTransaction).toHaveBeenCalledWith(expect.objectContaining({ source: 'chat' }));
     expect(mockDb.recordAiUsage).toHaveBeenCalledTimes(1);
     expect(mockDb.recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'user-1', shopId: 'shop-1', model: 'claude-haiku-4-5', calls: 2,
+      userId: 'user-1', shopId: 'shop-1', model: 'claude-sonnet-5-5', calls: 2,
       input: 6000, cacheWrite: 8000, output: 200, recorded: 1, failed: false,
     }));
     (console.info as jest.Mock).mockRestore();
@@ -468,5 +493,105 @@ describe('running costs and profit', () => {
     expect(mockProfit.getMonthlyProfit).toHaveBeenCalledWith('shop-1', 'user-1', expect.stringMatching(/^\d{4}-\d{2}$/), expect.any(String), 'NGN');
     const result = JSON.parse(toolResult().content);
     expect(result).toMatchObject({ profit: 120000, lastMonthSamePoint: 90000, feedback: ['₦30,000 better than at this point last month.'], methodNote: 'note' });
+  });
+});
+
+describe('memory of what the assistant did', () => {
+  it('logs one line per change, with the id, and none for a plain answer', async () => {
+    mockDb.createTransaction.mockResolvedValue(fakeTransaction({ amount: 7000, description: '2 crates of Coke' }));
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_transaction', { type: 'sale', amount: 7000, description: '2 crates of Coke', category: 'Drinks' }))
+      .mockResolvedValueOnce(textResponse('Saved.'));
+    const saved = await sendChatMessage(ctx, [{ role: 'user', content: 'Sold 2 crates of Coke, 7k' }]);
+    expect(saved.actions).toEqual(['recorded sale of ₦7,000 "2 crates of Coke" on 2026-09-25 [id tx-1]']);
+
+    mockCreate.mockResolvedValueOnce(textResponse('How much was it?'));
+    expect((await sendChatMessage(ctx, [{ role: 'user', content: 'I sold rice' }])).actions).toEqual([]);
+  });
+
+  it('logs a part payment with what is still owed, and a receipt shown', async () => {
+    const debt = fakeTransaction({ id: 'debt-1', type: 'receivable', status: 'pending', counterparty: 'Bola', amount: 5000, amountPaid: 3000, balance: 2000 });
+    mockDb.recordDebtPayment.mockResolvedValue({
+      ok: true, transaction: debt, payment: { id: 'pay-1', transactionId: 'debt-1', amount: 3000, paidOn: '2026-09-25', createdAt: new Date() },
+    });
+    mockDb.findTransactionById.mockResolvedValue(debt);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('record_debt_payment', { transactionId: 'debt-1', amount: 3000 }))
+      .mockResolvedValueOnce(toolUseResponse('show_receipt', { transactionId: 'debt-1' }))
+      .mockResolvedValueOnce(textResponse('Done.'));
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'Bola paid 3000, give me receipt' }]);
+    expect(result.actions).toEqual([
+      'recorded a payment of ₦3,000 on receivable of ₦5,000 "2 bags of rice" (Bola) on 2026-09-25 [id debt-1]; ₦2,000 still owed',
+      'showed the receipt for receivable of ₦5,000 "2 bags of rice" (Bola) on 2026-09-25 [id debt-1]',
+    ]);
+  });
+
+  it('formats the note the chat route adds to earlier replies', () => {
+    expect(actionNote(['deleted sale of ₦7,000'])).toBe('<actions_taken>\n- deleted sale of ₦7,000\n</actions_taken>');
+    expect(actionNote([])).toBe('<actions_taken>\nnone\n</actions_taken>');
+  });
+
+  it('strips a note the model writes itself', async () => {
+    mockCreate.mockResolvedValueOnce(textResponse('Saved.\n\n<actions_taken>\n- made up\n</actions_taken>'));
+    expect((await sendChatMessage(ctx, [{ role: 'user', content: 'hi' }])).reply).toBe('Saved.');
+  });
+});
+
+describe('fixing and removing transactions', () => {
+  it('edits only the fields given and logs before and after', async () => {
+    const before = fakeTransaction({ amount: 3250, description: '5 tins of milk @ 650' });
+    const after = { ...before, amount: 3500, description: '5 tins of milk @ 700' };
+    mockDb.findTransactionById.mockResolvedValue(before);
+    mockChanges.editTransaction.mockResolvedValue({ before, after });
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('edit_transaction', { transactionId: 'tx-1', amount: 3500, description: '5 tins of milk @ 700' }))
+      .mockResolvedValueOnce(textResponse('Fixed.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'The milk was 700 each, not 650' }]);
+
+    expect(mockChanges.editTransaction).toHaveBeenCalledWith('tx-1', 'shop-1', 'user-1', { amount: 3500, description: '5 tins of milk @ 700' });
+    expect(mockDb.createTransaction).not.toHaveBeenCalled();
+    expect(result.extractedTransactionIds).toEqual(['tx-1']);
+    expect(result.actions).toEqual([
+      'changed sale of ₦3,250 "5 tins of milk @ 650" on 2026-09-25 [id tx-1] to sale of ₦3,500 "5 tins of milk @ 700" on 2026-09-25 [id tx-1]',
+    ]);
+  });
+
+  it('refuses an empty edit, a due date on a sale, and passes on why a change is not allowed', async () => {
+    mockDb.findTransactionById.mockResolvedValue(fakeTransaction());
+    mockChanges.editTransaction.mockRejectedValue(new AppError(400, 'BAD_REQUEST', 'The amount can’t be less than what has already been paid (5,000.00).'));
+    for (const input of [{ transactionId: 'tx-1' }, { transactionId: 'tx-1', dueDate: '2026-10-10' }, { transactionId: 'tx-1', amount: 100 }]) {
+      mockCreate
+        .mockResolvedValueOnce(toolUseResponse('edit_transaction', input))
+        .mockResolvedValueOnce(textResponse('ok'));
+      const result = await sendChatMessage(ctx, [{ role: 'user', content: 'fix it' }]);
+      expect(result.actions).toEqual([]);
+    }
+    expect(mockChanges.editTransaction).toHaveBeenCalledTimes(1);
+    // The loop keeps appending to the same messages array, so look for the tool result rather than the last entry.
+    const sent = mockCreate.mock.calls.at(-1)![0].messages as { role: string; content: unknown }[];
+    const toolResult = sent.flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((b) => b.type === 'tool_result');
+    expect(toolResult).toMatchObject({ is_error: true, content: expect.stringMatching(/already been paid/) });
+  });
+
+  it('deletes through the shared service and does not list the gone transaction', async () => {
+    mockChanges.removeTransaction.mockResolvedValue(fakeTransaction({ amount: 7000, description: '2 crates of Coke' }));
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('delete_transaction', { transactionId: 'tx-1' }))
+      .mockResolvedValueOnce(textResponse('Removed.'));
+
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'Remove the Coke sale' }]);
+
+    expect(mockChanges.removeTransaction).toHaveBeenCalledWith('tx-1', 'shop-1', 'user-1');
+    expect(result.actions).toEqual(['deleted sale of ₦7,000 "2 crates of Coke" on 2026-09-25 [id tx-1]']);
+    expect(result.extractedTransactionIds).toEqual([]);
+  });
+
+  it('tells the model when there is nothing to delete', async () => {
+    mockChanges.removeTransaction.mockResolvedValue(null);
+    mockCreate
+      .mockResolvedValueOnce(toolUseResponse('delete_transaction', { transactionId: 'nope' }))
+      .mockResolvedValueOnce(textResponse('Not found.'));
+    expect((await sendChatMessage(ctx, [{ role: 'user', content: 'delete it' }])).actions).toEqual([]);
   });
 });

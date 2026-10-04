@@ -6,20 +6,33 @@ import * as staff from './staff';
 import { getMonthlyProfit, isMonth } from './profit';
 import { checkDuplicateSafely, refreshDebtAlerts } from './alerts';
 import { todayIso, addDays } from '../utils/dates';
+import { amount as money } from '../utils/money';
+import { editTransaction, removeTransaction, TransactionChanges } from './transactionChanges';
+import { AppError } from '../middleware/errorHandler';
 import { CostKind, Transaction, TransactionType } from '../types';
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-// Haiku 4.5 by default for the chat agent (the cheapest current model; each turn is short
-// and tool-driven), and always for one-shot category classification.
+// Sonnet 5.5 by default for the chat agent: in a live 10-message test Haiku 4.5 said it had
+// saved, fixed or removed something without calling the tool 1–3 times a run, which leaves
+// the books wrong while the owner thinks they're right; Sonnet 5.5 did all 10 correctly at
+// about 3x Haiku's cost. Haiku 4.5 stays for one-shot category classification.
 const CHAT_MODEL = config.anthropic.chatModel;
 const CATEGORIZE_MODEL = 'claude-haiku-4-5';
+
+// The newer models' safety classifiers can occasionally decline a harmless request (a
+// "refusal"). With server-side fallbacks the API re-runs a declined request on the model
+// Anthropic recommends for that kind of refusal, in the same call, instead of the owner
+// getting "I couldn't help with that". Only these models take the parameter.
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+const FALLBACK_MODELS = new Set(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1']);
 
 // US$ per million tokens (input, output), for the usage log only. A 5-minute cache write
 // costs 1.25x input and a cache read 0.1x.
 const PRICES: Record<string, [number, number]> = {
   'claude-haiku-4-5': [1, 5],
   'claude-sonnet-5': [2, 10],
+  'claude-sonnet-5-5': [2, 10],
   'claude-opus-5': [5, 25],
 };
 
@@ -52,6 +65,11 @@ When the owner says a customer has paid money they owed ("Mama Nkechi has paid",
 
 Pass amount only for a part-payment; leave it out when they paid everything still owed. Pass paidOn only if they said when it was paid ("yesterday"), resolved to a date. The debt's balance field says what is still owed; if they paid more than that, don't record anything — tell them what is actually owed. If you can't tell which debt they mean, ask. If no matching unpaid debt exists, say so and ask whether they want to record it as a new sale instead. After recording, tell them what is still owed, if anything.
 
+## Fixing or removing a transaction
+When the owner says something already recorded was wrong ("the milk was 700 each, not 650", "it was Emeka, not Ade", "that was yesterday"), call edit_transaction on that transaction with only what changed. Don't record a second transaction to make up the difference. If the whole thing should not be in the books — recorded by mistake, recorded twice, or goods returned and all the money given back — call delete_transaction. If only part of a sale came back, lower its amount with edit_transaction instead.
+
+Find the transaction with find_transactions first, and make sure it is the one they mean; if more than one could match, ask. A transaction can't be switched between money in and money out: delete it and record it again. After the change, say what it was before and what it is now, or what was removed.
+
 ## Stock
 The shop may keep a stock list: products with how many are on the shelf. When the owner records a sale or a purchase of goods that are on the stock list, pass them as items on record_transaction with the quantity — that is what keeps the shelf count right. Use product names as check_stock returns them; if you aren't sure which product they mean, call check_stock first. Never invent a product: if something isn't on the stock list, record the transaction without items.
 
@@ -59,6 +77,9 @@ For "how many bags of rice do I have?" or "what's running low?", call check_stoc
 
 ## Receipts and invoices
 When the owner asks for a receipt or invoice ("give me a receipt for Mama Nkechi", "print an invoice for that credit sale"), first call find_transactions to locate the real transaction — never invent an id. Once you have identified the one transaction they mean, call show_receipt with its id, then briefly confirm what you're showing them.
+
+## What you already did
+Each of your earlier replies in this chat ends with an <actions_taken> note that the app adds. The app writes it from the tools you actually called; it lists exactly what you changed in the books while writing that reply, or says none. Only a tool call changes the books — writing "Recorded", "Fixed" or "Removed" changes nothing. So whenever the owner asks for something to be recorded, fixed or removed, call the tool in that same reply before you say it is done. Trust the note: everything listed there was done, and the books already show it. Never apologise for an action listed there, undo it, or do it again because the books show it — that is what you would expect to see. Show a receipt again only if the owner asks for it again. If an earlier reply said you did something its note doesn't list, tell the owner plainly and offer to do it now. Never write an <actions_taken> note yourself.
 
 ## Tone
 Warm, direct, and brief — the owner is running a shop, not reading a report. Use the shop's actual currency for every amount. If a request is genuinely outside what you can do here (it isn't about this shop's transactions), say so plainly.`;
@@ -120,6 +141,37 @@ const TOOLS: Anthropic.Tool[] = [
         transactionId: { type: 'string', description: 'The unpaid receivable or payable’s id, from a find_transactions result' },
         amount: { type: 'number', description: 'Amount paid, for a part-payment. Omit when the whole remaining balance was paid.' },
         paidOn: { type: 'string', description: 'YYYY-MM-DD the payment was made, resolved from any relative date. Omit for today.' },
+      },
+      required: ['transactionId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'edit_transaction',
+    description: 'Correct a transaction already recorded. Pass only the fields that change. Requires the transaction’s real id from find_transactions. Returns it before and after.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        transactionId: { type: 'string', description: 'The transaction’s real id, from a find_transactions result' },
+        amount: { type: 'number', description: 'Correct total amount' },
+        description: { type: 'string', description: 'Correct description of what was sold or bought' },
+        category: { type: 'string', description: 'Correct category' },
+        counterparty: { type: 'string', description: 'Correct customer or supplier name' },
+        date: { type: 'string', description: 'Correct date, YYYY-MM-DD' },
+        dueDate: { type: 'string', description: 'Correct due date, YYYY-MM-DD. Receivable/payable only.' },
+        costKind: { type: 'string', enum: ['stock', 'running'], description: 'Expense/payable only: what the money was for' },
+      },
+      required: ['transactionId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'delete_transaction',
+    description: 'Remove a transaction from the books for good, putting back any stock it moved. Requires the transaction’s real id from find_transactions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        transactionId: { type: 'string', description: 'The transaction’s real id, from a find_transactions result' },
       },
       required: ['transactionId'],
       additionalProperties: false,
@@ -229,12 +281,36 @@ export interface ClaudeChatResult {
   reply: string;
   extractedTransactionIds: string[];
   receiptTransactionId?: string;
+  /** One line per change made to the books (and per receipt shown), kept with the reply. */
+  actions: string[];
 }
 
 interface ToolState {
   createdTransactionIds: string[];
   paidDebtIds: string[];
+  editedTransactionIds: string[];
   receiptTransactionId?: string;
+  actions: string[];
+}
+
+/** "sale of ₦7,000 "2 crates of Coke" (Ada) on 2026-10-04 [id …]": enough to find it again later. */
+function describeTx(tx: Transaction, currency: string): string {
+  const who = tx.counterparty ? ` (${tx.counterparty})` : '';
+  const what = tx.description ? ` "${tx.description}"` : '';
+  return `${tx.type} of ${money(tx.amount, currency)}${what}${who} on ${tx.date} [id ${tx.id}]`;
+}
+
+const ACTIONS_TAG = 'actions_taken';
+
+/** The note the chat route adds to an earlier reply, so the model knows what that reply actually did. */
+export function actionNote(actions: string[]): string {
+  const body = actions.length ? actions.map((a) => `- ${a}`).join('\n') : 'none';
+  return `<${ACTIONS_TAG}>\n${body}\n</${ACTIONS_TAG}>`;
+}
+
+/** Removes a note the model wrote itself, imitating the ones in its history. */
+function stripActionNotes(text: string): string {
+  return text.replace(new RegExp(`<${ACTIONS_TAG}>[\\s\\S]*?(</${ACTIONS_TAG}>|$)`, 'g'), '').trim();
 }
 
 function dynamicContext(ctx: ChatContext): string {
@@ -338,6 +414,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
       };
       const tx = items.length ? await stock.createTransactionWithItems(data, items) : await db.createTransaction(data);
       state.createdTransactionIds.push(tx.id);
+      state.actions.push(`recorded ${describeTx(tx, ctx.currency)}`);
       await checkDuplicateSafely(tx);
       if (tx.dueDate) await refreshDebtAlerts(tx.id);
       if (tx.staffId) await staff.refreshSalaryAlerts(tx.shopId);
@@ -374,8 +451,57 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
         }
       }
       state.paidDebtIds.push(result.transaction.id);
+      const left = result.transaction.balance;
+      state.actions.push(`recorded a payment of ${money(result.payment.amount, ctx.currency)} on ${describeTx(result.transaction, ctx.currency)}; `
+        + (left > 0 ? `${money(left, ctx.currency)} still owed` : 'now fully paid'));
       await refreshDebtAlerts(result.transaction.id);
       return { recorded: true, payment: result.payment, transaction: result.transaction };
+    }
+
+    case 'edit_transaction': {
+      const transactionId = args['transactionId'];
+      if (typeof transactionId !== 'string') throw new Error('transactionId is required');
+      const changes: TransactionChanges = {};
+      if (args['amount'] !== undefined) {
+        if (!isPositive(args['amount'])) throw new Error('amount must be a positive number');
+        changes.amount = args['amount'];
+      }
+      for (const key of ['description', 'category', 'counterparty', 'date', 'dueDate'] as const) {
+        const value = args[key];
+        if (value === undefined) continue;
+        if (typeof value !== 'string' || !value.trim()) throw new Error(`${key} must be a non-empty string`);
+        changes[key] = value.trim();
+      }
+      if (args['costKind'] !== undefined) {
+        if (args['costKind'] !== 'stock' && args['costKind'] !== 'running') throw new Error('costKind must be stock or running');
+        changes.costKind = args['costKind'];
+      }
+      if (Object.keys(changes).length === 0) throw new Error('Nothing to change: pass at least one field');
+      const existing = await db.findTransactionById(transactionId, ctx.shopId, ctx.userId);
+      if (!existing) throw new Error('No transaction with that id exists for this shop');
+      const isCredit = existing.type === 'receivable' || existing.type === 'payable';
+      if (changes.dueDate && !isCredit) throw new Error('Only receivables and payables have a due date');
+      if (changes.costKind && existing.type !== 'expense' && existing.type !== 'payable') throw new Error('Only expenses and payables have a costKind');
+      let result;
+      try {
+        result = await editTransaction(transactionId, ctx.shopId, ctx.userId, changes);
+      } catch (err) {
+        // These messages are written for the owner; pass them on as they are.
+        if (err instanceof AppError) throw new Error(err.message);
+        throw err;
+      }
+      state.editedTransactionIds.push(result.after.id);
+      state.actions.push(`changed ${describeTx(result.before, ctx.currency)} to ${describeTx(result.after, ctx.currency)}`);
+      return { updated: true, before: result.before, after: result.after };
+    }
+
+    case 'delete_transaction': {
+      const transactionId = args['transactionId'];
+      if (typeof transactionId !== 'string') throw new Error('transactionId is required');
+      const deleted = await removeTransaction(transactionId, ctx.shopId, ctx.userId);
+      if (!deleted) throw new Error('No transaction with that id exists for this shop');
+      state.actions.push(`deleted ${describeTx(deleted, ctx.currency)}`);
+      return { deleted: true, transaction: deleted };
     }
 
     case 'get_spending_summary': {
@@ -465,6 +591,7 @@ async function executeTool(name: string, input: unknown, ctx: ChatContext, state
       const tx = await db.findTransactionById(transactionId, ctx.shopId, ctx.userId);
       if (!tx) throw new Error('No transaction with that id exists for this shop');
       state.receiptTransactionId = tx.id;
+      state.actions.push(`showed the receipt for ${describeTx(tx, ctx.currency)}`);
       return { shown: true, transaction: tx };
     }
 
@@ -512,7 +639,7 @@ async function saveUsage(ctx: ChatContext, u: Usage, recorded: number, failed: b
 
 export async function sendChatMessage(ctx: ChatContext, history: Anthropic.MessageParam[]): Promise<ClaudeChatResult> {
   const usage: Usage = { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
-  const state: ToolState = { createdTransactionIds: [], paidDebtIds: [] };
+  const state: ToolState = { createdTransactionIds: [], paidDebtIds: [], editedTransactionIds: [], actions: [] };
   let failed = true;
   try {
     const result = await chatLoop(ctx, history, usage, state);
@@ -523,16 +650,31 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
   }
 }
 
+/**
+ * A response's content as it should be acted on and echoed back. When a fallback model
+ * took over mid-answer, `fallback` blocks mark the switch: before the last one, only text
+ * is kept (the declined model's tool calls and thinking are dropped, per the fallback
+ * rules); everything after it is the fallback model's own answer and is kept as-is.
+ */
+export function afterFallback(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlock[] {
+  let boundary = -1;
+  content.forEach((b, i) => { if (b.type === 'fallback') boundary = i; });
+  if (boundary === -1) return content;
+  return content.filter((b, i) => i > boundary || (i < boundary && b.type === 'text'));
+}
+
 async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usage: Usage, state: ToolState): Promise<ClaudeChatResult> {
-  const messages: Anthropic.MessageParam[] = [...history];
-  // Every transaction this turn created or marked paid; the chat shows each one.
-  const touched = () => [...new Set([...state.createdTransactionIds, ...state.paidDebtIds])];
+  const messages: Anthropic.Beta.BetaMessageParam[] = [...history];
+  // Every transaction this turn created, marked paid or corrected; the chat shows each one.
+  const touched = () => [...new Set([...state.createdTransactionIds, ...state.paidDebtIds, ...state.editedTransactionIds])]
+    .filter((id) => !state.actions.some((a) => a.startsWith('deleted ') && a.includes(`[id ${id}]`)));
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    let response: Anthropic.Message;
+    let response: Anthropic.Beta.BetaMessage;
     try {
-      response = await client.messages.create({
+      response = await client.beta.messages.create({
         model: CHAT_MODEL,
+        ...(FALLBACK_MODELS.has(CHAT_MODEL) ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {}),
         max_tokens: 4096,
         // Caches everything up to the newest message. A turn that uses a tool calls the
         // model again with the same start plus the tool's result, and that second call
@@ -550,15 +692,18 @@ async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usa
     } catch (err) {
       // If a transaction was already saved this turn, surfacing an error would make the
       // owner resend and record it twice — report what was saved instead.
-      if (touched().length === 0) throw err;
-      const n = touched().length;
-      const what = state.paidDebtIds.length === 0
+      const changes = state.actions.filter((a) => !a.startsWith('showed '));
+      if (changes.length === 0) throw err;
+      const n = changes.length;
+      const onlyRecorded = changes.every((a) => a.startsWith('recorded ') && !a.startsWith('recorded a payment'));
+      const what = onlyRecorded
         ? (n === 1 ? 'that transaction' : `${n} transactions`)
         : (n === 1 ? 'that change' : `${n} changes`);
       return {
         reply: `I saved ${what}, but couldn't finish my reply. Check your transactions list before sending it again.`,
         extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
+        actions: state.actions,
       };
     }
 
@@ -569,22 +714,23 @@ async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usa
         reply: "I couldn't help with that one — could you rephrase it?",
         extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
+        actions: state.actions,
       };
     }
 
-    const content = response.content;
+    const content = afterFallback(response.content);
     messages.push({ role: 'assistant', content });
 
     if (response.stop_reason !== 'tool_use') {
-      const reply = content
+      const reply = stripActionNotes(content
         .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map((b) => b.text)
-        .join('')
-        .trim();
+        .join(''));
       return {
         reply: reply || "I'm not sure how to respond to that — could you say it differently?",
         extractedTransactionIds: touched(),
         receiptTransactionId: state.receiptTransactionId,
+        actions: state.actions,
       };
     }
 
@@ -611,6 +757,7 @@ async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usa
     reply: "That's a lot to work through in one go — could you break it into smaller messages?",
     extractedTransactionIds: touched(),
     receiptTransactionId: state.receiptTransactionId,
+    actions: state.actions,
   };
 }
 

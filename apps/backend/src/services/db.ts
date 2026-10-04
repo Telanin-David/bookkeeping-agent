@@ -640,15 +640,16 @@ export async function listChatSessions(userId: string, shopId?: string, page = 1
 }
 
 export async function addChatMessage(sessionId: string, role: 'user' | 'assistant', content: string, type = 'text', mediaUrl?: string, extra?: {
-  extractedTransactionIds?: string[]; receiptTransactionId?: string;
+  extractedTransactionIds?: string[]; receiptTransactionId?: string; actions?: string[];
 }): Promise<ChatMessage> {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO chat_messages (session_id, role, type, content, media_url, extracted_transaction_ids, receipt_transaction_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [sessionId, role, type, content, mediaUrl ?? null, extra?.extractedTransactionIds ?? [], extra?.receiptTransactionId ?? null],
+      `INSERT INTO chat_messages (session_id, role, type, content, media_url, extracted_transaction_ids, receipt_transaction_id, actions)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [sessionId, role, type, content, mediaUrl ?? null, extra?.extractedTransactionIds ?? [], extra?.receiptTransactionId ?? null,
+       extra?.actions ?? null],
     );
     await client.query('UPDATE chat_sessions SET last_message_at = NOW() WHERE id = $1', [sessionId]);
     await client.query('COMMIT');
@@ -894,6 +895,7 @@ function mapMessage(row: Record<string, unknown>): ChatMessage {
     mediaUrl: row['media_url'] as string | undefined,
     extractedTransactionIds: (row['extracted_transaction_ids'] as string[] | null) ?? [],
     receiptTransactionId: row['receipt_transaction_id'] as string | undefined,
+    actions: (row['actions'] as string[] | null) ?? undefined,
     createdAt: row['created_at'] as Date,
   };
 }

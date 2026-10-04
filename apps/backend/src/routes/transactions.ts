@@ -9,6 +9,7 @@ import * as staff from '../services/staff';
 import { checkDuplicateSafely, refreshDebtAlerts } from '../services/alerts';
 import { categorizeTransaction } from '../services/claude';
 import { todayIso } from '../utils/dates';
+import { editTransaction, removeTransaction } from '../services/transactionChanges';
 
 const router = Router({ mergeParams: true });
 router.use(requireAuth);
@@ -101,62 +102,13 @@ router.get('/:transactionId', async (req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 });
 
-const isDebt = (type: string) => type === 'receivable' || type === 'payable';
 const amountText = (n: number) => n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 router.patch('/:transactionId', validate(updateSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const shopId = req.params['shopId']!;
-    const userId = req.user!.id;
-    const txId = req.params['transactionId']!;
-    const current = await db.findTransactionById(txId, shopId, userId);
-    if (!current) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
-
     const { status, ...changes } = req.body as z.infer<typeof updateSchema>;
-    if (isDebt(current.type) && current.amountPaid > 0) {
-      if (changes.type && !isDebt(changes.type)) {
-        throw new AppError(400, 'BAD_REQUEST', 'This debt has payments recorded, so it can’t be changed to a cash sale or expense. Remove the payments first.');
-      }
-      if (changes.amount !== undefined && changes.amount < current.amountPaid) {
-        throw new AppError(400, 'BAD_REQUEST', `The amount can’t be less than what has already been paid (${amountText(current.amountPaid)}).`);
-      }
-    }
-
-    if (changes.type && await stock.wouldFlipStock(txId, current.type, changes.type)) {
-      throw new AppError(400, 'BAD_REQUEST', 'This transaction moved stock, so it can’t be switched between a sale and a purchase. Delete it and record it again.');
-    }
-
-    if (changes.costKind === 'running' && await stock.hasItems(txId)) {
-      throw new AppError(400, 'BAD_REQUEST', 'This put products on your shelf, so it’s stock to resell. To change that, delete it and record it again.');
-    }
-
-    let tx = await db.updateTransaction(txId, shopId, userId, isDebt(current.type) ? changes : { ...changes, status });
-    if (!tx) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
-    // Changing what the assistant filled in counts against its accuracy; marking paid doesn't.
-    const fixed = (Object.keys(changes) as (keyof typeof changes)[])
-      .some((k) => changes[k] !== undefined && changes[k] !== current[k]);
-    if (fixed) await db.noteAiCorrection(txId, shopId, userId, 'edited');
-    if (changes.date && changes.date !== current.date) await stock.moveTransactionItems(txId, changes.date);
-
-    // A debt's status follows its payments. "Settled" pays off what's left today;
-    // "pending" reopens it by removing its payments.
-    if (isDebt(tx.type)) {
-      if (status === 'settled' && tx.balance > 0) {
-        const paid = await db.recordDebtPayment(txId, shopId, userId, { paidOn: todayIso(), today: todayIso() });
-        if (paid.ok) tx = paid.transaction;
-      } else if (status === 'pending' && tx.amountPaid > 0) {
-        tx = (await db.removeDebtPayments(txId, shopId, userId))!.transaction;
-      } else if (status === 'overdue' && tx.balance > 0) {
-        tx = (await db.updateTransaction(txId, shopId, userId, { status: 'overdue' }))!;
-      } else if (changes.amount !== undefined) {
-        await db.resyncDebtStatus(txId);
-        tx = (await db.findTransactionById(txId, shopId, userId))!;
-      }
-      await refreshDebtAlerts(txId);
-      tx = (await db.findTransactionById(txId, shopId, userId))!;
-    }
-    if (current.staffId) await staff.refreshSalaryAlerts(shopId); // its date or type may have changed
-    res.json(tx);
+    const { after } = await editTransaction(req.params['transactionId']!, req.params['shopId']!, req.user!.id, changes, status);
+    res.json(after);
   } catch (err) { next(err); }
 });
 
@@ -209,13 +161,8 @@ router.delete('/:transactionId/payments/:paymentId', async (req: Request, res: R
 
 router.delete('/:transactionId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Counted before the row goes, while its source is still known.
-    await db.noteAiCorrection(req.params['transactionId']!, req.params['shopId']!, req.user!.id, 'deleted');
-    // Any stock the transaction moved goes back with it.
-    const deleted = await stock.deleteTransactionWithStock(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
+    const deleted = await removeTransaction(req.params['transactionId']!, req.params['shopId']!, req.user!.id);
     if (!deleted) throw new AppError(404, 'NOT_FOUND', 'Transaction not found');
-    await refreshDebtAlerts(req.params['transactionId']!); // closes any alert about it
-    await staff.refreshSalaryAlerts(req.params['shopId']!); // a deleted salary payment is owed again
     res.status(204).send();
   } catch (err) { next(err); }
 });
