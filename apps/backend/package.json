@@ -12,7 +12,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:live": "ts-node --transpile-only scripts/live-test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

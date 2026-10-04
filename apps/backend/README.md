@@ -26,6 +26,16 @@ npm run build   # compile TypeScript → dist/
 npm start       # run compiled output
 ```
 
+## Live AI test (no database needed)
+
+Runs 8 owner messages through the real Claude API against an in-memory shop and prints what the
+agent replied and saved. Put `ANTHROPIC_API_KEY=...` in `.env` first. Stops at the cost cap (default $0.50).
+
+```bash
+npm run test:live
+npm run test:live -- --cap 0.25
+```
+
 ## Testing
 
 ```bash
