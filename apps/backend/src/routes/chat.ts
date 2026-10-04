@@ -93,9 +93,11 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
     // the owner's, so a window that starts on an assistant reply drops that reply.
     const recent = await db.listRecentChatMessages(session.id, HISTORY_LIMIT);
     const start = recent.findIndex((m) => m.role === 'user');
+    // Each earlier reply carries a note of what it changed, so the assistant doesn't mistake
+    // its own past changes for someone else's and apologise or redo them.
     const history: Anthropic.MessageParam[] = recent.slice(start).map((m) => ({
       role: m.role,
-      content: m.content,
+      content: m.role === 'assistant' && m.actions ? `${m.content}\n\n${claudeService.actionNote(m.actions)}` : m.content,
     }));
 
     let result: claudeService.ClaudeChatResult;
@@ -123,6 +125,7 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
     const assistantMsg = await db.addChatMessage(session.id, 'assistant', result.reply, 'text', undefined, {
       extractedTransactionIds: result.extractedTransactionIds,
       receiptTransactionId: result.receiptTransactionId,
+      actions: result.actions,
     });
 
     const extractedTransactions = result.extractedTransactionIds.length > 0

@@ -2489,6 +2489,15 @@ components:
           description: |
             Set when the user asked for a receipt and the agent resolved which transaction it is for.
             The client renders a printable receipt card for this transaction.
+        actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: |
+            Assistant messages only: one line per change the agent made to the books while writing
+            this message (recorded, paid, changed, deleted, receipt shown). Empty when it changed
+            nothing; null on messages from before this was kept.
         createdAt:
           type: string
           format: date-time

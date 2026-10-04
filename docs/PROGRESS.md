@@ -16,6 +16,7 @@
 | 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
 | 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
 | 9c | Running costs, staff & profit (owner's request) | ✅ Done | `feat/running-costs-profit` | merged to main (#30) |
+| 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | 🔄 In review | `claude/hopeful-galileo-utx4b4` | — |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -381,6 +382,18 @@
   - Voice notes are capped in length and size, and rate-limited per user.
   - The transcript is shown in the chat box for the owner to check and edit before sending, because misheard amounts ("fifty" for "fifteen") go straight into the books otherwise.
   - Before launch, pick the model size by testing 20–30 real Nigerian voice notes (English, Pidgin, names, amounts) for accuracy and speed on the actual VPS.
+
+- **Chat memory, fixing and removing in chat** (owner's request; `claude/hopeful-galileo-utx4b4`).
+  - **The bug:** the assistant was sent only the words of earlier messages, not what it had done. Asked "you don mark Ade own as paid?", it read its own "Done", saw Ade already paid, decided someone else had done it, and said there was no debt (live test on `main`). In a longer chat it re-showed a receipt on six replies in a row and apologised for changes it had made itself.
+  - **The fix:** every reply now keeps one line per change it made (`chat_messages.actions`, migration 012): "recorded a sale of ₦7,000 "2 crates of Coke" …", "recorded a payment of ₦3,000 …; ₦2,000 still owed", "deleted …", "showed the receipt …". The chat sends them back with each earlier reply, and the assistant is told they are the record of what happened.
+  - **Fixing and removing in chat:** "the milk was 700 each, not 650" now changes the sale instead of adding a second one; "remove the Coke sale, customer return am" deletes it. Both go through the same code as the Transactions screen (`services/transactionChanges.ts`, moved out of the route), so stock goes back on the shelf, debt payments are respected, and corrections still count against the assistant's accuracy on the dashboard.
+  - **Checked:** 125 unit tests; migration 012 applied, rolled back and re-applied on a test database; the same 10-message chat through the real backend and a real database (`npm run test:live`):
+    | Model | Right | Notes | Cost |
+    |---|---|---|---|
+    | `main` before this, Haiku 4.5 | 3/10 | lost track of Ade's payment; never saved the milk | $0.10 |
+    | This branch, Haiku 4.5 (3 runs) | 7, 4, 7 /10 | said "Recorded" or "Removed" without saving, 1–3 times a run | $0.03 a run |
+    | This branch, Sonnet 5.5 | 10/10 | — | $0.09 |
+  - **Open:** Haiku 4.5 sometimes says it saved something without calling the tool; the notes make that visible but don't stop it. Sonnet 5.5 (`CHAT_MODEL=claude-sonnet-5-5`) didn't do it once, at about 3× the cost per message. Which model to run is the owner's call.
 
 ## Rules
 - Never commit/push to `main` directly.
