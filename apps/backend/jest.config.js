@@ -4,6 +4,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
+  setupFiles: ['<rootDir>/jest.setup.js'],
   collectCoverageFrom: ['src/**/*.ts', '!src/server.ts'],
   coverageThreshold: {
     global: { lines: 80 },

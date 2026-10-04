@@ -1,7 +1,7 @@
 import { db } from '../config';
 import {
   User, Shop, Transaction, ChatSession, ChatMessage,
-  Alert, AlertHistory, ExcelImport, PaginatedResponse,
+  Alert, AlertHistory, ExcelImport, PaginatedResponse, FinancialSummary,
   TransactionType, TransactionStatus, AlertStatus, ImportStatus,
 } from '../types';
 
@@ -118,7 +118,7 @@ export async function updateShop(id: string, ownerId: string, data: Partial<Pick
 
 // ── Transactions ──────────────────────────────────────────────
 export async function listTransactions(shopId: string, userId: string, opts: {
-  type?: TransactionType; category?: string;
+  type?: TransactionType; category?: string; status?: TransactionStatus; search?: string;
   dateFrom?: string; dateTo?: string;
   page: number; limit: number;
 }): Promise<PaginatedResponse<Transaction>> {
@@ -127,6 +127,8 @@ export async function listTransactions(shopId: string, userId: string, opts: {
   let i = 3;
   if (opts.type)     { conditions.push(`type = $${i++}`);                    values.push(opts.type); }
   if (opts.category) { conditions.push(`category ILIKE $${i++}`);            values.push(`%${opts.category}%`); }
+  if (opts.status)   { conditions.push(`status = $${i++}`);                  values.push(opts.status); }
+  if (opts.search)   { conditions.push(`(description ILIKE $${i} OR counterparty ILIKE $${i++})`); values.push(`%${opts.search}%`); }
   if (opts.dateFrom) { conditions.push(`date >= $${i++}`);                   values.push(opts.dateFrom); }
   if (opts.dateTo)   { conditions.push(`date <= $${i++}`);                   values.push(opts.dateTo); }
 
@@ -195,7 +197,49 @@ export async function deleteTransaction(id: string, shopId: string, userId: stri
   return (rowCount ?? 0) > 0;
 }
 
+export async function getFinancialSummary(shopId: string, userId: string, opts: {
+  dateFrom?: string; dateTo?: string;
+} = {}): Promise<FinancialSummary> {
+  const conditions = ['shop_id = $1', 'user_id = $2'];
+  const values: unknown[] = [shopId, userId];
+  let i = 3;
+  if (opts.dateFrom) { conditions.push(`date >= $${i++}`); values.push(opts.dateFrom); }
+  if (opts.dateTo)   { conditions.push(`date <= $${i++}`); values.push(opts.dateTo); }
+  const { rows } = await db.query(
+    `SELECT
+       COALESCE(SUM(amount) FILTER (WHERE type = 'sale'), 0)                                    AS total_sales,
+       COALESCE(SUM(amount) FILTER (WHERE type = 'expense'), 0)                                 AS total_expenses,
+       COALESCE(SUM(amount) FILTER (WHERE type = 'receivable' AND status <> 'settled'), 0)      AS outstanding_receivables,
+       COALESCE(SUM(amount) FILTER (WHERE type = 'payable' AND status <> 'settled'), 0)         AS outstanding_payables,
+       COALESCE(SUM(amount) FILTER (WHERE type = 'receivable' AND status <> 'settled'
+                                     AND due_date < CURRENT_DATE), 0)                          AS overdue_receivables,
+       COUNT(*)                                                                                 AS transaction_count
+     FROM transactions WHERE ${conditions.join(' AND ')}`,
+    values,
+  );
+  const r = rows[0];
+  const totalSales = parseFloat(r.total_sales);
+  const totalExpenses = parseFloat(r.total_expenses);
+  return {
+    totalSales,
+    totalExpenses,
+    netProfit: totalSales - totalExpenses,
+    outstandingReceivables: parseFloat(r.outstanding_receivables),
+    outstandingPayables: parseFloat(r.outstanding_payables),
+    overdueReceivables: parseFloat(r.overdue_receivables),
+    transactionCount: parseInt(r.transaction_count, 10),
+  };
+}
+
 // ── Chat ──────────────────────────────────────────────────────
+export async function findChatSessionById(id: string, userId: string): Promise<ChatSession | null> {
+  const { rows } = await db.query(
+    'SELECT * FROM chat_sessions WHERE id = $1 AND user_id = $2',
+    [id, userId],
+  );
+  return rows[0] ? mapSession(rows[0]) : null;
+}
+
 export async function createChatSession(userId: string, shopId: string): Promise<ChatSession> {
   const { rows } = await db.query(
     'INSERT INTO chat_sessions (user_id, shop_id) VALUES ($1, $2) RETURNING *',
@@ -218,13 +262,16 @@ export async function listChatSessions(userId: string, shopId?: string, page = 1
   return { data: rows.map(mapSession), total: parseInt(countRows[0].count), page, limit };
 }
 
-export async function addChatMessage(sessionId: string, role: 'user' | 'assistant', content: string, type = 'text', mediaUrl?: string): Promise<ChatMessage> {
+export async function addChatMessage(sessionId: string, role: 'user' | 'assistant', content: string, type = 'text', mediaUrl?: string, links: {
+  extractedTransactionIds?: string[]; receiptTransactionId?: string;
+} = {}): Promise<ChatMessage> {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      'INSERT INTO chat_messages (session_id, role, type, content, media_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [sessionId, role, type, content, mediaUrl ?? null],
+      `INSERT INTO chat_messages (session_id, role, type, content, media_url, extracted_transaction_ids, receipt_transaction_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [sessionId, role, type, content, mediaUrl ?? null, links.extractedTransactionIds ?? [], links.receiptTransactionId ?? null],
     );
     await client.query('UPDATE chat_sessions SET last_message_at = NOW() WHERE id = $1', [sessionId]);
     await client.query('COMMIT');
@@ -244,6 +291,17 @@ export async function listChatMessages(sessionId: string, page = 1, limit = 50):
     db.query('SELECT COUNT(*) FROM chat_messages WHERE session_id = $1', [sessionId]),
   ]);
   return { data: rows.map(mapMessage), total: parseInt(countRows[0].count), page, limit };
+}
+
+/** The most recent `limit` messages of a session, returned oldest first. */
+export async function listRecentChatMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
+  const { rows } = await db.query(
+    `SELECT * FROM (
+       SELECT * FROM chat_messages WHERE session_id = $1 ORDER BY created_at DESC LIMIT $2
+     ) recent ORDER BY created_at ASC`,
+    [sessionId, limit],
+  );
+  return rows.map(mapMessage);
 }
 
 // ── Alerts ────────────────────────────────────────────────────
@@ -383,6 +441,8 @@ function mapMessage(row: Record<string, unknown>): ChatMessage {
     type: row['type'] as ChatMessage['type'],
     content: row['content'] as string,
     mediaUrl: row['media_url'] as string | undefined,
+    extractedTransactionIds: (row['extracted_transaction_ids'] as string[] | null) ?? [],
+    receiptTransactionId: (row['receipt_transaction_id'] as string | null) ?? undefined,
     createdAt: row['created_at'] as Date,
   };
 }

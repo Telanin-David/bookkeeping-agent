@@ -27,6 +27,8 @@ router.get('/sessions', async (req: Request, res: Response, next: NextFunction) 
 
 router.post('/sessions', validate(createSessionSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const shop = await db.findShopById(req.body.shopId, req.user!.id);
+    if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
     const session = await db.createChatSession(req.user!.id, req.body.shopId);
     res.status(201).json(session);
   } catch (err) { next(err); }
@@ -36,6 +38,8 @@ router.get('/sessions/:sessionId/messages', async (req: Request, res: Response, 
   try {
     const page = parseInt(req.query['page'] as string ?? '1', 10);
     const limit = Math.min(parseInt(req.query['limit'] as string ?? '50', 10), 100);
+    const session = await db.findChatSessionById(req.params['sessionId']!, req.user!.id);
+    if (!session) throw new AppError(404, 'NOT_FOUND', 'Chat session not found');
     const result = await db.listChatMessages(req.params['sessionId']!, page, limit);
     res.json(result);
   } catch (err) { next(err); }
@@ -44,18 +48,37 @@ router.get('/sessions/:sessionId/messages', async (req: Request, res: Response, 
 router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { content, type, mediaUrl } = req.body;
-    const userMsg = await db.addChatMessage(req.params['sessionId']!, 'user', content, type, mediaUrl);
+    const userId = req.user!.id;
 
-    // TODO (Deliverable 5): assemble full shop context before calling Claude
-    const aiResponse = await claudeService.sendChatMessage(content, {
-      shopName: 'Your Shop',
-      currency: 'NGN',
-      recentTransactions: [],
+    const session = await db.findChatSessionById(req.params['sessionId']!, userId);
+    if (!session) throw new AppError(404, 'NOT_FOUND', 'Chat session not found');
+    const shop = await db.findShopById(session.shopId, userId);
+    if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
+
+    // Read history before saving the new message so it isn't sent to Claude twice.
+    const history = await db.listRecentChatMessages(session.id, 20);
+    const userMsg = await db.addChatMessage(session.id, 'user', content, type, mediaUrl);
+
+    let turn: claudeService.ChatTurnResult;
+    try {
+      turn = await claudeService.runChatTurn({ shop, userId, history, userMessage: content });
+    } catch (err) {
+      if (err instanceof claudeService.ClaudeUnavailableError) {
+        console.error('Claude unavailable:', err.message);
+        throw new AppError(503, 'AI_UNAVAILABLE', 'The assistant is temporarily unavailable. Your message was saved — please try again.');
+      }
+      throw err;
+    }
+
+    const assistantMsg = await db.addChatMessage(session.id, 'assistant', turn.reply, 'text', undefined, {
+      extractedTransactionIds: turn.extractedTransactions.map((t) => t.id),
+      receiptTransactionId: turn.receiptTransactionId,
     });
 
-    const assistantMsg = await db.addChatMessage(req.params['sessionId']!, 'assistant', aiResponse.reply);
-
-    res.json({ userMessage: userMsg, assistantMessage: assistantMsg });
+    res.json({
+      userMessage: userMsg,
+      assistantMessage: { ...assistantMsg, extractedTransactions: turn.extractedTransactions },
+    });
   } catch (err) { next(err); }
 });
 

@@ -72,7 +72,19 @@ export interface ChatMessage {
   type: MessageType;
   content: string;
   mediaUrl?: string;
+  extractedTransactionIds: string[];
+  receiptTransactionId?: string;
   createdAt: Date;
+}
+
+export interface FinancialSummary {
+  totalSales: number;
+  totalExpenses: number;
+  netProfit: number;
+  outstandingReceivables: number;
+  outstandingPayables: number;
+  overdueReceivables: number;
+  transactionCount: number;
 }
 
 export interface Alert {

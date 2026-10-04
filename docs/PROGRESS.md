@@ -7,8 +7,8 @@
 | 1 | Backend API Specification (OpenAPI YAML + docs) | ✅ Done | `feat/deliverable-1-api-spec` | merged to main |
 | 2 | Database Schema & Migrations | ✅ Done | `feat/deliverable-2-database-schema` | merged to main |
 | 3 | Backend Source Code Structure & Entry Point | ✅ Done | `feat/deliverable-3-backend-structure` | merged to main |
-| 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` | pending review |
-| 5 | Claude Integration & System Prompt | ⬜ Not started | — | — |
+| 4 | Frontend Source Code Structure & Components | ✅ Done | `feat/deliverable-4-frontend-structure` (+ UI polish PRs #12–#15) | merged to main |
+| 5 | Claude Integration & System Prompt | 🟡 In progress | `claude/inspiring-bardeen-scggnv` | — |
 | 6 | Authentication & Authorization System | ⬜ Not started | — | — |
 | 7 | Report Generation & PDF Templates | ⬜ Not started | — | — |
 | 8 | Alert Detection & Routing System | ⬜ Not started | — | — |

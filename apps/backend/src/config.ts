@@ -25,7 +25,12 @@ export const config = {
 
   anthropic: {
     apiKey: required('ANTHROPIC_API_KEY'),
+    chatModel: process.env['CLAUDE_CHAT_MODEL'] ?? 'claude-opus-5-5',
+    categorizeModel: process.env['CLAUDE_CATEGORIZE_MODEL'] ?? 'claude-haiku-4-5',
   },
+
+  // Shops record dates in local time; "today" for the agent must not be the UTC date.
+  timezone: process.env['APP_TIMEZONE'] ?? 'Africa/Lagos',
 
   sendgrid: {
     apiKey: process.env['SENDGRID_API_KEY'] ?? '',
