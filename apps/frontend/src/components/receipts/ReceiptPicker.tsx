@@ -18,7 +18,7 @@ export default function ReceiptPicker() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (data?.data ?? [])
-      .filter((t) => t.type === 'income' || t.type === 'receivable')
+      .filter((t) => t.type === 'sale' || t.type === 'receivable')
       .filter((t) => !q || `${t.counterparty ?? ''} ${t.description}`.toLowerCase().includes(q))
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   }, [data, query]);

@@ -17,14 +17,10 @@ export interface Shop {
   signatureUrl?: string | null;
 }
 
-export type TransactionType =
-  | 'income'
-  | 'expense'
-  | 'receivable'
-  | 'payable'
-  | 'transfer';
+// Must match the backend's transactions_type_check / transactions_status_check constraints.
+export type TransactionType = 'sale' | 'expense' | 'receivable' | 'payable';
 
-export type TransactionStatus = 'pending' | 'completed' | 'overdue' | 'cancelled';
+export type TransactionStatus = 'pending' | 'settled' | 'overdue';
 
 export interface Transaction {
   id: string;

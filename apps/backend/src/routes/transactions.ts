@@ -31,6 +31,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const result = await db.listTransactions(req.params['shopId']!, req.user!.id, {
       type: req.query['type'] as Parameters<typeof db.listTransactions>[2]['type'],
       category: req.query['category'] as string | undefined,
+      status: req.query['status'] as Parameters<typeof db.listTransactions>[2]['status'],
       dateFrom: req.query['dateFrom'] as string | undefined,
       dateTo: req.query['dateTo'] as string | undefined,
       page,

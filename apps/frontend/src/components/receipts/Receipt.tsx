@@ -7,10 +7,11 @@ export function receiptNumber(tx: Transaction) {
 }
 
 export function receiptStatus(tx: Transaction) {
-  if (tx.status === 'cancelled') return 'Void';
+  // Only credit carries a balance; a cash sale is paid whatever its stored status.
+  if (tx.type !== 'receivable') return 'Paid';
+  if (tx.status === 'settled') return 'Paid';
   if (tx.status === 'overdue') return 'Overdue';
-  if (tx.type === 'receivable' || tx.status === 'pending') return 'Balance due';
-  return 'Paid';
+  return 'Balance due';
 }
 
 const dateFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });

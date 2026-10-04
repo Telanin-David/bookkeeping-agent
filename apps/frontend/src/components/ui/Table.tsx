@@ -17,7 +17,7 @@ interface TableProps<T> {
   className?: string;
 }
 
-export default function Table<T extends Record<string, unknown>>({
+export default function Table<T extends object>({
   columns, data, keyExtractor, onRowClick, emptyMessage = 'No records found', className,
 }: TableProps<T>) {
   return (
@@ -50,7 +50,7 @@ export default function Table<T extends Record<string, unknown>>({
             >
               {columns.map((col) => (
                 <td key={col.key} className={cn('px-4 py-3 text-sm text-white/75', col.className)}>
-                  {col.render ? col.render(row) : String(row[col.key] ?? '')}
+                  {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '')}
                 </td>
               ))}
             </tr>

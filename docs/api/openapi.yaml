@@ -369,6 +369,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, settled, overdue]
         - name: dateFrom
           in: query
           schema:

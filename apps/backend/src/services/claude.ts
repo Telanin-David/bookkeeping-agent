@@ -4,7 +4,10 @@ import { config } from '../config';
 import * as db from './db';
 import { Shop, Transaction, TransactionType, FinancialSummary, ChatMessage } from '../types';
 
-const client = new Anthropic({ apiKey: config.anthropic.apiKey });
+if (!config.anthropic.hasCredentials) {
+  console.warn('No Anthropic credentials found in the environment; chat will fail unless an `ant auth login` profile exists on disk.');
+}
+const client = new Anthropic();
 
 // ── Categories ────────────────────────────────────────────────
 // A fixed list keeps reports groupable; free-text categories from the model drift

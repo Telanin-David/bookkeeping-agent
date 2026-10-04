@@ -23,8 +23,13 @@ export const config = {
     refreshExpiresIn: process.env['JWT_REFRESH_EXPIRES_IN'] ?? '7d',
   },
 
+  // Credentials are resolved by the Anthropic SDK itself, in this order: ANTHROPIC_API_KEY,
+  // ANTHROPIC_AUTH_TOKEN, an `ant auth login` profile, then workload identity federation
+  // (ANTHROPIC_FEDERATION_RULE_ID + ANTHROPIC_ORGANIZATION_ID + ANTHROPIC_SERVICE_ACCOUNT_ID +
+  // ANTHROPIC_IDENTITY_TOKEN_FILE). A set ANTHROPIC_API_KEY — even an empty one — wins over federation.
   anthropic: {
-    apiKey: required('ANTHROPIC_API_KEY'),
+    hasCredentials: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_PROFILE', 'ANTHROPIC_FEDERATION_RULE_ID']
+      .some((name) => Boolean(process.env[name])),
     chatModel: process.env['CLAUDE_CHAT_MODEL'] ?? 'claude-sonnet-5-5',
     categorizeModel: process.env['CLAUDE_CATEGORIZE_MODEL'] ?? 'claude-haiku-4-5',
   },

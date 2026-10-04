@@ -7,14 +7,14 @@ import Button from '@/components/ui/Button';
 import type { Transaction } from '@/types';
 
 const schema = z.object({
-  type:         z.enum(['income', 'expense', 'receivable', 'payable', 'transfer']),
+  type:         z.enum(['sale', 'expense', 'receivable', 'payable']),
   amount:       z.coerce.number().positive(),
   description:  z.string().min(1),
   date:         z.string().min(1),
   category:     z.string().optional(),
   counterparty: z.string().optional(),
   dueDate:      z.string().optional(),
-  status:       z.enum(['pending', 'completed', 'overdue', 'cancelled']).default('pending'),
+  status:       z.enum(['pending', 'settled', 'overdue']).default('pending'),
   currency:     z.string().default('NGN'),
 });
 
@@ -34,13 +34,25 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
     defaultValues: { currency: 'NGN', status: 'pending', ...defaultValues },
   });
 
+  // Blank optional inputs arrive as '' — the API rejects '' as a date, and only credit can have a due date.
+  function submit(values: FormValues) {
+    const blankToUndefined = (v?: string) => (v?.trim() ? v.trim() : undefined);
+    const isCredit = values.type === 'receivable' || values.type === 'payable';
+    return onSubmit({
+      ...values,
+      category: blankToUndefined(values.category),
+      counterparty: blankToUndefined(values.counterparty),
+      dueDate: isCredit ? blankToUndefined(values.dueDate) : undefined,
+    });
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="flex min-w-0 flex-col gap-1.5">
           <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
           <select {...register('type')} className={selectCls}>
-            {['income', 'expense', 'receivable', 'payable', 'transfer'].map((t) => (
+            {['sale', 'expense', 'receivable', 'payable'].map((t) => (
               <option key={t} value={t} className="bg-ink-900 capitalize">{t}</option>
             ))}
           </select>

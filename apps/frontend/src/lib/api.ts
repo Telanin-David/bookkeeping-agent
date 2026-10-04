@@ -93,8 +93,13 @@ export const transactionsApi = {
   list: (shopId: string, params?: {
     type?: string; status?: string; category?: string;
     from?: string; to?: string; page?: number; limit?: number;
-  }) =>
-    api.get<PaginatedResponse<Transaction>>(`/api/v1/shops/${shopId}/transactions`, { params }),
+  }) => {
+    // The API names the date range dateFrom/dateTo (see docs/api/openapi.yaml).
+    const { from, to, ...rest } = params ?? {};
+    return api.get<PaginatedResponse<Transaction>>(`/api/v1/shops/${shopId}/transactions`, {
+      params: { ...rest, dateFrom: from, dateTo: to },
+    });
+  },
 
   get: (shopId: string, txId: string) =>
     api.get<Transaction>(`/api/v1/shops/${shopId}/transactions/${txId}`),
