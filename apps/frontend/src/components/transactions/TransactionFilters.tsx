@@ -16,11 +16,11 @@ interface TransactionFiltersProps {
 const TYPES: TransactionType[] = ['income', 'expense', 'receivable', 'payable', 'transfer'];
 const STATUSES: TransactionStatus[] = ['pending', 'completed', 'overdue', 'cancelled'];
 
-const selectCls = 'glass-input rounded-xl px-3 py-2 text-sm bg-transparent cursor-pointer';
+const selectCls = 'glass-input w-full min-w-0 rounded-xl px-3 py-2 text-sm bg-transparent cursor-pointer sm:w-auto';
 
 export default function TransactionFilters({ value, onChange }: TransactionFiltersProps) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       <select
         value={value.type ?? ''}
         onChange={(e) => onChange({ ...value, type: (e.target.value as TransactionType) || undefined })}

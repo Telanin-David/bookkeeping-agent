@@ -42,7 +42,7 @@ export default function ReportForm() {
   }
 
   return (
-    <div className="glass-card rounded-2xl p-6 space-y-5 max-w-md">
+    <div className="glass-card w-full max-w-md space-y-5 rounded-2xl p-4 sm:p-6">
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium uppercase tracking-wide text-white/40">Report type</label>
         <select
@@ -56,14 +56,14 @@ export default function ReportForm() {
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input id="from" label="From" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         <Input id="to"   label="To"   type="date" value={to}   onChange={(e) => setTo(e.target.value)}   />
       </div>
 
       {error && <p className="text-xs text-white/45">{error}</p>}
 
-      <Button onClick={generate} loading={loading} disabled={!from || !to} className="gap-2">
+      <Button onClick={generate} loading={loading} disabled={!from || !to} className="w-full gap-2 sm:w-auto">
         <DownloadSimple size={15} />
         Generate &amp; Download PDF
       </Button>

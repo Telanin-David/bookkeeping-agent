@@ -37,7 +37,7 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <label className="text-xs font-medium uppercase tracking-wide text-white/40">Type</label>
           <select {...register('type')} className={selectCls}>
             {['income', 'expense', 'receivable', 'payable', 'transfer'].map((t) => (
@@ -53,7 +53,7 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
       <Input id="category"     label="Category"      error={errors.category?.message}     {...register('category')} />
       <Input id="counterparty" label="Counterparty"  error={errors.counterparty?.message} {...register('counterparty')} />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input id="date"    label="Date"     type="date" error={errors.date?.message}    {...register('date')} />
         <Input id="dueDate" label="Due Date" type="date" error={errors.dueDate?.message} {...register('dueDate')} />
       </div>
