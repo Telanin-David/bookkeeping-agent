@@ -3,6 +3,7 @@ const mockCreate = jest.fn();
 // Chat and categorization both go through client.messages; one mock records both, in call order.
 jest.mock('@anthropic-ai/sdk', () => jest.fn().mockImplementation(() => ({
   messages: { create: mockCreate },
+  beta: { messages: { create: mockCreate } },
 })));
 
 jest.mock('./db');
@@ -185,14 +186,34 @@ describe('sendChatMessage', () => {
     expect(result.extractedTransactionIds).toEqual([]);
   });
 
-  it('asks Haiku 4.5 by default, caching the prompt up to the newest message', async () => {
+  it('asks Sonnet 5.5 by default with refusal fallbacks, caching the prompt up to the newest message', async () => {
     mockCreate.mockResolvedValueOnce(textResponse('Hello!'));
     await sendChatMessage(ctx, [{ role: 'user', content: 'hi' }]);
     const params = mockCreate.mock.calls[0][0];
-    expect(params).toEqual(expect.objectContaining({ model: 'claude-haiku-4-5', cache_control: { type: 'ephemeral' } }));
-    // Haiku 4.5 rejects effort, and the fallback beta is for Opus 5 / Fable.
+    expect(params).toEqual(expect.objectContaining({
+      model: 'claude-sonnet-5-5',
+      cache_control: { type: 'ephemeral' },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+    }));
+    // Effort stays at the model's default, the setting the live test passed with.
     expect(params).not.toHaveProperty('output_config');
-    expect(params).not.toHaveProperty('fallbacks');
+  });
+
+  it("acts only on the fallback model's answer after a refusal fallback", async () => {
+    mockCreate.mockResolvedValueOnce({
+      stop_reason: 'end_turn',
+      usage,
+      content: [
+        { type: 'text', text: 'Let me ' },
+        { type: 'tool_use', id: 'declined', name: 'record_transaction', input: { type: 'sale', amount: 1, description: 'x' } },
+        { type: 'fallback', from: { model: 'claude-sonnet-5-5' }, to: { model: 'claude-opus-5-5' } },
+        { type: 'text', text: 'How much did you sell it for?' },
+      ],
+    });
+    const result = await sendChatMessage(ctx, [{ role: 'user', content: 'I sold rice' }]);
+    expect(mockDb.createTransaction).not.toHaveBeenCalled();
+    expect(result.reply).toBe('Let me How much did you sell it for?');
   });
 
   it('logs one usage line per owner message, summed over its tool calls', async () => {
@@ -206,7 +227,7 @@ describe('sendChatMessage', () => {
 
     expect(info).toHaveBeenCalledTimes(1);
     expect(info.mock.calls[0][0]).toBe(
-      'chat usage shop=shop-1 model=claude-haiku-4-5 calls=2 input=3200 cache_write=4000 cache_read=4000 output=150 cost_usd=0.00935',
+      'chat usage shop=shop-1 model=claude-sonnet-5-5 calls=2 input=3200 cache_write=4000 cache_read=4000 output=150 cost_usd=0.01870',
     );
     info.mockRestore();
   });
@@ -276,7 +297,7 @@ describe('sendChatMessage', () => {
     expect(mockDb.createTransaction).toHaveBeenCalledWith(expect.objectContaining({ source: 'chat' }));
     expect(mockDb.recordAiUsage).toHaveBeenCalledTimes(1);
     expect(mockDb.recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'user-1', shopId: 'shop-1', model: 'claude-haiku-4-5', calls: 2,
+      userId: 'user-1', shopId: 'shop-1', model: 'claude-sonnet-5-5', calls: 2,
       input: 6000, cacheWrite: 8000, output: 200, recorded: 1, failed: false,
     }));
     (console.info as jest.Mock).mockRestore();

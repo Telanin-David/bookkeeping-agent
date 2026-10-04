@@ -392,8 +392,8 @@
     |---|---|---|---|
     | `main` before this, Haiku 4.5 | 3/10 | lost track of Ade's payment; never saved the milk | $0.10 |
     | This branch, Haiku 4.5 (3 runs) | 7, 4, 7 /10 | said "Recorded" or "Removed" without saving, 1–3 times a run | $0.03 a run |
-    | This branch, Sonnet 5.5 | 10/10 | — | $0.09 |
-  - **Open:** Haiku 4.5 sometimes says it saved something without calling the tool; the notes make that visible but don't stop it. Sonnet 5.5 (`CHAT_MODEL=claude-sonnet-5-5`) didn't do it once, at about 3× the cost per message. Which model to run is the owner's call.
+    | This branch, Sonnet 5.5 (2 runs) | 10/10, 10/10 | — | $0.09 a run |
+  - **Chat model is now Sonnet 5.5** (owner's decision). Haiku 4.5 sometimes says it saved something without calling the tool, so the books are wrong while the owner thinks they're right; the notes make that visible but don't stop it. Sonnet 5.5 didn't do it once, at about 3× the cost: roughly US$0.009 a message, so at most about $0.18 per owner per day at the 20-message limit. `CHAT_MODEL=claude-haiku-4-5` switches back. Sonnet 5.5 calls go through refusal fallbacks again (removed when the chat moved to Haiku), so a rare safety decline on a harmless message is retried on another model instead of failing.
 
 ## Rules
 - Never commit/push to `main` directly.

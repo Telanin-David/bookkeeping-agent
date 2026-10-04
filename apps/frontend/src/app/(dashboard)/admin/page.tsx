@@ -11,7 +11,7 @@ import { ListSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import DailyCostChart from '@/components/admin/DailyCostChart';
 import type { AdminOverview, AdminUser } from '@/types';
 
-// Above this share of the assistant's records being fixed by owners, Haiku isn't accurate
+// Above this share of the assistant's records being fixed by owners, the chat model isn't accurate
 // enough and a stronger model is worth its price.
 const FIX_RATE_LIMIT = 0.05;
 

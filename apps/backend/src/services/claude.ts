@@ -13,10 +13,19 @@ import { CostKind, Transaction, TransactionType } from '../types';
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-// Haiku 4.5 by default for the chat agent (the cheapest current model; each turn is short
-// and tool-driven), and always for one-shot category classification.
+// Sonnet 5.5 by default for the chat agent: in a live 10-message test Haiku 4.5 said it had
+// saved, fixed or removed something without calling the tool 1–3 times a run, which leaves
+// the books wrong while the owner thinks they're right; Sonnet 5.5 did all 10 correctly at
+// about 3x Haiku's cost. Haiku 4.5 stays for one-shot category classification.
 const CHAT_MODEL = config.anthropic.chatModel;
 const CATEGORIZE_MODEL = 'claude-haiku-4-5';
+
+// The newer models' safety classifiers can occasionally decline a harmless request (a
+// "refusal"). With server-side fallbacks the API re-runs a declined request on the model
+// Anthropic recommends for that kind of refusal, in the same call, instead of the owner
+// getting "I couldn't help with that". Only these models take the parameter.
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+const FALLBACK_MODELS = new Set(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1']);
 
 // US$ per million tokens (input, output), for the usage log only. A 5-minute cache write
 // costs 1.25x input and a cache read 0.1x.
@@ -641,17 +650,31 @@ export async function sendChatMessage(ctx: ChatContext, history: Anthropic.Messa
   }
 }
 
+/**
+ * A response's content as it should be acted on and echoed back. When a fallback model
+ * took over mid-answer, `fallback` blocks mark the switch: before the last one, only text
+ * is kept (the declined model's tool calls and thinking are dropped, per the fallback
+ * rules); everything after it is the fallback model's own answer and is kept as-is.
+ */
+export function afterFallback(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlock[] {
+  let boundary = -1;
+  content.forEach((b, i) => { if (b.type === 'fallback') boundary = i; });
+  if (boundary === -1) return content;
+  return content.filter((b, i) => i > boundary || (i < boundary && b.type === 'text'));
+}
+
 async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usage: Usage, state: ToolState): Promise<ClaudeChatResult> {
-  const messages: Anthropic.MessageParam[] = [...history];
+  const messages: Anthropic.Beta.BetaMessageParam[] = [...history];
   // Every transaction this turn created, marked paid or corrected; the chat shows each one.
   const touched = () => [...new Set([...state.createdTransactionIds, ...state.paidDebtIds, ...state.editedTransactionIds])]
     .filter((id) => !state.actions.some((a) => a.startsWith('deleted ') && a.includes(`[id ${id}]`)));
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    let response: Anthropic.Message;
+    let response: Anthropic.Beta.BetaMessage;
     try {
-      response = await client.messages.create({
+      response = await client.beta.messages.create({
         model: CHAT_MODEL,
+        ...(FALLBACK_MODELS.has(CHAT_MODEL) ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {}),
         max_tokens: 4096,
         // Caches everything up to the newest message. A turn that uses a tool calls the
         // model again with the same start plus the tool's result, and that second call
@@ -695,7 +718,7 @@ async function chatLoop(ctx: ChatContext, history: Anthropic.MessageParam[], usa
       };
     }
 
-    const content = response.content;
+    const content = afterFallback(response.content);
     messages.push({ role: 'assistant', content });
 
     if (response.stop_reason !== 'tool_use') {

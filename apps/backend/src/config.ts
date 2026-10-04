@@ -68,9 +68,10 @@ export const config = {
 
   anthropic: {
     apiKey: required('ANTHROPIC_API_KEY'),
-    // The model behind the chat assistant. Haiku 4.5 is the cheapest current model and
-    // handles this app's short, tool-driven turns; set CHAT_MODEL to try another one.
-    chatModel: process.env['CHAT_MODEL'] || 'claude-haiku-4-5',
+    // The model behind the chat assistant. Sonnet 5.5 is the default because Haiku 4.5, the
+    // cheapest, sometimes says it saved something without saving it (see services/claude.ts);
+    // set CHAT_MODEL=claude-haiku-4-5 to trade that accuracy for about a third of the cost.
+    chatModel: process.env['CHAT_MODEL'] || 'claude-sonnet-5-5',
     // Messages each owner can send the assistant per day (Lagos time), to cap the AI bill.
     // 0 turns the limit off. Admins are never limited.
     chatDailyLimit: Math.max(0, parseInt(process.env['CHAT_DAILY_LIMIT'] || '20', 10) || 0),
