@@ -208,6 +208,7 @@ function Offers({ b }: { b: BillingInfo }) {
                   {save > 0 && <span className="rounded-full bg-white/[0.1] px-2 py-0.5 text-[11px] font-medium text-white/75">Save {naira(save)}</span>}
                 </span>
                 <span className="mt-0.5 block text-[13px] text-white/45">{PLAN_LINE[o.id]}</span>
+                {o.id !== 'day' && <span className="block text-[13px] text-white/35">About {naira(Math.round(o.priceKobo / o.days / 100) * 100)} a day</span>}
               </span>
               <span className="shrink-0 text-right">
                 <span className={cn('block text-[15px] font-semibold tabular-nums', on ? 'text-white' : 'text-white/80')}>{o.priceText}</span>
