@@ -57,6 +57,10 @@ export interface Entitlements {
   planName: string;
   /** When the current kind of plan runs out, counting time already paid in advance. */
   endsAt: string | null;
+  /** When the period running now ends (without time paid in advance). */
+  periodEndsAt: string | null;
+  /** A Monthly or Yearly plan still running underneath a full-capacity pass. */
+  underneath: { plan: P.PaidPlanId; planName: string; endsAt: string } | null;
   /** Paid time that starts later. */
   upcoming: { plan: P.PaidPlanId; planName: string; startsAt: string; endsAt: string }[];
   /** Only while on the trial. */
@@ -105,7 +109,7 @@ async function legacyEntitlements(userId: string, admin: boolean): Promise<Entit
   const limit = config.anthropic.chatDailyLimit;
   const unlimited = limit === 0 || admin;
   return {
-    billingEnabled: false, plan: 'unlimited', planName: P.planName('unlimited'), endsAt: null, upcoming: [], trial: null,
+    billingEnabled: false, plan: 'unlimited', planName: P.planName('unlimited'), endsAt: null, periodEndsAt: null, underneath: null, upcoming: [], trial: null,
     features: P.UNLIMITED_FEATURES, passesEnabled: false,
     chat: unlimited
       ? { used, limit: null, remaining: null, scope: 'day', resetsAt: null }
@@ -121,7 +125,7 @@ export async function getEntitlements(userId: string, now = new Date()): Promise
   if (admin) {
     const used = await dbs.countChatMessagesOn(userId, todayIso(now), config.businessTimeZone);
     return {
-      billingEnabled: true, plan: 'unlimited', planName: 'Admin: everything included', endsAt: null, upcoming: [], trial: null,
+      billingEnabled: true, plan: 'unlimited', planName: 'Admin: everything included', endsAt: null, periodEndsAt: null, underneath: null, upcoming: [], trial: null,
       features: P.UNLIMITED_FEATURES, passesEnabled: passes,
       chat: { used, limit: null, remaining: null, scope: 'day', resetsAt: null },
     };
@@ -133,6 +137,12 @@ export async function getEntitlements(userId: string, now = new Date()): Promise
   const upcoming = P.queuedPeriods(periods, now)
     .filter((p): p is P.Period & { plan: P.PaidPlanId } => p.plan !== 'trial')
     .map((p) => ({ plan: p.plan, planName: P.planName(p.plan), startsAt: p.startsAt.toISOString(), endsAt: p.endsAt.toISOString() }));
+  const below = active && active.plan !== 'trial' && P.PAID_PLANS[active.plan].family === 'pass'
+    ? periods.find((p) => p.plan !== 'trial' && P.PAID_PLANS[p.plan].family === 'subscription' && p.startsAt <= now && p.endsAt > now)
+    : undefined;
+  const underneath = below && below.plan !== 'trial'
+    ? { plan: below.plan, planName: P.planName(below.plan), endsAt: below.endsAt.toISOString() }
+    : null;
 
   let chat: ChatAllowance;
   let trial: Entitlements['trial'] = null;
@@ -157,6 +167,8 @@ export async function getEntitlements(userId: string, now = new Date()): Promise
     plan,
     planName: P.planName(plan),
     endsAt: active ? P.coveredUntil(active, periods).toISOString() : null,
+    periodEndsAt: active ? active.endsAt.toISOString() : null,
+    underneath,
     upcoming,
     trial,
     features: P.featuresFor(plan),

@@ -65,7 +65,12 @@ export interface BillingInfo {
   billingEnabled: boolean;
   plan: PlanId;
   planName: string;
+  /** Counting time paid in advance. */
   endsAt: string | null;
+  /** When the period running now ends. */
+  periodEndsAt: string | null;
+  /** Monthly or Yearly still running underneath a full-capacity pass. */
+  underneath: { plan: PaidPlanId; planName: string; endsAt: string } | null;
   upcoming: { plan: PaidPlanId; planName: string; startsAt: string; endsAt: string }[];
   trial: { endsAt: string; messagesLeft: number } | null;
   features: PlanFeatures;

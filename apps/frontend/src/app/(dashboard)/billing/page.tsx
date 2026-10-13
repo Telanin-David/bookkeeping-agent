@@ -17,6 +17,11 @@ const dayFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short'
 const dayYearFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Lagos' });
 const timeFmt = new Intl.DateTimeFormat('en-NG', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' });
 const day = (iso: string) => dayFmt.format(new Date(iso));
+/** "13 Oct – 12 Nov", with years when the dates fall in different years ("12 Nov 2026 – 12 Nov 2027"). */
+const span = (from: string, to: string) => {
+  const year = (iso: string) => new Date(iso).toLocaleString('en-NG', { year: 'numeric', timeZone: 'Africa/Lagos' });
+  return year(from) === year(to) ? `${day(from)} – ${day(to)}` : `${dayYearFmt.format(new Date(from))} – ${dayYearFmt.format(new Date(to))}`;
+};
 const naira = (kobo: number) => `₦${Math.round(kobo / 100).toLocaleString('en-NG')}`;
 
 const PERIOD: Record<PaidPlanId, string> = { monthly: 'a month', yearly: 'a year', weekly: 'a week', day: 'a day' };
@@ -89,19 +94,21 @@ function CurrentPlan({ b }: { b: BillingInfo }) {
   if (b.plan === 'unlimited') detail = 'Everything is included on this account.';
   else if (b.plan === 'free') detail = 'The assistant, PDF reports and receipts with your logo come with a paid plan.';
   else if (b.plan === 'trial' && b.trial) detail = `Ends ${day(b.trial.endsAt)} · ${b.trial.messagesLeft} of ${chat.limit} assistant messages left`;
-  else if (b.plan === 'day' && b.endsAt) detail = `Until ${timeFmt.format(new Date(b.endsAt))}, ${day(b.endsAt)} · ${chat.remaining} of ${chat.limit} messages left`;
-  else detail = `Until ${b.endsAt ? dayYearFmt.format(new Date(b.endsAt)) : '—'} · ${chat.remaining} of ${chat.limit} assistant messages left today`;
+  else if (b.plan === 'day' && b.periodEndsAt) detail = `Until ${timeFmt.format(new Date(b.periodEndsAt))}, ${day(b.periodEndsAt)} · ${chat.remaining} of ${chat.limit} messages left`;
+  else detail = `Until ${b.periodEndsAt ? dayYearFmt.format(new Date(b.periodEndsAt)) : '—'} · ${chat.remaining} of ${chat.limit} assistant messages left today`;
+  const later = [
+    ...(b.underneath ? [`Then ${b.underneath.planName} until ${dayYearFmt.format(new Date(b.underneath.endsAt))}`] : []),
+    ...b.upcoming.map((u) => `Paid ahead: ${u.planName}, ${dayYearFmt.format(new Date(u.startsAt))} – ${dayYearFmt.format(new Date(u.endsAt))}`),
+  ];
 
   return (
     <section className="glass-card rounded-2xl p-5">
       <p className="text-[13px] font-medium text-white/45">Your plan</p>
       <p className="mt-1 text-2xl font-bold text-white/90">{b.planName}</p>
       <p className="mt-1.5 text-[14px] leading-relaxed text-white/60">{detail}</p>
-      {b.upcoming.length > 0 && (
+      {later.length > 0 && (
         <ul className="mt-3 space-y-1 border-t border-white/[0.06] pt-3 text-[13px] text-white/50">
-          {b.upcoming.map((u) => (
-            <li key={u.startsAt}>Paid ahead: {u.planName} from {day(u.startsAt)} to {dayYearFmt.format(new Date(u.endsAt))}</li>
-          ))}
+          {later.map((line) => <li key={line}>{line}</li>)}
         </ul>
       )}
       {b.plan === 'free' && <p className="mt-3 text-[13px] leading-relaxed text-white/40">{FREE_INCLUDES}</p>}
@@ -267,7 +274,7 @@ function Payments({ payments }: { payments: PaymentRecord[] }) {
                   : [
                       p.paidAt && day(p.paidAt),
                       p.provider === 'manual' ? 'Paid directly' : p.channel ? CHANNEL[p.channel] ?? p.channel : null,
-                      p.period && `covers ${day(p.period.startsAt)} – ${day(p.period.endsAt)}`,
+                      p.period && `covers ${span(p.period.startsAt, p.period.endsAt)}`,
                     ].filter(Boolean).join(' · ')}
               </p>
             </div>

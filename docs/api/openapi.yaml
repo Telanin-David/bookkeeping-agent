@@ -2269,7 +2269,16 @@ components:
         billingEnabled: { type: boolean }
         plan: { type: string, enum: [trial, free, monthly, yearly, weekly, day, unlimited] }
         planName: { type: string }
-        endsAt: { type: string, format: date-time, nullable: true }
+        endsAt: { type: string, format: date-time, nullable: true, description: When this kind of plan runs out, counting time paid in advance }
+        periodEndsAt: { type: string, format: date-time, nullable: true, description: When the period running now ends }
+        underneath:
+          type: object
+          nullable: true
+          description: Monthly or Yearly still running underneath a full-capacity pass
+          properties:
+            plan: { type: string, enum: [monthly, yearly] }
+            planName: { type: string }
+            endsAt: { type: string, format: date-time }
         upcoming:
           type: array
           description: Plans already paid for that start when the current one ends

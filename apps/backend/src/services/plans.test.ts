@@ -136,7 +136,7 @@ describe('Paystack webhook signature', () => {
 describe('refusals', () => {
   it('explains each kind of limit in plain words', async () => {
     const { chatRefusal } = await import('./billing');
-    const base = { billingEnabled: true, endsAt: null, upcoming: [], trial: null, features: P.PAID_FEATURES, passesEnabled: false, planName: '' };
+    const base = { billingEnabled: true, endsAt: null, periodEndsAt: null, underneath: null, upcoming: [], trial: null, features: P.PAID_FEATURES, passesEnabled: false, planName: '' };
     const free = chatRefusal({ ...base, plan: 'free', features: P.FREE_FEATURES, chat: { used: 0, limit: 0, remaining: 0, scope: 'none', resetsAt: null } });
     expect([free.statusCode, free.code]).toEqual([402, 'PLAN_REQUIRED']);
     expect(free.message).toMatch(/paid plan.*Add transaction form/);
