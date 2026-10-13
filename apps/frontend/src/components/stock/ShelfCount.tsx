@@ -86,7 +86,7 @@ function CountForm({ shopId, products, onClose }: { shopId: string; products: Pr
             <input
               id={`count-${p.id}`} type="number" inputMode="decimal" min="0" step="any" placeholder="—"
               value={counted[p.id] ?? ''} onChange={(e) => { setCounted((c) => ({ ...c, [p.id]: e.target.value })); setError(''); }}
-              className="glass-input w-24 rounded-xl px-3 py-2 text-right text-sm tabular-nums"
+              className="glass-input w-24 shrink-0 rounded-xl px-3 py-2 text-right text-base tabular-nums sm:text-sm"
             />
           </li>
         ))}

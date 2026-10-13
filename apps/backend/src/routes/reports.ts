@@ -12,6 +12,7 @@ import { getProfitFigures } from '../services/profit';
 import { renderReceipt, renderProfitAndLoss, renderCreditReport, renderStockReport, receiptNumber } from '../services/pdf';
 import { todayIso } from '../utils/dates';
 import type { Shop } from '../types';
+import { requireFeature, entitlementsFor } from '../middleware/billing';
 
 const router = Router();
 router.use(requireAuth);
@@ -73,13 +74,17 @@ router.post('/receipt', limiter(30), validate(receiptSchema), ownShop, async (re
     if (tx.type === 'expense' || tx.type === 'payable') {
       throw new AppError(422, 'UNPROCESSABLE_ENTITY', 'Receipts are for sales. This transaction is an expense.');
     }
-    const [logo, signature] = await Promise.all([loadBrandingImage(shop.logoUrl), loadBrandingImage(shop.signatureUrl)]);
-    const pdf = await renderReceipt(tx, shop, { logo, signature });
+    // Receipts are on every plan; the shop's own logo and signature are part of the paid plan.
+    const { features } = await entitlementsFor(req);
+    const [logo, signature] = features.branding
+      ? await Promise.all([loadBrandingImage(shop.logoUrl), loadBrandingImage(shop.signatureUrl)])
+      : [null, null];
+    const pdf = await renderReceipt(tx, shop, { logo, signature, madeWith: !features.branding });
     await sendPdf(res, `${receiptNumber(tx)}.pdf`, pdf, null, 'Receipt');
   } catch (err) { next(err); }
 });
 
-router.post('/pl', limiter(10), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/pl', limiter(10), requireFeature('reports'), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const shop = await loadShop(req);
     const { dateFrom, dateTo } = req.body;
@@ -93,7 +98,7 @@ router.post('/pl', limiter(10), validate(dateRangeSchema), ownShop, async (req: 
   } catch (err) { next(err); }
 });
 
-router.post('/credit', limiter(10), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/credit', limiter(10), requireFeature('reports'), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const shop = await loadShop(req);
     const { dateFrom, dateTo } = req.body;
@@ -120,7 +125,7 @@ router.post('/credit', limiter(10), validate(dateRangeSchema), ownShop, async (r
 
 // Stock as of the end of the period (or today), with what came in, went out and went
 // missing during it.
-router.post('/stock', limiter(10), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/stock', limiter(10), requireFeature('reports'), validate(dateRangeSchema), ownShop, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const shop = await loadShop(req);
     const { dateFrom, dateTo } = req.body;

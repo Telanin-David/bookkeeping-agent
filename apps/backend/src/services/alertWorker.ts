@@ -6,12 +6,13 @@
 import { config, db } from '../config';
 import { scanDebts } from './alerts';
 import { scanSalaries } from './staff';
+import { getEntitlements, scanPlans } from './billing';
 import { sendAlertDigest, type DigestAlert } from './email';
 import { todayIso } from '../utils/dates';
 import type { Alert } from '../types';
 
 /** Worth an email. Duplicates are only useful in the moment, so they stay in the app. */
-export const EMAILED_TYPES: Alert['type'][] = ['overdue_receivable', 'bill_due', 'low_stock', 'salary_due'];
+export const EMAILED_TYPES: Alert['type'][] = ['overdue_receivable', 'bill_due', 'low_stock', 'salary_due', 'plan_ending'];
 const MAX_EMAIL_ATTEMPTS = 3;
 /** An alert this old that was never emailed (e.g. the address was confirmed later) stays in the app only. */
 const MAX_AGE_DAYS = 7;
@@ -63,6 +64,9 @@ export async function deliverAlertEmails(now = new Date()): Promise<DeliveryRepo
   const report: DeliveryReport = { users: byUser.size, emailed: 0, failed: 0, waiting: 0 };
   for (const [userId, alerts] of byUser) {
     const first = alerts[0]!;
+    // Alert emails are part of the paid plan (and the trial). Nothing is recorded, so they go
+    // out if the owner pays within the week; they always see the alerts in the app.
+    if (!(await getEntitlements(userId, now)).features.emailAlerts) continue;
     if (inQuietHours(now, String(first['alert_quiet_start']).slice(0, 5), String(first['alert_quiet_end']).slice(0, 5))) {
       report.waiting += 1;
       continue;
@@ -117,7 +121,8 @@ export async function runAlertCycle(now = new Date()): Promise<{ ran: boolean; r
     try {
       const debts = await scanDebts(todayIso(now));
       const salaries = await scanSalaries(todayIso(now));
-      const [raised, resolved] = [debts.raised + salaries.raised, debts.resolved + salaries.resolved];
+      const plans = await scanPlans(now);
+      const [raised, resolved] = [debts.raised + salaries.raised + plans.raised, debts.resolved + salaries.resolved + plans.resolved];
       const delivery = await deliverAlertEmails(now);
       return { ran: true, raised, resolved, delivery };
     } finally {

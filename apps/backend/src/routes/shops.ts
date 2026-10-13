@@ -9,6 +9,8 @@ import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import { saveBrandingFile, deleteBrandingFile } from '../services/storage';
 import type { BrandingKind } from '../types';
+import { entitlementsFor } from '../middleware/billing';
+import { lockedError } from '../services/billing';
 
 const router = Router();
 router.use(requireAuth);
@@ -35,6 +37,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.post('/', validate(createSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { features } = await entitlementsFor(req);
+    if (features.maxShops !== null && (await db.listShops(req.user!.id)).length >= features.maxShops) throw lockedError('shops');
     const shop = await db.createShop({ ownerId: req.user!.id, ...req.body });
     res.status(201).json(shop);
   } catch (err) { next(err); }

@@ -5,6 +5,7 @@ import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as staff from '../services/staff';
 import { todayIso } from '../utils/dates';
+import { requireFeature } from '../middleware/billing';
 
 // Optional: only owners who pay people use any of this.
 const router = Router({ mergeParams: true });
@@ -35,14 +36,14 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', validate(createSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', requireFeature('staff'), validate(createSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     res.status(201).json(await staff.createStaff(shopId(req), req.user!.id, req.body));
   } catch (err) { next(err); }
 });
 
 // Records a salary expense for each person, all together (a running cost, category Salaries).
-router.post('/pay', validate(paySchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/pay', requireFeature('staff'), validate(paySchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const today = todayIso();
     const body = req.body as z.infer<typeof paySchema>;

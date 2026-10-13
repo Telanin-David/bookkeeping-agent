@@ -1,5 +1,7 @@
 import { config, db } from '../config';
 import { todayIso, addDays } from '../utils/dates';
+import { currentPlans } from './billing';
+import { PAID_PLANS, planName, type PlanId } from './plans';
 
 // The business dashboard's numbers. Counts and costs only: nothing here reads a shop's
 // amounts, customers or descriptions.
@@ -41,7 +43,10 @@ export async function getOverview(now = new Date()): Promise<DashboardOverview> 
   const monthStart = `${today.slice(0, 8)}01`;
   const p = [tz, today, from];
 
-  const dailyLimit = config.anthropic.chatDailyLimit;
+  // With plans on, the Monthly plan's daily cap is the limit worth watching (when many owners
+  // reach it, it's time for the full-capacity passes); otherwise the one CHAT_DAILY_LIMIT.
+  const monthlyCap = 'perDay' in PAID_PLANS.monthly.chat ? PAID_PLANS.monthly.chat.perDay : 0;
+  const dailyLimit = config.billing.enabled ? monthlyCap : config.anthropic.chatDailyLimit;
   const [users, active, ai, daily, corrections, recorded, returning, emails, limitHits] = await Promise.all([
     db.query(
       `SELECT COUNT(*) AS total,
@@ -172,17 +177,24 @@ export async function getOverview(now = new Date()): Promise<DashboardOverview> 
 
 export interface DashboardUser {
   id: string; name: string; email: string; signedUp: string; emailVerified: boolean; isAdmin: boolean;
+  /** Only with billing on: the plan in force now, until when, and everything paid so far. */
+  plan: { id: PlanId; name: string; endsAt: string | null; paidKobo: number } | null;
   shops: number; lastActive: string | null; activeDays: number;
   messages: number; cost: number; recorded: number; corrected: number;
 }
 
 const USER_LIMIT = 200;
 
-/** Every account, most expensive first, with its last 30 days of use. */
-export async function listUsers(now = new Date()): Promise<{ data: DashboardUser[]; total: number; limit: number }> {
+/**
+ * Every account, most expensive first, with its last 30 days of use. `search` finds an owner by
+ * name or email (to record a payment for someone new, who'd otherwise be far down the list).
+ */
+export async function listUsers(now = new Date(), search?: string): Promise<{ data: DashboardUser[]; total: number; limit: number }> {
   const tz = config.businessTimeZone;
   const today = todayIso(now);
   const from = addDays(today, -(WINDOW_DAYS - 1));
+  const term = search?.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const pattern = term ? `%${term}%` : null;
   const [{ rows }, count] = await Promise.all([
     db.query(
       `SELECT u.id, u.name, u.email, to_char(${day('u.created_at')}, 'YYYY-MM-DD') AS signed_up,
@@ -198,12 +210,14 @@ export async function listUsers(now = new Date()): Promise<{ data: DashboardUser
            SELECT COUNT(*) FILTER (WHERE NOT g.failed) AS messages, SUM(g.cost_usd) AS cost, SUM(g.recorded) AS recorded
              FROM ai_usage g WHERE g.user_id = u.id AND ${day('g.created_at')} BETWEEN $3 AND $2
          ) x ON true
+        WHERE ($5::text IS NULL OR u.email ILIKE $5 OR u.name ILIKE $5)
         ORDER BY COALESCE(x.cost, 0) DESC, last_active DESC NULLS LAST, u.created_at DESC
         LIMIT $4`,
-      [tz, today, from, USER_LIMIT],
+      [tz, today, from, USER_LIMIT, pattern],
     ),
-    db.query('SELECT COUNT(*) AS n FROM users'),
+    db.query('SELECT COUNT(*) AS n FROM users u WHERE ($1::text IS NULL OR u.email ILIKE $1 OR u.name ILIKE $1)', [pattern]),
   ]);
+  const plans = config.billing.enabled ? await currentPlans(rows.map((r) => r['id'] as string)) : new Map();
   return {
     data: rows.map((r) => ({
       id: r['id'] as string,
@@ -219,6 +233,10 @@ export async function listUsers(now = new Date()): Promise<{ data: DashboardUser
       cost: num(r['cost']),
       recorded: num(r['recorded']),
       corrected: num(r['corrected']),
+      plan: (() => {
+        const p = plans.get(r['id'] as string);
+        return p ? { id: p.plan, name: planName(p.plan), endsAt: p.endsAt, paidKobo: p.paidKobo } : null;
+      })(),
     })),
     total: num(count.rows[0]!['n']),
     limit: USER_LIMIT,

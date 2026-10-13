@@ -118,6 +118,7 @@ const TYPE_LABELS: Partial<Record<Alert['type'], string>> = {
   bill_due: 'Bill due',
   low_stock: 'Low stock',
   salary_due: 'Pay day',
+  plan_ending: 'Your plan',
 };
 
 /** One email for everything that's new, grouped by shop, so a busy day isn't a stream of emails. */

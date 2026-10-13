@@ -10,6 +10,7 @@ import * as db from '../services/db';
 import { saveFile } from '../services/storage';
 import { detectKind, readSheet } from '../services/importParse';
 import { buildTemplate, confirmImport, listImports, loadSheet, previewOf, undoImport, validateImport } from '../services/importer';
+import { requireFeature } from '../middleware/billing';
 
 // Import from a spreadsheet (Deliverable 9): upload → preview with guessed columns →
 // validate (check every row) → confirm (import) → undo if it was a mistake.
@@ -66,7 +67,7 @@ router.get('/', requireShopOwnership((req) => req.query['shopId']), async (req: 
 });
 
 // shopId arrives as a multipart form field, so the ownership check runs after multer.
-router.post('/upload', uploadLimiter, upload.single('file'), tooBig, requireShopOwnership((req) => req.body?.shopId),
+router.post('/upload', uploadLimiter, requireFeature('import'), upload.single('file'), tooBig, requireShopOwnership((req) => req.body?.shopId),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.file) throw new AppError(400, 'BAD_REQUEST', 'Choose a file to upload.');

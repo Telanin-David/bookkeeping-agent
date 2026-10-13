@@ -31,14 +31,15 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 
 const Rule = () => <div className="my-4 border-t border-dashed border-black/20" />;
 
-export default function Receipt({ tx, shop }: { tx: Transaction; shop: Shop }) {
+/** `branded` false (free plan): no logo or signature, and a "Made with Bookkeeping AI" line. */
+export default function Receipt({ tx, shop, branded = true }: { tx: Transaction; shop: Shop; branded?: boolean }) {
   const isInvoice = tx.type === 'receivable';
   const loggedAt = new Date(tx.createdAt);
 
   return (
     <article className="receipt-paper mx-auto w-full max-w-[360px] rounded-2xl bg-[#fbfbfa] px-7 pb-8 pt-9 text-black shadow-[0_24px_80px_rgba(0,0,0,0.55)] print:max-w-[80mm] print:rounded-none print:bg-white print:px-0 print:pt-0 print:shadow-none">
       <header className="text-center">
-        {shop.logoUrl && (
+        {branded && shop.logoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={shop.logoUrl} alt="" className="mx-auto mb-3 max-h-16 max-w-[180px] object-contain" />
         )}
@@ -93,7 +94,7 @@ export default function Receipt({ tx, shop }: { tx: Transaction; shop: Shop }) {
       {isInvoice && (
         <div className="mt-8">
           <div className="flex h-14 items-end">
-            {shop.signatureUrl && (
+            {branded && shop.signatureUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={shop.signatureUrl} alt="" className="max-h-14 max-w-[160px] object-contain" />
             )}
@@ -107,7 +108,8 @@ export default function Receipt({ tx, shop }: { tx: Transaction; shop: Shop }) {
 
       <footer className="text-center">
         <p className="text-[13px] text-black/70">Thank you for your patronage.</p>
-        <p className="mt-1 text-[11px] text-black/35">Issued {dateFmt.format(new Date(lagosDay.format(new Date())))} · Bookkeeping AI</p>
+        <p className="mt-1 text-[11px] text-black/35">Issued {dateFmt.format(new Date(lagosDay.format(new Date())))}{branded && ' · Bookkeeping AI'}</p>
+        {!branded && <p className="mt-1 text-[11px] text-black/45">Made with Bookkeeping AI · free bookkeeping for your shop</p>}
       </footer>
     </article>
   );

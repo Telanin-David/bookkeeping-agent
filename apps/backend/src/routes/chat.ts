@@ -6,7 +6,7 @@ import { validate } from '../middleware/validation';
 import { AppError } from '../middleware/errorHandler';
 import * as db from '../services/db';
 import * as claudeService from '../services/claude';
-import { getDailyUsage, limitReachedMessage } from '../services/chatLimit';
+import { getDailyUsage, chatAllowanceError } from '../services/chatLimit';
 
 const router = Router();
 router.use(requireAuth);
@@ -79,12 +79,11 @@ router.post('/sessions/:sessionId/messages', validate(sendMessageSchema), async 
     const shop = await db.findShopById(session.shopId, req.user!.id);
     if (!shop) throw new AppError(404, 'NOT_FOUND', 'Shop not found');
 
-    // Checked before anything is saved, so a refused message leaves no trace. Two messages
-    // sent at the same moment can both get in at the limit; that costs a cent, not worth a lock.
-    const usage = await getDailyUsage(req.user!.id);
-    if (usage.remaining === 0) {
-      throw new AppError(429, 'DAILY_LIMIT', limitReachedMessage(usage.limit!));
-    }
+    // Checked before anything is saved, so a refused message leaves no trace: the daily limit,
+    // the trial's or day pass's messages, or a plan without the assistant. Two messages sent at
+    // the same moment can both get in at the limit; that costs a cent, not worth a lock.
+    const refusal = await chatAllowanceError(req.user!.id);
+    if (refusal) throw refusal;
 
     const { content, type, mediaUrl } = req.body;
     const userMsg = await db.addChatMessage(session.id, 'user', content, type, mediaUrl);

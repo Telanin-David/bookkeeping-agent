@@ -111,7 +111,7 @@ export default function OnboardingPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Amara Provisions"
               autoComplete="organization"
-              className="glass-input mt-2 h-12 rounded-2xl px-4 text-base text-white/90 placeholder:text-white/30 focus:outline-none"
+              className="glass-input mt-2 h-12 w-full rounded-2xl px-4 text-base text-white/90 placeholder:text-white/30 focus:outline-none"
             />
 
             <p className="mt-6 text-[13px] font-medium text-white/55">What do you sell?</p>
@@ -142,7 +142,7 @@ export default function OnboardingPage() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="e.g. Yaba, Lagos"
-              className="glass-input mt-2 h-12 rounded-2xl px-4 text-base text-white/90 placeholder:text-white/30 focus:outline-none"
+              className="glass-input mt-2 h-12 w-full rounded-2xl px-4 text-base text-white/90 placeholder:text-white/30 focus:outline-none"
             />
 
             {error && <p className="mt-4 text-[14px] text-white/60">{error}</p>}

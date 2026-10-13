@@ -28,7 +28,19 @@
   /* Date fields: a softer calendar icon that brightens on hover, and the date itself
      left-aligned (iOS centres it) at a steady height even when empty. */
   input[type='date'] { min-height: 2.75rem; }
-  input[type='date']::-webkit-date-and-time-value { text-align: left; }
+  input[type='date']::-webkit-date-and-time-value { text-align: left; margin: 0; }
+
+  /* iPhones give date and time fields a built-in minimum width and their own frame, so a
+     full-width date field pushes past the edge of its form. Let every field shrink to the
+     space it's given, and take Safari's frame off date fields (ours is drawn by .glass-input). */
+  input, select, textarea { min-width: 0; max-width: 100%; }
+  @supports (-webkit-touch-callout: none) {
+    input[type='date'], input[type='time'], input[type='datetime-local'], input[type='month'] {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+    }
+  }
   input[type='date']::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; transition: opacity 150ms; }
   input[type='date']::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
 

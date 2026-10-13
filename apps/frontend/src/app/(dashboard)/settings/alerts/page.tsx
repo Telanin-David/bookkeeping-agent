@@ -10,6 +10,8 @@ import { ListSkeleton } from '@/components/ui/Skeleton';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { useFeature } from '@/hooks/useBilling';
+import Locked from '@/components/billing/Locked';
 
 const WHAT_IS_EMAILED = [
   'A customer’s credit is past its due date and not fully paid',
@@ -24,6 +26,7 @@ export default function AlertSettingsPage() {
   const { data, isLoading } = useQuery({ queryKey: ['alert-settings'], queryFn: accountApi.alertSettings, enabled: !isDemo && !!user });
 
   const [emailAlerts, setEmailAlerts] = useState(true);
+  const emailIncluded = useFeature('emailAlerts');
   const [quietOn, setQuietOn] = useState(true);
   const [quietStart, setQuietStart] = useState('22:00');
   const [quietEnd, setQuietEnd] = useState('07:00');
@@ -91,6 +94,10 @@ export default function AlertSettingsPage() {
                 </div>
               )}
             </div>
+
+            {!emailIncluded && (
+              <Locked compact title="Alert emails come with a paid plan" text="Every alert still shows in the app. Your settings below are kept for when you choose a plan." />
+            )}
 
             <form onSubmit={save} className="glass-card space-y-5 rounded-2xl p-5">
               <label className="flex cursor-pointer items-start justify-between gap-4">

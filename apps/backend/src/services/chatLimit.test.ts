@@ -13,7 +13,7 @@ describe('getDailyUsage', () => {
     expect(config.anthropic.chatDailyLimit).toBe(20);
     mockDb.countChatMessagesOn.mockResolvedValue(5);
     mockDb.isAdmin.mockResolvedValue(false);
-    expect(await getDailyUsage('user-1')).toEqual({ used: 5, limit: 20, remaining: 15 });
+    expect(await getDailyUsage('user-1')).toMatchObject({ used: 5, limit: 20, remaining: 15, scope: 'day' });
     expect(mockDb.countChatMessagesOn).toHaveBeenCalledWith('user-1', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), 'Africa/Lagos');
   });
 
@@ -26,7 +26,7 @@ describe('getDailyUsage', () => {
   it('never limits an admin', async () => {
     mockDb.countChatMessagesOn.mockResolvedValue(50);
     mockDb.isAdmin.mockResolvedValue(true);
-    expect(await getDailyUsage('admin-1')).toEqual({ used: 50, limit: null, remaining: null });
+    expect(await getDailyUsage('admin-1')).toMatchObject({ used: 50, limit: null, remaining: null });
   });
 });
 

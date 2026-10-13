@@ -36,6 +36,8 @@ tags:
     description: The signed-in owner's own settings
   - name: imports
     description: Excel/CSV bulk upload pipeline
+  - name: billing
+    description: Plans, the free trial and payments (Paystack, or recorded by hand)
   - name: admin
     description: Business dashboard for the app's admins (counts and costs only)
   - name: health
@@ -308,10 +310,114 @@ paths:
       description: |
         Each owner can send CHAT_DAILY_LIMIT messages a day (default 20; resets at midnight in
         BUSINESS_TIME_ZONE). Only answered messages count. limit and remaining are null when there
-        is no limit (CHAT_DAILY_LIMIT=0, or an admin).
+        is no limit (CHAT_DAILY_LIMIT=0, or an admin). When billing is on, the allowance comes from
+        the owner's plan instead (see /billing): the trial's and the day pass's messages are for the
+        whole period, and the free plan has none.
       responses:
         '200': { description: Usage, content: { application/json: { schema: { $ref: '#/components/schemas/DailyUsage' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ── BILLING (plans and payments) ────────────
+  /billing:
+    get:
+      tags: [billing]
+      summary: The owner's plan, what's on offer and their payments (the Plan screen)
+      description: |
+        Off unless the server has BILLING_ENABLED=true: then billingEnabled is false, plan is
+        `unlimited`, every feature is on, offers and payments are empty, and the chat keeps the
+        CHAT_DAILY_LIMIT. When on, a new owner's free trial (TRIAL_DAYS, default 14, and
+        TRIAL_MESSAGES, default 40) starts the first time their plan is read; one trial per account.
+        Admins are always `unlimited`.
+      responses:
+        '200': { description: Plan, content: { application/json: { schema: { $ref: '#/components/schemas/BillingInfo' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /billing/checkout:
+    post:
+      tags: [billing]
+      summary: Start paying for a plan
+      description: |
+        Creates a pending payment (reference `bk_<plan>_<random>`) and a Paystack transaction for the
+        plan's fixed price, with bank transfer, card and USSD. Send the owner to authorizationUrl;
+        Paystack returns them to FRONTEND_URL/billing?reference=…, which then calls /billing/verify.
+        A plan bought before the current one ends starts when it ends (no days lost); a weekly or
+        day pass bought during Monthly or Yearly starts at once as a top-up. Weekly and day passes
+        are only on sale once an admin switches them on. 10 a minute per owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [monthly, yearly, weekly, day] }
+      responses:
+        '201': { description: Payment started, content: { application/json: { schema: { $ref: '#/components/schemas/CheckoutResult' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { description: Paystack refused or couldn't be reached, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '503': { description: 'PAYMENTS_UNAVAILABLE: PAYSTACK_SECRET_KEY is not set; the message tells the owner to pay by transfer', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /billing/verify:
+    post:
+      tags: [billing]
+      summary: Ask Paystack whether a payment has arrived, and switch the plan on if so
+      description: |
+        Checks with Paystack that the payment succeeded, in naira, for exactly the stored amount.
+        A wrong amount marks the payment failed. Safe to call any number of times, and at the same
+        time as the webhook: a payment only ever adds one plan period. `pending` means a transfer
+        hasn't arrived yet; ask again shortly. 30 a minute per owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference]
+              properties:
+                reference: { type: string, minLength: 6, maxLength: 100 }
+      responses:
+        '200':
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [success, pending, failed] }
+                  payment: { $ref: '#/components/schemas/PaymentRecord' }
+                  entitlements: { $ref: '#/components/schemas/BillingInfo' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { description: Couldn't reach Paystack; the plan will still switch on through the webhook, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /billing/paystack/webhook:
+    post:
+      tags: [billing]
+      summary: Paystack's webhook (charge.success)
+      description: |
+        Set as the Webhook URL in Paystack (Settings → API Keys & Webhooks). No JWT: the body must be
+        signed with the secret key (HMAC-SHA512 in x-paystack-signature). The event is never trusted
+        on its own: the payment is confirmed with Paystack's verify API before the plan switches on.
+      security: []
+      parameters:
+        - in: header
+          name: x-paystack-signature
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: Received (including events that need nothing done) }
+        '401': { description: Bad or missing signature }
+        '500': { description: Couldn't check with Paystack; Paystack retries later }
 
   # ── ADMIN (business dashboard) ─────────────
   /admin/overview:
@@ -335,6 +441,12 @@ paths:
     get:
       tags: [admin]
       summary: Every account with its last 30 days of use, most AI spending first (top 200)
+      parameters:
+        - in: query
+          name: search
+          required: false
+          schema: { type: string, maxLength: 100 }
+          description: Only accounts whose name or email contains this (any case)
       responses:
         '200':
           description: Users
@@ -348,6 +460,66 @@ paths:
                   limit: { type: integer, example: 200 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { description: 'Not an admin, or not signed in: the same answer as a path that does not exist' }
+
+  /admin/billing:
+    get:
+      tags: [admin]
+      summary: Money in, paying owners, trials, and the passes switch
+      description: Amounts are in kobo. trialsEnded30 counts trials that ended in the last 30 days; trialsConverted30 those of them whose owner has paid since.
+      responses:
+        '200': { description: Billing overview, content: { application/json: { schema: { $ref: '#/components/schemas/AdminBilling' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: 'Not an admin, or not signed in: the same answer as a path that does not exist' }
+
+  /admin/billing/passes:
+    put:
+      tags: [admin]
+      summary: Switch the full-capacity passes (weekly and day) on or off for sale
+      description: Owners who already bought a pass keep it when this is switched off.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { type: object, properties: { passesEnabled: { type: boolean } } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: 'Not an admin, or not signed in: the same answer as a path that does not exist' }
+
+  /admin/users/{userId}/payments:
+    post:
+      tags: [admin]
+      summary: Record money an owner sent straight to the business account, and switch their plan on
+      description: |
+        For bank transfers outside Paystack. The plan period is added exactly as for a Paystack
+        payment (queued after the current plan if one is running). amount is in naira and defaults
+        to the plan's price; the admin who recorded it is stored with the payment.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [monthly, yearly, weekly, day] }
+                amount: { type: number, description: Naira received; defaults to the plan's price }
+                note: { type: string, maxLength: 300, example: 'GTB transfer, 13 Oct' }
+      responses:
+        '201': { description: Recorded, content: { application/json: { schema: { $ref: '#/components/schemas/PaymentRecord' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: 'No such owner; or not an admin' }
 
   # ── SHOPS ────────────────────────────────────
   /shops:
@@ -394,6 +566,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Shop'
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1075,6 +1248,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/StaffMember' }
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -1118,6 +1292,7 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Transaction' }
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1288,6 +1463,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatMessageResponse'
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1376,6 +1552,7 @@ paths:
               schema:
                 type: string
                 format: binary
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1406,6 +1583,7 @@ paths:
               schema:
                 type: string
                 format: binary
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1439,6 +1617,7 @@ paths:
               schema:
                 type: string
                 format: binary
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1639,6 +1818,7 @@ paths:
         '201':
           description: Read; here is a preview
           content: { application/json: { schema: { $ref: '#/components/schemas/ImportPreview' } } }
+        '402': { $ref: '#/components/responses/PlanRequired' }
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { description: Larger than 5 MB }
         '422': { description: Not a readable spreadsheet, no header row, or no rows }
@@ -1814,6 +1994,19 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    PlanRequired:
+      description: |
+        PLAN_REQUIRED: the owner's plan doesn't include this (only when billing is switched on).
+        details[0].message names the feature (assistant, reports, staff, import, shops). Also
+        sent by the chat when the trial's messages are used up.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: PLAN_REQUIRED
+            message: 'PDF reports are part of the paid plan. Your profit is always on the Profit page.'
+            details: [{ field: feature, message: reports }]
     InternalError:
       description: Unexpected server error
       content:
@@ -1925,6 +2118,11 @@ components:
         used: { type: integer }
         limit: { type: integer, nullable: true }
         remaining: { type: integer, nullable: true }
+        scope:
+          type: string
+          enum: [day, period, none]
+          description: 'day: resets at midnight (Monthly, Yearly, weekly pass, or billing off). period: for the whole trial or day pass. none: the free plan has no assistant.'
+        resetsAt: { type: string, format: date-time, nullable: true }
 
     AdminOverview:
       type: object
@@ -2008,6 +2206,140 @@ components:
         cost: { type: number, description: US dollars, last 30 days }
         recorded: { type: integer }
         corrected: { type: integer }
+        plan:
+          type: object
+          nullable: true
+          description: The paid plan running now; null for trial, free, or billing off
+          properties:
+            id: { type: string, enum: [monthly, yearly, weekly, day] }
+            name: { type: string }
+            endsAt: { type: string, format: date-time }
+            paidKobo: { type: integer }
+
+    # ── Billing ─────────────────────────────────
+    PlanFeatures:
+      type: object
+      description: maxShops is null for no limit (billing off, or an admin)
+      properties:
+        assistant: { type: boolean }
+        reports: { type: boolean }
+        branding: { type: boolean, description: Logo and signature on receipts; without it, receipts carry a "Made with Bookkeeping AI" line }
+        emailAlerts: { type: boolean }
+        staff: { type: boolean }
+        import: { type: boolean }
+        maxShops: { type: integer, nullable: true }
+
+    PlanOffer:
+      type: object
+      properties:
+        id: { type: string, enum: [monthly, yearly, weekly, day] }
+        name: { type: string }
+        priceKobo: { type: integer, example: 500000 }
+        priceText: { type: string, example: '₦5,000' }
+        days: { type: number }
+        messages: { type: string, example: '6 assistant messages a day' }
+        summary: { type: string }
+        pass: { type: boolean, description: A full-capacity pass (weekly or day) }
+
+    PaymentRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        plan: { type: string, enum: [monthly, yearly, weekly, day] }
+        planName: { type: string }
+        amountKobo: { type: integer }
+        amountText: { type: string }
+        provider: { type: string, enum: [paystack, manual] }
+        status: { type: string, enum: [pending, success, failed] }
+        channel: { type: string, nullable: true, example: bank_transfer }
+        reference: { type: string }
+        note: { type: string, nullable: true }
+        paidAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        period:
+          type: object
+          nullable: true
+          properties:
+            startsAt: { type: string, format: date-time }
+            endsAt: { type: string, format: date-time }
+
+    BillingInfo:
+      type: object
+      properties:
+        billingEnabled: { type: boolean }
+        plan: { type: string, enum: [trial, free, monthly, yearly, weekly, day, unlimited] }
+        planName: { type: string }
+        endsAt: { type: string, format: date-time, nullable: true, description: When this kind of plan runs out, counting time paid in advance }
+        periodEndsAt: { type: string, format: date-time, nullable: true, description: When the period running now ends }
+        underneath:
+          type: object
+          nullable: true
+          description: Monthly or Yearly still running underneath a full-capacity pass
+          properties:
+            plan: { type: string, enum: [monthly, yearly] }
+            planName: { type: string }
+            endsAt: { type: string, format: date-time }
+        upcoming:
+          type: array
+          description: Plans already paid for that start when the current one ends
+          items:
+            type: object
+            properties:
+              plan: { type: string, enum: [monthly, yearly, weekly, day] }
+              planName: { type: string }
+              startsAt: { type: string, format: date-time }
+              endsAt: { type: string, format: date-time }
+        trial:
+          type: object
+          nullable: true
+          properties:
+            endsAt: { type: string, format: date-time }
+            messagesLeft: { type: integer }
+        features: { $ref: '#/components/schemas/PlanFeatures' }
+        chat: { $ref: '#/components/schemas/DailyUsage' }
+        passesEnabled: { type: boolean }
+        offers: { type: array, items: { $ref: '#/components/schemas/PlanOffer' }, description: Only on GET /billing }
+        payments: { type: array, items: { $ref: '#/components/schemas/PaymentRecord' }, description: Only on GET /billing }
+        passSpendKobo: { type: integer, description: 'Only on GET /billing: spent on passes this month' }
+
+    CheckoutResult:
+      type: object
+      properties:
+        authorizationUrl: { type: string, format: uri, description: Paystack's payment page }
+        reference: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+
+    AdminBilling:
+      type: object
+      properties:
+        billingEnabled: { type: boolean }
+        paystackConfigured: { type: boolean }
+        passesEnabled: { type: boolean }
+        revenueThisMonthKobo: { type: integer }
+        paymentsThisMonth: { type: integer }
+        revenueLast30Kobo: { type: integer }
+        payingOwners: { type: integer }
+        byPlan:
+          type: array
+          items:
+            type: object
+            properties:
+              plan: { type: string, enum: [monthly, yearly, weekly, day] }
+              planName: { type: string }
+              owners: { type: integer }
+        onTrial: { type: integer }
+        trialsEnded30: { type: integer }
+        trialsConverted30: { type: integer }
+        recent:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/PaymentRecord'
+              - type: object
+                properties:
+                  ownerName: { type: string }
+                  ownerEmail: { type: string, format: email }
 
     AlertSettings:
       type: object
@@ -2559,12 +2891,13 @@ components:
           format: uuid
         type:
           type: string
-          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock, bill_due, salary_due]
+          enum: [low_cash, high_payable, overdue_receivable, duplicate, anomaly, low_stock, bill_due, salary_due, plan_ending]
           description: |
             Raised today: overdue_receivable (a customer's debt past its due date), bill_due (a bill due
             within 2 days or overdue), salary_due (a staff member's pay day, from the day before until their
             salary is recorded), low_stock, duplicate (the same transaction entered twice within 2
-            minutes; in the app only). low_cash, high_payable and anomaly are reserved, not raised yet.
+            minutes; in the app only), plan_ending (3 days before Monthly or Yearly ends, 2 before the
+            trial ends; only when billing is on). low_cash, high_payable and anomaly are reserved, not raised yet.
         status:
           type: string
           enum: [active, acknowledged, dismissed, resolved]

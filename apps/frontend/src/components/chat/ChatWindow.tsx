@@ -9,6 +9,7 @@ import MessageInput, { type Attachment } from './MessageInput';
 import Spinner from '@/components/ui/Spinner';
 import { DEMO_TRANSACTIONS } from '@/lib/demo';
 import { formatCurrency } from '@/lib/utils';
+import { useBilling } from '@/hooks/useBilling';
 import type { ChatMessage, DailyUsage } from '@/types';
 
 const DEMO_MESSAGES: ChatMessage[] = [
@@ -73,6 +74,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
 
   // Messages left today, shared by every chat (the limit is per owner, not per chat).
   const { data: usage } = useQuery({ queryKey: ['chat-usage'], queryFn: chatApi.usage, enabled: !isDemo });
+  const { data: billing } = useBilling();
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ['chat-messages', sessionId],
@@ -127,6 +129,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
         ...old, data.userMessage, data.assistantMessage,
       ]);
       qc.setQueryData<DailyUsage>(['chat-usage'], data.dailyUsage);
+      qc.invalidateQueries({ queryKey: ['billing'] });
       // The assistant may have recorded a sale, a payment or a stock change: other screens refetch when next shown.
       for (const key of ['transactions', 'transaction', 'payments', 'profit', 'staff', 'products', 'movements', 'alerts']) {
         qc.invalidateQueries({ queryKey: [key] });
@@ -137,6 +140,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
       // refetch so it shows, and pass the server's explanation to the input to display.
       qc.invalidateQueries({ queryKey: ['chat-messages', sessionId] });
       qc.invalidateQueries({ queryKey: ['chat-usage'] });
+      qc.invalidateQueries({ queryKey: ['billing'] });
       const serverMessage = isAxiosError(err) ? err.response?.data?.message : undefined;
       throw new Error(serverMessage ?? 'Message failed to send. Check your connection and try again.');
     }
@@ -147,7 +151,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <MessageList messages={[...messages, ...optimistic]} />
-      <MessageInput onSend={handleSend} disabled={usage?.remaining === 0} footer={<UsageLine usage={usage} />} />
+      <MessageInput onSend={handleSend} disabled={usage?.remaining === 0} footer={<UsageLine usage={usage} plan={billing?.billingEnabled ? billing.plan : undefined} />} />
     </div>
   );
 }
@@ -156,17 +160,34 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
 // (free) instead of in the assistant's replies (paid for every time).
 const TIP = 'Tip: put several sales in one message, like "sold rice 10k, sugar 5k, beans 3k".';
 
-function UsageLine({ usage }: { usage?: DailyUsage }) {
+const formLink = <Link href="/transactions" className="text-white/80 underline underline-offset-2">add sales with the form</Link>;
+const plansLink = (text: string) => <Link href="/billing" className="text-white/80 underline underline-offset-2">{text}</Link>;
+
+/** Under the chat box: what's left on the owner's plan, and what to do when it runs out. */
+function UsageLine({ usage, plan }: { usage?: DailyUsage; plan?: string }) {
+  if (usage?.scope === 'none') {
+    return <span className="text-white/60">The assistant comes with a paid plan: {plansLink('see plans')}. You can always {formLink}.</span>;
+  }
   if (usage?.remaining === 0) {
+    if (plan === 'trial') {
+      return <span className="text-white/60">You&apos;ve used the free trial&apos;s {usage.limit} messages. {plansLink('Choose a plan')} to keep the assistant, or {formLink}.</span>;
+    }
+    if (usage.scope === 'period') {
+      return <span className="text-white/60">You&apos;ve used the {usage.limit} messages on your day pass. You can still {formLink}.</span>;
+    }
     return (
       <span className="text-white/60">
-        You&apos;ve used today&apos;s {usage.limit} messages. They start again at midnight. You can still{' '}
-        <Link href="/transactions" className="text-white/80 underline underline-offset-2">add sales with the form</Link>.
+        You&apos;ve used today&apos;s {usage.limit} messages. They start again at midnight. You can still {formLink}.
       </span>
     );
   }
   if (usage?.remaining != null) {
-    return <>{usage.remaining} of {usage.limit} messages left today · {TIP}</>;
+    const left = plan === 'trial'
+      ? `Free trial: ${usage.remaining} of ${usage.limit} messages left`
+      : usage.scope === 'period'
+        ? `${usage.remaining} of ${usage.limit} messages left on your day pass`
+        : `${usage.remaining} of ${usage.limit} messages left today`;
+    return <>{left} · {TIP}</>;
   }
   return <>{TIP}</>;
 }

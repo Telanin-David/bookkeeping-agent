@@ -9,6 +9,7 @@ import { useShopsStore } from '@/store/shops';
 import { useTransaction } from '@/hooks/useTransactions';
 import Receipt from '@/components/receipts/Receipt';
 import Spinner from '@/components/ui/Spinner';
+import { useFeature } from '@/hooks/useBilling';
 
 export default function ReceiptPage() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function ReceiptPage() {
   const { data: tx, isLoading, isError } = useTransaction(shop?.id ?? '', id);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState('');
+  const branded = useFeature('branding');
   // The PDF is made by the server; demo mode has none, so it keeps Print only.
   const canShare = !!tx && !!shop && !isDemoShop(shop.id);
 
@@ -72,7 +74,7 @@ export default function ReceiptPage() {
       <div className="px-4 pb-10 print:p-0">
         {isLoading && <div className="flex justify-center py-16"><Spinner className="h-5 w-5 text-white/25" /></div>}
         {isError && <p className="py-16 text-center text-[15px] text-white/45">This transaction couldn&apos;t be found.</p>}
-        {tx && shop && <Receipt tx={tx} shop={shop} />}
+        {tx && shop && <Receipt tx={tx} shop={shop} branded={branded} />}
       </div>
     </div>
   );

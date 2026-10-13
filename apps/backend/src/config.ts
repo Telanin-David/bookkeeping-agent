@@ -77,6 +77,24 @@ export const config = {
     chatDailyLimit: Math.max(0, parseInt(process.env['CHAT_DAILY_LIMIT'] || '20', 10) || 0),
   },
 
+  // Plans and payment (services/plans.ts). Off until the owner is ready to charge: everyone
+  // then has every feature and CHAT_DAILY_LIMIT messages a day, as before plans existed.
+  // When it's switched on, each owner's free trial starts the first time they use the app.
+  billing: {
+    enabled: (process.env['BILLING_ENABLED'] ?? '') === 'true',
+    trialDays: Math.max(1, parseInt(process.env['TRIAL_DAYS'] || '14', 10) || 14),
+    // Assistant messages over the whole trial, so a trial's AI cost has a ceiling.
+    trialMessages: Math.max(0, parseInt(process.env['TRIAL_MESSAGES'] || '40', 10) || 0),
+  },
+
+  // Paystack takes the payments (bank transfer, card, USSD). The secret key is on the
+  // Paystack dashboard under Settings → API Keys & Webhooks; use the test key until launch.
+  // Without it, owners can't pay online, but an admin can still record payments by hand.
+  paystack: {
+    secretKey: process.env['PAYSTACK_SECRET_KEY'] ?? '',
+    baseUrl: (process.env['PAYSTACK_BASE_URL'] || 'https://api.paystack.co').replace(/\/$/, ''),
+  },
+
   // Outgoing email over SMTP, which every email provider offers (Brevo, Amazon SES,
   // Zoho, Mailgun, SendGrid…), so switching provider is a config change. With no
   // SMTP_HOST, development writes emails to EMAIL_OUTBOX_DIR as .eml files instead,

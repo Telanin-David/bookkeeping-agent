@@ -16,7 +16,8 @@
 | 9 | Excel Import & Validation Pipeline | ✅ Done | `feat/deliverable-9-import` | merged to main (#24) |
 | 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
 | 9c | Running costs, staff & profit (owner's request) | ✅ Done | `feat/running-costs-profit` | merged to main (#30) |
-| 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | 🔄 In review | `claude/hopeful-galileo-utx4b4` | — |
+| 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | ✅ Done | `claude/hopeful-galileo-utx4b4` | merged to main (#31) |
+| 9e | Plans & payment: free trial, free plan, Monthly/Yearly, passes, Paystack (owner's request) | ✅ Done | `claude/focused-galileo-jfp0d6` | merged to main (#32) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -394,6 +395,44 @@
     | This branch, Haiku 4.5 (3 runs) | 7, 4, 7 /10 | said "Recorded" or "Removed" without saving, 1–3 times a run | $0.03 a run |
     | This branch, Sonnet 5.5 (2 runs) | 10/10, 10/10 | — | $0.09 a run |
   - **Chat model is now Sonnet 5.5** (owner's decision). Haiku 4.5 sometimes says it saved something without calling the tool, so the books are wrong while the owner thinks they're right; the notes make that visible but don't stop it. Sonnet 5.5 didn't do it once, at about 3× the cost: roughly US$0.009 a message, so at most about $0.18 per owner per day at the 20-message limit. `CHAT_MODEL=claude-haiku-4-5` switches back. Sonnet 5.5 calls go through refusal fallbacks again (removed when the chat moved to Haiku), so a rare safety decline on a harmless message is retried on another model instead of failing.
+
+- **Plans and payment** (owner's request; `claude/focused-galileo-jfp0d6`; migration `013_billing.sql`). **Off until `BILLING_ENABLED=true`**; while off, nothing changes for anyone.
+  - **The plans** (prices and rules in `services/plans.ts`, one place):
+    | Plan | Price | Length | Assistant | Everything else |
+    |---|---|---|---|---|
+    | Free trial | ₦0 | 14 days | 40 messages in total | all paid features |
+    | Free | ₦0 | always | none | record sales/expenses/debts, stock, receipts, profit page, in-app alerts; 1 shop; receipts carry "Made with Bookkeeping AI" |
+    | Monthly | ₦5,000 | 30 days | 6 a day | PDF reports, logo and signature on receipts, alert emails, staff and salaries, spreadsheet import, up to 3 shops |
+    | Yearly | ₦50,000 | 365 days | 6 a day | as Monthly |
+    | Full capacity: 1 week | ₦3,000 | 7 days | 20 a day | as Monthly |
+    | Full capacity: 1 day | ₦800 | 24 hours | 20 in total | as Monthly |
+    - Receipts and reports are unlimited on every plan that has them; nothing is charged per print.
+    - The two passes are hidden until an admin switches them on (Admin → Money in). The owner's plan: after about 50 paying Monthly owners.
+    - `TRIAL_DAYS` and `TRIAL_MESSAGES` change the trial without a deploy; prices need a code change.
+  - **How periods stack:** each payment adds a period (`subscriptions`). Paying for Monthly or Yearly while one is running starts the new one when the current one ends, so renewing early loses no days. A pass bought during Monthly starts at once and gives 20 messages a day while it lasts; Monthly carries on underneath. The trial starts the first time the owner's plan is read after billing is switched on: **every existing owner gets a 14-day trial on the day it's switched on.** One trial per account (a unique index).
+  - **Paying (Paystack):** the Plan screen (menu → "Plan · …") sends the owner to Paystack's page (bank transfer, card or USSD). On return, the app asks Paystack whether the money arrived; a transfer can take minutes, so the screen keeps checking for up to about 10 minutes, and the webhook switches the plan on even if the owner closes the page.
+    - Nothing from the browser or the webhook is trusted on its own: the server asks Paystack's verify API and checks success, naira, the exact amount and the reference. A wrong amount marks the payment failed.
+    - The webhook's signature (HMAC-SHA512 of the raw body) is checked in constant time; bad signatures get 401.
+    - One payment can only ever add one period (`subscriptions.payment_id` is unique, and the payment row is locked while it's applied), so the webhook and the browser arriving together is safe.
+    - Payments are one-off, not automatic renewals. The owner gets a `plan_ending` alert (in the app, and by email) 3 days before Monthly or Yearly ends and 2 days before the trial ends; it clears when they renew.
+  - **Paid by direct transfer:** Admin → find the owner (new search box) → "Record payment". Their plan switches on at once; the admin's id and note are stored with it. Check the money is in the bank first; never go by a screenshot.
+  - **Admin "Money in":** paid this month, paying owners by plan, owners on the trial, what share of trials that ended in the last 30 days went on to pay, the latest payments, and the passes switch. Each owner row shows their current paid plan.
+  - **Where the locks are:** the server refuses with 402 `PLAN_REQUIRED` and a plain message (reports, import, adding staff or paying salaries, a second shop, the assistant). The app shows a "comes with a paid plan" card with "See plans" instead of a broken button. Alert emails stop on the free plan; alerts still show in the app. Admins always have everything.
+  - **Cost check** (estimates: Sonnet 5.5 at about US$0.009 a message, ₦1,600 to the dollar, Paystack 1.5% + ₦100 capped at ₦2,000; check Paystack's current fees): an owner who uses every message costs about ₦2,600 a month on Monthly (₦5,000), ₦31,500 a year on Yearly (₦50,000), ₦2,000 on the weekly pass (₦3,000) and ₦290 on the day pass (₦800). Each trial used in full costs about ₦580. `plans.test.ts` fails if a plan's full use would cost more than its price.
+  - **Checked:** 143 unit tests (incl. `plans.test.ts`: prices, periods stacking, webhook signature, refusals). With billing on, against a real database and a stand-in Paystack: a 47-check API walkthrough (trial, free locks, checkout, a forged webhook refused, an unpaid webhook ignored, the webhook and the browser confirming together, early renewal queued, wrong amount refused, passes switch, a day pass on top of Monthly, a payment recorded by hand, the admin's totals, the plan-ending reminder raised and cleared), a 27-check phone and desktop browser walkthrough with screenshots, and alert emails (free owner gets none, trial owner does; no Paystack key gives a plain "pay by transfer" message). With billing off, every earlier API and browser suite passes unchanged. Migration 013 applied, rolled back and re-applied.
+  - **Turning it on (on the VPS):**
+    1. `npm run migrate` (adds migration 013).
+    2. In the server's `.env`: `BILLING_ENABLED=true` and `PAYSTACK_SECRET_KEY=sk_test_…` (never in the repo, never in chat).
+    3. In Paystack (Settings → API Keys & Webhooks), set the Webhook URL to `https://<your API>/api/v1/billing/paystack/webhook`.
+    4. Restart, then make one test payment with Paystack's test card or transfer and check it on the admin page.
+    5. Swap to the `sk_live_…` key and restart.
+  - **Plan screen** (owner's design request): the current plan as label/value rows, then every plan in one list (one under the other) with its price and cost per day, and a single pay button.
+  - **Form fields on iPhones** (owner's report, same PR): Safari gives date fields a built-in minimum width, so the From/To boxes on Filter and Reports ran past their card. Every field can now shrink to its space, and Safari's own date-field frame is removed on iPhones (`globals.css`). Chrome can't reproduce this, so it was checked by measuring every form at 320px and 390px; confirm on a real iPhone after deploy. The shelf-count boxes had 14px text, which makes iPhones zoom in when tapped; 16px on phones now.
+  - **Not built / known limits:**
+    - Someone can sign up again with another email for another trial. The cap is small (40 messages); watch "Trials that paid" on the admin page.
+    - No price lock for early owners: if prices change in `plans.ts`, everyone's next payment uses the new price.
+    - Going down to free doesn't remove anything: an owner keeps shops, staff and logo already set up; they just can't add more shops, staff or reports until they pay.
+    - No refunds in the app; refund in Paystack's dashboard. The period stays on until it ends.
 
 ## Rules
 - Never commit/push to `main` directly.
