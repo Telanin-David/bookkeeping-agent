@@ -30,6 +30,35 @@ Phone / laptop ──HTTPS──▶ nginx (ports 80/443, the only door open)
 
 The server should run **Ubuntu 24.04** (22.04 also works; step 4 explains the difference) with at least **1 GB of RAM**; 2 GB is more comfortable. If your provider asks which system to install, choose Ubuntu 24.04.
 
+## Want Claude Code to do the typing?
+
+It can do most of it. Claude Code can run **on your VPS itself**: it reads this guide, types the commands, checks each result and explains any error. It asks your permission before every command. It uses your Claude subscription.
+
+**What it can't do for you** (these happen on websites or need your keys):
+- Step 1: the DNS records, on your domain company's website.
+- Step 6: adding the deploy key on GitHub.
+- Getting keys from Anthropic, Brevo and Paystack, and typing them into the settings file (step 7).
+- Checking the site on your phone.
+
+**How:**
+
+1. Do **step 1** (DNS) and **step 2** (log in to the server) yourself.
+2. Do **step 6** yourself, after installing git with `apt update && apt install -y git`. That puts the code, with this guide inside it, on the server.
+3. Install Claude Code and start it in the app's folder:
+
+   ```bash
+   curl -fsSL https://claude.ai/install.sh | bash
+   cd /srv/bookkeeping
+   claude
+   ```
+
+   If it says `claude: command not found`, log out (`exit`), log back in, and run the last two lines again. The first time, it asks you to log in to your Claude account: it shows a link, you open it on your phone or laptop, approve, and paste the code it gives you back into the server.
+4. Type this to Claude Code, with your real domain:
+
+   > Follow docs/DEPLOY.md to put this app live on this server. My domain is yourdomain.com. Steps 1, 2 and 6 are done. Stop and ask me whenever a step needs me. Never open or print apps/backend/.env — I'll add the keys myself with nano.
+
+5. Read each command it proposes before you approve it. It runs as root on your live server, so don't switch on "accept everything" for this job.
+
 ---
 
 ## Step 1: Point your domain at the server
