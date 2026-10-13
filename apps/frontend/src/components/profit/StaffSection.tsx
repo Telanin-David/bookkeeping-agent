@@ -210,7 +210,7 @@ function PaySalaries({ shopId, staff, currency, onDone }: { shopId: string; staf
             <input
               aria-label={`Amount for ${l.name}`} type="number" inputMode="decimal" min="0" value={l.amount} disabled={!l.on}
               onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
-              className="glass-input min-h-[2.75rem] w-32 rounded-xl px-3 py-2.5 text-right text-base tabular-nums disabled:opacity-40 sm:text-sm"
+              className="glass-input min-h-[2.75rem] w-32 shrink-0 rounded-xl px-3 py-2.5 text-right text-base tabular-nums disabled:opacity-40 sm:text-sm"
             />
           </li>
         ))}

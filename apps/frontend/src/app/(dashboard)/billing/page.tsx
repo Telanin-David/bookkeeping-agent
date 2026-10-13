@@ -1,8 +1,8 @@
 'use client';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Clock, Lightning, WarningCircle } from '@phosphor-icons/react';
+import { Check, CheckCircle, Clock, Lightning, LockSimple, WarningCircle } from '@phosphor-icons/react';
 import PageWrapper from '@/components/layout/PageWrapper';
 import Button from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -10,7 +10,7 @@ import { billingApi } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import { useBilling } from '@/hooks/useBilling';
 import { cn } from '@/lib/utils';
-import type { BillingInfo, PaidPlanId, PaymentRecord, PlanOffer } from '@/types';
+import type { BillingInfo, PaidPlanId, PaymentRecord } from '@/types';
 
 // Dates the owner reads are Lagos dates, whatever the phone is set to.
 const dayFmt = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
@@ -73,7 +73,7 @@ function PlanScreen() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-xl space-y-6">
       {reference && <PaymentCheck reference={reference} />}
       <CurrentPlan b={data} />
       {data.passSpendKobo >= 300_000 && data.offers.some((o) => o.id === 'monthly') && (
@@ -88,37 +88,75 @@ function PlanScreen() {
   );
 }
 
+/** One line of a grouped list: a label on the left, its value on the right. */
+function Row({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+      <span className="shrink-0 text-[15px] text-white/80">{label}</span>
+      <span className="min-w-0 text-right">
+        <span className="block text-[15px] text-white/55">{value}</span>
+        {sub && <span className="mt-0.5 block text-[13px] text-white/35">{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+const Group = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <div className={cn('glass-card divide-y divide-white/[0.06] overflow-hidden rounded-2xl', className)}>{children}</div>
+);
+const Heading = ({ children }: { children: ReactNode }) => (
+  <h2 className="mb-2 px-1 text-[13px] font-medium text-white/45">{children}</h2>
+);
+
 function CurrentPlan({ b }: { b: BillingInfo }) {
   const chat = b.chat;
-  let detail: string;
-  if (b.plan === 'unlimited') detail = 'Everything is included on this account.';
-  else if (b.plan === 'free') detail = 'The assistant, PDF reports and receipts with your logo come with a paid plan.';
-  else if (b.plan === 'trial' && b.trial) detail = `Ends ${day(b.trial.endsAt)} · ${b.trial.messagesLeft} of ${chat.limit} assistant messages left`;
-  else if (b.plan === 'day' && b.periodEndsAt) detail = `Until ${timeFmt.format(new Date(b.periodEndsAt))}, ${day(b.periodEndsAt)} · ${chat.remaining} of ${chat.limit} messages left`;
-  else detail = `Until ${b.periodEndsAt ? dayYearFmt.format(new Date(b.periodEndsAt)) : '—'} · ${chat.remaining} of ${chat.limit} assistant messages left today`;
-  const later = [
-    ...(b.underneath ? [`Then ${b.underneath.planName} until ${dayYearFmt.format(new Date(b.underneath.endsAt))}`] : []),
-    ...b.upcoming.map((u) => `Paid ahead: ${u.planName}, ${dayYearFmt.format(new Date(u.startsAt))} – ${dayYearFmt.format(new Date(u.endsAt))}`),
-  ];
-
+  const left = `${chat.remaining} of ${chat.limit} left`;
   return (
-    <section className="glass-card rounded-2xl p-5">
-      <p className="text-[13px] font-medium text-white/45">Your plan</p>
-      <p className="mt-1 text-2xl font-bold text-white/90">{b.planName}</p>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-white/60">{detail}</p>
-      {later.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t border-white/[0.06] pt-3 text-[13px] text-white/50">
-          {later.map((line) => <li key={line}>{line}</li>)}
-        </ul>
-      )}
-      {b.plan === 'free' && <p className="mt-3 text-[13px] leading-relaxed text-white/40">{FREE_INCLUDES}</p>}
+    <section>
+      <Heading>Your plan</Heading>
+      <Group>
+        <Row label="Plan" value={<span className="font-medium text-white/90">{b.planName}</span>} />
+        {b.plan === 'free' && <Row label="Assistant" value="Not included" />}
+        {b.plan === 'trial' && b.trial && (
+          <>
+            <Row label="Ends" value={dayYearFmt.format(new Date(b.trial.endsAt))} />
+            <Row label="Assistant" value={`${b.trial.messagesLeft} of ${chat.limit} left`} sub="For the whole trial" />
+          </>
+        )}
+        {b.plan === 'day' && b.periodEndsAt && (
+          <>
+            <Row label="Ends" value={`${timeFmt.format(new Date(b.periodEndsAt))}, ${day(b.periodEndsAt)}`} />
+            <Row label="Assistant" value={left} />
+          </>
+        )}
+        {(b.plan === 'monthly' || b.plan === 'yearly' || b.plan === 'weekly') && (
+          <>
+            <Row label="Ends" value={b.periodEndsAt ? dayYearFmt.format(new Date(b.periodEndsAt)) : '—'} />
+            <Row label="Assistant today" value={left} />
+          </>
+        )}
+        {b.underneath && <Row label="Then" value={b.underneath.planName} sub={`Until ${dayYearFmt.format(new Date(b.underneath.endsAt))}`} />}
+        {b.upcoming.map((u) => (
+          <Row key={u.startsAt} label="Paid ahead" value={u.planName} sub={span(u.startsAt, u.endsAt)} />
+        ))}
+      </Group>
+      {b.plan === 'free' && <p className="mt-2 px-1 text-[13px] leading-relaxed text-white/40">{FREE_INCLUDES}</p>}
     </section>
   );
 }
 
+/** What Monthly and Yearly include, as ticks under the price. */
+/** "6 a day" → "6 assistant messages a day"; "20 in 24 hours" → "20 assistant messages in 24 hours". */
+const messagesText = (m: string) => { const [n, ...rest] = m.split(' '); return `${n} assistant messages ${rest.join(' ')}`; };
+const INCLUDED = ['PDF reports: profit, debts and stock', 'Your logo and signature on receipts', 'Alert emails', 'Staff and salaries', 'Import from a spreadsheet', 'Up to 3 shops'];
+
 function Offers({ b }: { b: BillingInfo }) {
   const [busy, setBusy] = useState<PaidPlanId | null>(null);
   const [error, setError] = useState('');
+  const subscriptions = b.offers.filter((o) => !o.pass);
+  const passes = b.offers.filter((o) => o.pass);
+  const [choice, setChoice] = useState<PaidPlanId>(b.plan === 'yearly' ? 'yearly' : 'monthly');
+  const onSubscription = b.plan === 'monthly' || b.plan === 'yearly' || b.upcoming.some((u) => u.plan === 'monthly' || u.plan === 'yearly');
 
   async function pay(plan: PaidPlanId) {
     setError('');
@@ -132,51 +170,83 @@ function Offers({ b }: { b: BillingInfo }) {
     }
   }
 
-  const subscriptions = b.offers.filter((o) => !o.pass);
-  const passes = b.offers.filter((o) => o.pass);
-  const onSubscription = b.plan === 'monthly' || b.plan === 'yearly' || b.upcoming.some((u) => u.plan === 'monthly' || u.plan === 'yearly');
+  const offer = subscriptions.find((o) => o.id === choice) ?? subscriptions[0];
+  const monthly = subscriptions.find((o) => o.id === 'monthly');
+  const yearSaving = monthly && offer?.id === 'yearly' ? monthly.priceKobo * 12 - offer.priceKobo : 0;
 
   return (
-    <section className="space-y-3">
-      <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-white/45">
-        {b.plan === 'free' || b.plan === 'trial' ? 'Choose a plan' : 'Renew or add time'}
-      </h2>
-      {subscriptions.map((o) => (
-        <OfferCard key={o.id} offer={o} busy={busy} onPay={pay} note={onSubscription ? 'Adds the time on after your current plan, so no days are lost.' : undefined} />
-      ))}
-      {passes.length > 0 && (
-        <>
-          <h2 className="px-1 pt-2 text-xs font-medium uppercase tracking-wide text-white/45">Full capacity</h2>
-          <p className="-mt-1 px-1 text-[13px] leading-relaxed text-white/45">
-            For busy days: 20 assistant messages a day instead of 6. Bought during Monthly, a pass gives the bigger allowance while it lasts.
-          </p>
-          {passes.map((o) => <OfferCard key={o.id} offer={o} busy={busy} onPay={pay} />)}
-        </>
+    <>
+      {offer && (
+        <section>
+          <Heading>{b.plan === 'free' || b.plan === 'trial' ? 'Choose a plan' : 'Renew or add time'}</Heading>
+          <div className="glass-card rounded-2xl p-4 sm:p-5">
+            <div className="grid grid-cols-2 rounded-full bg-white/[0.05] p-1 ring-1 ring-inset ring-white/[0.08]" role="tablist" aria-label="Plan">
+              {subscriptions.map((o) => (
+                <button
+                  key={o.id} type="button" role="tab" aria-selected={o.id === offer.id} onClick={() => setChoice(o.id)}
+                  className={cn('h-9 rounded-full text-[14px] font-medium transition',
+                    o.id === offer.id ? 'bg-white/[0.14] text-white shadow-[0_1px_0_rgba(255,255,255,0.08)_inset]' : 'text-white/50 hover:text-white/80')}
+                >
+                  {o.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-5 px-1">
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-[32px] font-bold leading-none tracking-tight tabular-nums text-white">{offer.priceText}</span>
+                <span className="text-[15px] text-white/45">/ {PERIOD[offer.id].replace('a ', '')}</span>
+              </p>
+              <p className="mt-2 text-[14px] text-white/50">
+                {yearSaving > 0 ? `${naira(Math.round(offer.priceKobo / 12))} a month · you save ${naira(yearSaving)}` : 'Pay once for 30 days. Nothing renews by itself.'}
+              </p>
+            </div>
+
+            <ul className="mt-5 space-y-2.5 px-1 text-[15px] text-white/75">
+              <li className="flex gap-3"><Check size={18} weight="bold" className="mt-0.5 shrink-0 text-white/60" />{messagesText(offer.messages)}</li>
+              {INCLUDED.map((f) => (
+                <li key={f} className="flex gap-3"><Check size={18} weight="bold" className="mt-0.5 shrink-0 text-white/60" />{f}</li>
+              ))}
+            </ul>
+
+            {onSubscription && <p className="mt-4 px-1 text-[13px] text-white/40">Starts when your current plan ends, so no days are lost.</p>}
+            <button
+              type="button" onClick={() => pay(offer.id)} disabled={busy !== null}
+              className="mt-5 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-ink-950 transition hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
+            >
+              {busy === offer.id && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+              Pay {offer.priceText}
+            </button>
+          </div>
+        </section>
       )}
-      {error && <p className="px-1 text-[13px] text-white/70" role="alert">{error}</p>}
-      <p className="px-1 text-[13px] leading-relaxed text-white/40">
-        You pay on Paystack&apos;s secure page by bank transfer, card or USSD. Your plan switches on as soon as the payment arrives.
-        Your records are yours on every plan: nothing is ever deleted if you stop paying.
-      </p>
-    </section>
-  );
-}
 
-function OfferCard({ offer, busy, onPay, note }: { offer: PlanOffer; busy: PaidPlanId | null; onPay: (p: PaidPlanId) => void; note?: string }) {
-  return (
-    <div className="glass-card rounded-2xl p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[16px] font-semibold text-white/90">{offer.name}</p>
-        <p className="shrink-0 text-[16px] font-semibold tabular-nums text-white/90">
-          {offer.priceText}<span className="text-[13px] font-normal text-white/45"> / {PERIOD[offer.id]}</span>
-        </p>
-      </div>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-white/55">{offer.summary}</p>
-      {note && <p className="mt-1 text-[13px] text-white/40">{note}</p>}
-      <Button size="lg" className="mt-4 w-full" loading={busy === offer.id} disabled={busy !== null && busy !== offer.id} onClick={() => onPay(offer.id)}>
-        Pay {offer.priceText}
-      </Button>
-    </div>
+      {passes.length > 0 && (
+        <section>
+          <Heading>Full capacity</Heading>
+          <Group>
+            {passes.map((o) => (
+              <div key={o.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
+                <span className="min-w-0">
+                  <span className="block text-[15px] text-white/85">{o.name.replace('Full capacity: ', '')}</span>
+                  <span className="mt-0.5 block text-[13px] text-white/40">{messagesText(o.messages)} · everything in Monthly</span>
+                </span>
+                <Button size="sm" variant="secondary" className="shrink-0 px-3.5 py-2 text-[14px]" loading={busy === o.id} disabled={busy !== null && busy !== o.id} onClick={() => pay(o.id)}>
+                  {o.priceText}
+                </Button>
+              </div>
+            ))}
+          </Group>
+          <p className="mt-2 px-1 text-[13px] leading-relaxed text-white/40">For busy days: 20 assistant messages instead of 6. Bought during Monthly, it starts at once.</p>
+        </section>
+      )}
+
+      {error && <p className="px-1 text-[13px] text-white/70" role="alert">{error}</p>}
+      <p className="flex gap-2 px-1 text-[13px] leading-relaxed text-white/40">
+        <LockSimple size={15} className="mt-0.5 shrink-0" />
+        <span>Paid on Paystack&apos;s secure page by bank transfer, card or USSD. Your records stay yours on every plan: nothing is deleted if you stop paying.</span>
+      </p>
+    </>
   );
 }
 
@@ -262,26 +332,28 @@ function Payments({ payments }: { payments: PaymentRecord[] }) {
   if (payments.length === 0) return null;
   return (
     <section>
-      <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-white/45">Payments</h2>
-      <ul className="glass-card divide-y divide-white/[0.05] overflow-hidden rounded-2xl">
+      <Heading>Payments</Heading>
+      <Group>
         {payments.map((p) => (
-          <li key={p.id} className="flex items-start justify-between gap-4 px-5 py-3.5">
+          <div key={p.id} className="flex items-start justify-between gap-4 px-4 py-3.5">
             <div className="min-w-0">
               <p className="text-[15px] text-white/85">{p.planName}</p>
               <p className="mt-0.5 text-[13px] text-white/40">
                 {p.status === 'pending'
                   ? 'Waiting for the payment to arrive'
-                  : [
-                      p.paidAt && day(p.paidAt),
-                      p.provider === 'manual' ? 'Paid directly' : p.channel ? CHANNEL[p.channel] ?? p.channel : null,
-                      p.period && `covers ${span(p.period.startsAt, p.period.endsAt)}`,
-                    ].filter(Boolean).join(' · ')}
+                  : p.status === 'failed'
+                    ? 'Didn’t go through'
+                    : [
+                        p.paidAt && day(p.paidAt),
+                        p.provider === 'manual' ? 'Paid directly' : p.channel ? CHANNEL[p.channel] ?? p.channel : null,
+                      ].filter(Boolean).join(' · ')}
               </p>
+              {p.status === 'success' && p.period && <p className="text-[13px] text-white/35">Covers {span(p.period.startsAt, p.period.endsAt)}</p>}
             </div>
-            <span className={cn('shrink-0 text-[15px] tabular-nums', p.status === 'pending' ? 'text-white/45' : 'text-white/85')}>{p.amountText}</span>
-          </li>
+            <span className={cn('shrink-0 text-[15px] tabular-nums', p.status === 'success' ? 'text-white/85' : 'text-white/40')}>{p.amountText}</span>
+          </div>
         ))}
-      </ul>
+      </Group>
     </section>
   );
 }

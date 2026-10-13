@@ -140,7 +140,7 @@ export default function TransactionForm({ defaultValues, onSubmit, onCancel }: T
               <input
                 aria-label="How many" type="number" inputMode="decimal" min="0" step="any" placeholder="Qty" value={row.quantity}
                 onChange={(e) => applyRows(rows.map((r, j) => (j === i ? { ...r, quantity: e.target.value } : r)))}
-                className="glass-input min-h-[2.75rem] w-20 rounded-xl px-3 py-2.5 text-right text-base tabular-nums sm:text-sm"
+                className="glass-input min-h-[2.75rem] w-20 shrink-0 rounded-xl px-3 py-2.5 text-right text-base tabular-nums sm:text-sm"
               />
               <button
                 type="button" aria-label="Remove line" onClick={() => applyRows(rows.filter((_, j) => j !== i))}
