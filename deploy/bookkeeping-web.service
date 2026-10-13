@@ -1,0 +1,18 @@
+# The web app (Next.js). Installed by docs/DEPLOY.md step 8.
+[Unit]
+Description=Bookkeeping AI web app
+After=network.target bookkeeping-api.service
+
+[Service]
+Type=simple
+User=bookkeeping
+WorkingDirectory=/srv/bookkeeping/apps/frontend
+Environment=NODE_ENV=production
+# Listens on 127.0.0.1 only: visitors reach it through nginx.
+ExecStart=/usr/bin/node /srv/bookkeeping/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=5
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target

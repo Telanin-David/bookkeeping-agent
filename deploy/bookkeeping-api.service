@@ -1,0 +1,19 @@
+# The backend (Express API). Installed by docs/DEPLOY.md step 8.
+[Unit]
+Description=Bookkeeping AI backend
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=bookkeeping
+WorkingDirectory=/srv/bookkeeping/apps/backend
+# Settings come from apps/backend/.env (read by the app itself).
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=5
+# Keep it from eating the whole server if something goes wrong.
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target
