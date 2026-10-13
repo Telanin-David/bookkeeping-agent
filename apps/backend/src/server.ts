@@ -20,6 +20,7 @@ import alertRoutes       from './routes/alerts';
 import importRoutes      from './routes/imports';
 import fileRoutes        from './routes/files';
 import accountRoutes     from './routes/account';
+import billingRoutes, { paystackWebhook } from './routes/billing';
 import { startAlertWorker } from './services/alertWorker';
 
 const app = express();
@@ -31,6 +32,9 @@ app.use(helmet());
 // scripts unless it's exposed here.
 app.use(cors({ origin: config.cors.frontendUrl, credentials: true, exposedHeaders: ['Content-Disposition'] }));
 app.use(cookieParser());
+// Paystack's webhook needs the body exactly as sent to check its signature, so it is read
+// before the JSON parser turns it into an object.
+app.post('/api/v1/billing/paystack/webhook', express.raw({ type: '*/*', limit: '100kb' }), paystackWebhook);
 app.use(express.json({ limit: '1mb' }));
 
 // ── Global rate limit ─────────────────────────────────────────
@@ -55,6 +59,7 @@ app.use('/api/v1/imports',                     importRoutes);
 app.use('/api/v1/files',                       fileRoutes);
 app.use('/api/v1/account',                     accountRoutes);
 app.use('/api/v1/admin',                       adminRoutes);
+app.use('/api/v1/billing',                     billingRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'NOT_FOUND', message: 'Endpoint not found' }));

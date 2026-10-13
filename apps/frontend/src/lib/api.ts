@@ -1,6 +1,6 @@
 import axios, { AxiosError, isAxiosError } from 'axios';
 import type {
-  AdminOverview, AdminUser, MonthlyProfit, StaffMember, StaffFields, AlertSettings, DailyUsage, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
+  AdminOverview, AdminUser, AdminBilling, BillingInfo, CheckoutResult, PaidPlanId, PaymentRecord, MonthlyProfit, StaffMember, StaffFields, AlertSettings, DailyUsage, CountLine, ImportCheck, ImportMapping, ImportPreview, ImportResult, DebtPayment, Product, StockMovement, TransactionItemInput, RefreshResult, User, Shop, Transaction, ChatSession, ChatMessage,
   Alert, ExcelImport, PaginatedResponse, ReportType,
 } from '@/types';
 
@@ -101,7 +101,26 @@ export const accountApi = {
 // ── Business dashboard (admins only) ──────────────────────────
 export const adminApi = {
   overview: () => api.get<AdminOverview>('/api/v1/admin/overview').then((r) => r.data),
-  users: () => api.get<{ data: AdminUser[]; total: number; limit: number }>('/api/v1/admin/users').then((r) => r.data),
+  /** search: part of a name or email. */
+  users: (search?: string) =>
+    api.get<{ data: AdminUser[]; total: number; limit: number }>('/api/v1/admin/users', { params: { search: search || undefined } }).then((r) => r.data),
+  billing: () => api.get<AdminBilling>('/api/v1/admin/billing').then((r) => r.data),
+  setPasses: (enabled: boolean) =>
+    api.put<{ passesEnabled: boolean }>('/api/v1/admin/billing/passes', { enabled }).then((r) => r.data),
+  /** Money paid straight to the business's account: switches the owner's plan on at once. */
+  recordPayment: (userId: string, body: { plan: PaidPlanId; amount?: number; note?: string }) =>
+    api.post<PaymentRecord>(`/api/v1/admin/users/${userId}/payments`, body).then((r) => r.data),
+};
+
+// ── Plan and payment ──────────────────────────────────────────
+export const billingApi = {
+  me: () => api.get<BillingInfo>('/api/v1/billing').then((r) => r.data),
+  /** Returns Paystack's payment page to send the owner to. */
+  checkout: (plan: PaidPlanId) => api.post<CheckoutResult>('/api/v1/billing/checkout', { plan }).then((r) => r.data),
+  /** After Paystack sends the owner back: did the money arrive? */
+  verify: (reference: string) =>
+    api.post<{ status: 'success' | 'pending' | 'failed'; payment: PaymentRecord; entitlements: BillingInfo }>('/api/v1/billing/verify', { reference })
+      .then((r) => r.data),
 };
 
 // ── Shops ─────────────────────────────────────────────────────

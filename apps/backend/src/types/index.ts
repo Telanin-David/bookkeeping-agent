@@ -3,7 +3,7 @@ export type TransactionStatus = 'pending' | 'settled' | 'overdue';
 /** What money spent was for: goods to resell, or running the business (rent, salaries, fuel…). */
 export type CostKind = 'stock' | 'running';
 export type ShopType = 'retail' | 'wholesale' | 'services' | 'food' | 'other';
-export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'duplicate' | 'anomaly' | 'low_stock' | 'bill_due' | 'salary_due';
+export type AlertType = 'low_cash' | 'high_payable' | 'overdue_receivable' | 'duplicate' | 'anomaly' | 'low_stock' | 'bill_due' | 'salary_due' | 'plan_ending';
 /** 'resolved' is set by the app itself, e.g. when a low product is restocked. */
 export type AlertStatus = 'active' | 'acknowledged' | 'dismissed' | 'resolved';
 export type AlertChannel = 'email' | 'sms' | 'whatsapp' | 'in_app';

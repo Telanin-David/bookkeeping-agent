@@ -4,6 +4,8 @@ import PageWrapper from '@/components/layout/PageWrapper';
 import ReportForm from '@/components/reports/ReportForm';
 import ReceiptPicker from '@/components/receipts/ReceiptPicker';
 import { cn } from '@/lib/utils';
+import { useFeature } from '@/hooks/useBilling';
+import Locked from '@/components/billing/Locked';
 
 const TABS = [
   { id: 'reports',  label: 'Reports' },
@@ -14,6 +16,7 @@ type Tab = (typeof TABS)[number]['id'];
 
 export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('reports');
+  const reportsIncluded = useFeature('reports');
 
   return (
     <PageWrapper title="Reports">
@@ -40,7 +43,9 @@ export default function ReportsPage() {
             <p className="mb-5 text-[14px] text-white/45">
               Generate a PDF report for your shop. Pick a report type and date range, then download.
             </p>
-            <ReportForm />
+            {reportsIncluded ? <ReportForm /> : (
+              <Locked title="PDF reports come with a paid plan" text="Profit & Loss, credit and stock reports, to download or email. Your profit is always on the Profit page, and receipts are free." />
+            )}
           </>
         ) : (
           <>

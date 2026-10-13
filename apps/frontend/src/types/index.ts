@@ -14,6 +14,83 @@ export interface DailyUsage {
   used: number;
   limit: number | null;
   remaining: number | null;
+  /** 'day': resets at midnight. 'period': for the whole trial or day pass. 'none': not on this plan. */
+  scope?: 'day' | 'period' | 'none';
+  resetsAt?: string | null;
+}
+
+// ── Plans and payment ─────────────────────────────────────────
+export type PaidPlanId = 'monthly' | 'yearly' | 'weekly' | 'day';
+/** 'unlimited': payments aren't switched on (everything included), or an admin. */
+export type PlanId = PaidPlanId | 'trial' | 'free' | 'unlimited';
+
+export interface PlanFeatures {
+  assistant: boolean;
+  reports: boolean;
+  branding: boolean;
+  emailAlerts: boolean;
+  staff: boolean;
+  import: boolean;
+  maxShops: number | null;
+}
+
+export interface PlanOffer {
+  id: PaidPlanId;
+  name: string;
+  priceKobo: number;
+  priceText: string;
+  days: number;
+  messages: string;
+  summary: string;
+  pass: boolean;
+}
+
+export interface PaymentRecord {
+  id: string;
+  plan: PaidPlanId;
+  planName: string;
+  amountKobo: number;
+  amountText: string;
+  provider: 'paystack' | 'manual';
+  status: 'pending' | 'success' | 'failed';
+  channel: string | null;
+  reference: string;
+  note: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  period: { startsAt: string; endsAt: string } | null;
+}
+
+export interface BillingInfo {
+  billingEnabled: boolean;
+  plan: PlanId;
+  planName: string;
+  endsAt: string | null;
+  upcoming: { plan: PaidPlanId; planName: string; startsAt: string; endsAt: string }[];
+  trial: { endsAt: string; messagesLeft: number } | null;
+  features: PlanFeatures;
+  chat: DailyUsage;
+  passesEnabled: boolean;
+  offers: PlanOffer[];
+  payments: PaymentRecord[];
+  passSpendKobo: number;
+}
+
+export interface CheckoutResult { authorizationUrl: string; reference: string; startsAt: string; endsAt: string }
+
+export interface AdminBilling {
+  billingEnabled: boolean;
+  paystackConfigured: boolean;
+  passesEnabled: boolean;
+  revenueThisMonthKobo: number;
+  paymentsThisMonth: number;
+  revenueLast30Kobo: number;
+  payingOwners: number;
+  byPlan: { plan: PaidPlanId; planName: string; owners: number }[];
+  onTrial: number;
+  trialsEnded30: number;
+  trialsConverted30: number;
+  recent: (PaymentRecord & { ownerName: string; ownerEmail: string })[];
 }
 
 // ── Business dashboard (admins only) ──────────────────────────
@@ -38,6 +115,8 @@ export interface AdminUser {
   id: string; name: string; email: string; signedUp: string; emailVerified: boolean; isAdmin: boolean;
   shops: number; lastActive: string | null; activeDays: number;
   messages: number; cost: number; recorded: number; corrected: number;
+  /** Only when payments are switched on. */
+  plan: { id: PlanId; name: string; endsAt: string | null; paidKobo: number } | null;
 }
 
 export interface AlertSettings {

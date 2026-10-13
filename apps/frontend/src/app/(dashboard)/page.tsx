@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { TrendUp, TrendDown, Bell, ChartLineUp, CaretRight } from '@phosphor-icons/react';
 import { useShopsStore } from '@/store/shops';
 import { useShops } from '@/hooks/useShops';
@@ -7,6 +8,8 @@ import { useAlerts } from '@/hooks/useAlerts';
 import { useProducts } from '@/hooks/useStock';
 import { useProfit } from '@/hooks/useProfit';
 import { isDemoShop } from '@/lib/demo';
+import { useBilling } from '@/hooks/useBilling';
+import type { BillingInfo } from '@/types';
 import Link from 'next/link';
 import { quantityText } from '@/lib/quantity';
 import PageWrapper from '@/components/layout/PageWrapper';
@@ -24,6 +27,7 @@ export default function DashboardPage() {
   const low = products.filter((p) => p.isLow);
   const { data: profit, isLoading: profitLoading } = useProfit(activeShop?.id ?? '');
   const demo = isDemoShop(activeShop?.id);
+  const { data: billing } = useBilling();
 
   // Accrual, like the reports: a credit sale is income and a bill on credit is a cost when recorded.
   const isCost  = (type: string) => type === 'expense' || type === 'payable';
@@ -43,6 +47,9 @@ export default function DashboardPage() {
 
   return (
     <PageWrapper title="Dashboard">
+      {/* On the trial or the free plan: one quiet line, with the way to a plan. */}
+      {billing?.billingEnabled && (billing.plan === 'trial' || billing.plan === 'free') && <PlanNote b={billing} />}
+
       {/* How the month is going, in one card: the Profit page has the rest. */}
       {!demo && (
         <Link href="/profit" className="glass-card group mb-4 block rounded-2xl p-5 transition hover:bg-white/[0.06]">
@@ -131,5 +138,19 @@ export default function DashboardPage() {
         )}
       </div>
     </PageWrapper>
+  );
+}
+
+function PlanNote({ b }: { b: BillingInfo }) {
+  const [now] = useState(() => Date.now());
+  const daysLeft = b.trial ? Math.max(0, Math.ceil((Date.parse(b.trial.endsAt) - now) / 86_400_000)) : 0;
+  const text = b.plan === 'trial' && b.trial
+    ? `Free trial: ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} and ${b.trial.messagesLeft} assistant ${b.trial.messagesLeft === 1 ? 'message' : 'messages'} left.`
+    : 'You’re on the free plan. The assistant, PDF reports and receipts with your logo come with a paid plan.';
+  return (
+    <Link href="/billing" className="glass-card group mb-4 flex items-center justify-between gap-3 rounded-2xl px-5 py-3.5 transition hover:bg-white/[0.06]">
+      <span className="text-[14px] leading-snug text-white/70">{text}</span>
+      <span className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-white/85">See plans <CaretRight size={13} /></span>
+    </Link>
   );
 }

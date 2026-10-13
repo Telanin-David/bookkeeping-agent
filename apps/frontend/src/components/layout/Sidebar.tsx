@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   SquaresFour, ArrowsLeftRight, ChatCircle,
-  ChartBar, Bell, UploadSimple, Storefront, NotePencil, Package, Gauge, ChartLineUp,
+  ChartBar, Bell, UploadSimple, Storefront, NotePencil, Package, Gauge, ChartLineUp, CreditCard,
 } from '@phosphor-icons/react';
 import { cn, formatDateTime } from '@/lib/utils';
 import { useAlertsStore } from '@/store/alerts';
 import { useAuthStore } from '@/store/auth';
 import { useChatStore } from '@/store/chat';
 import { useChatSessions } from '@/hooks/useChatSessions';
+import { useBilling } from '@/hooks/useBilling';
 
 const NAV = [
   { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
@@ -24,12 +25,15 @@ const NAV = [
 ];
 // Only for accounts made admin on the server.
 const ADMIN_NAV = { href: '/admin', label: 'Business', Icon: Gauge };
+// Only once payments are switched on.
+const PLAN_NAV = { href: '/billing', label: 'Plan', Icon: CreditCard };
 
 export default function Sidebar() {
   const pathname   = usePathname();
   const router     = useRouter();
   const alertCount = useAlertsStore((s) => s.activeCount);
   const isAdmin    = useAuthStore((s) => s.user?.isAdmin === true);
+  const { data: billing } = useBilling();
   const activeSessionId    = useChatStore((s) => s.activeSessionId);
   const setActiveSessionId = useChatStore((s) => s.setActiveSessionId);
   const { sessions, createSession } = useChatSessions();
@@ -53,7 +57,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="shrink-0 space-y-0.5 px-2 py-2">
-        {(isAdmin ? [...NAV, ADMIN_NAV] : NAV).map(({ href, label, Icon }) => {
+        {[...NAV, ...(billing?.billingEnabled ? [PLAN_NAV] : []), ...(isAdmin ? [ADMIN_NAV] : [])].map(({ href, label, Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
             <Link

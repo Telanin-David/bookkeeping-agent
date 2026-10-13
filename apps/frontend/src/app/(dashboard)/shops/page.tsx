@@ -18,6 +18,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Shop } from '@/types';
+import { useBilling } from '@/hooks/useBilling';
+import Locked from '@/components/billing/Locked';
 
 const schema = z.object({
   name:     z.string().min(1),
@@ -32,6 +34,9 @@ export default function ShopsPage() {
   const qc = useQueryClient();
   const { shops, activeShopId, setActiveShop, setShops } = useShopsStore();
   const [showCreate, setShowCreate] = useState(false);
+  const { data: billing } = useBilling();
+  const maxShops = billing?.features.maxShops ?? null;
+  const atShopLimit = maxShops !== null && shops.length >= maxShops;
 
   const { isLoading } = useQuery({
     queryKey: ['shops'],
@@ -109,6 +114,9 @@ export default function ShopsPage() {
       )}
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add a shop">
+        {atShopLimit ? (
+          <Locked compact title={`Your plan has ${maxShops === 1 ? 'one shop' : `${maxShops} shops`}`} text="The paid plan lets you keep up to 3 shops, each with its own sales, stock and reports." />
+        ) : (
         <form onSubmit={handleSubmit((v) => createMut.mutateAsync(v))} className="space-y-4">
           <Input id="name"     label="Shop name"  error={errors.name?.message}     {...register('name')} />
           <Input id="location" label="Location"   error={errors.location?.message} {...register('location')} />
@@ -123,6 +131,7 @@ export default function ShopsPage() {
             <Button type="submit" size="lg" loading={isSubmitting}>Create shop</Button>
           </FormActions>
         </form>
+        )}
       </Modal>
     </PageWrapper>
   );

@@ -1,7 +1,7 @@
 'use client';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { notFound } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import { usd, shortDay, percent, count } from '@/lib/admin';
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { ListSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import DailyCostChart from '@/components/admin/DailyCostChart';
+import BillingPanel, { RecordPayment } from '@/components/admin/BillingPanel';
 import type { AdminOverview, AdminUser } from '@/types';
 
 // Above this share of the assistant's records being fixed by owners, the chat model isn't accurate
@@ -18,7 +19,16 @@ const FIX_RATE_LIMIT = 0.05;
 export default function AdminPage() {
   const isAdmin = useAuthStore((s) => s.user?.isAdmin === true);
   const overview = useQuery({ queryKey: ['admin', 'overview'], queryFn: adminApi.overview, enabled: isAdmin });
-  const users = useQuery({ queryKey: ['admin', 'users'], queryFn: adminApi.users, enabled: isAdmin });
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  // Ask the server a moment after typing stops, not on every key.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const users = useQuery({
+    queryKey: ['admin', 'users', query], queryFn: () => adminApi.users(query), enabled: isAdmin, placeholderData: keepPreviousData,
+  });
 
   // The dashboard layout already shows non-admins "not found"; this is a second lock.
   if (!isAdmin) notFound();
@@ -26,6 +36,11 @@ export default function AdminPage() {
   return (
     <PageWrapper title="Business dashboard">
       <div className="max-w-5xl space-y-8">
+        <section>
+          <SectionTitle title="Money in" note="Payments from owners: Paystack, and transfers you record by hand." />
+          <BillingPanel />
+        </section>
+
         {overview.isLoading ? (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="status" aria-label="Loading">
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[92px] rounded-2xl" />)}
@@ -36,6 +51,10 @@ export default function AdminPage() {
 
         <section>
           <SectionTitle title="Users" note="Last 30 days, most AI spending first. Counts only: their sales and customers stay private." />
+          <input
+            type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find an owner by name or email"
+            aria-label="Find an owner" className="glass-input mb-3 block min-h-[2.75rem] w-full max-w-sm rounded-xl px-3.5 py-2.5 text-base sm:text-sm"
+          />
           {users.isLoading ? (
             <ListSkeleton rows={3} />
           ) : users.error ? (
@@ -136,7 +155,12 @@ function Overview({ o }: { o: AdminOverview }) {
 }
 
 function UserList({ users, total }: { users: AdminUser[]; total: number }) {
+  const [paying, setPaying] = useState<AdminUser | null>(null);
   if (users.length === 0) return <p className="text-sm text-white/40">No one has signed up yet.</p>;
+  const planText = (u: AdminUser) => (u.plan ? `${u.plan.name}${u.plan.endsAt && u.plan.id !== 'free' ? ` until ${shortDay(u.plan.endsAt.slice(0, 10))}` : ''}` : null);
+  const recordButton = (u: AdminUser) => u.plan && !u.isAdmin && (
+    <button type="button" onClick={() => setPaying(u)} className="text-[13px] text-white/60 underline-offset-2 hover:text-white hover:underline">Record payment</button>
+  );
   const fixed = (u: AdminUser) => (u.recorded ? `${u.corrected} of ${u.recorded}` : '–');
   const last = (u: AdminUser) => (u.lastActive ? shortDay(u.lastActive) : 'Never');
   return (
@@ -150,6 +174,12 @@ function UserList({ users, total }: { users: AdminUser[]; total: number }) {
               <p className="shrink-0 text-[15px] tabular-nums text-white/80">{usd(u.cost)}</p>
             </div>
             <p className="truncate text-[13px] text-white/40">{u.email}{!u.emailVerified && ' · not confirmed'}</p>
+            {u.plan && (
+              <p className="mt-1 flex items-center justify-between gap-3 text-[13px] text-white/70">
+                <span>{planText(u)}{u.plan.paidKobo > 0 && <span className="text-white/40"> · paid ₦{Math.round(u.plan.paidKobo / 100).toLocaleString('en-NG')}</span>}</span>
+                {recordButton(u)}
+              </p>
+            )}
             <p className="mt-1.5 flex flex-wrap gap-x-1.5 text-[13px] text-white/55">
               <span className="whitespace-nowrap">Last used {last(u)} ·</span>
               <span className="whitespace-nowrap">{u.activeDays} {u.activeDays === 1 ? 'day' : 'days'} ·</span>
@@ -180,6 +210,7 @@ function UserList({ users, total }: { users: AdminUser[]; total: number }) {
                 <td className="max-w-[260px] px-4 py-2.5">
                   <p className="truncate font-medium text-white/85">{u.name}{u.isAdmin && <AdminTag />}</p>
                   <p className="truncate text-white/40">{u.email}{!u.emailVerified && ' · not confirmed'}</p>
+                  {u.plan && <p className="flex gap-3 truncate text-white/60">{planText(u)} {recordButton(u)}</p>}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-white/60">{shortDay(u.signedUp)}</td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-white/60">{last(u)}</td>
@@ -193,6 +224,7 @@ function UserList({ users, total }: { users: AdminUser[]; total: number }) {
         </table>
       </div>
       {total > users.length && <p className="mt-2 text-[13px] text-white/40">Showing the top {users.length} of {total}.</p>}
+      <RecordPayment user={paying} onClose={() => setPaying(null)} />
     </>
   );
 }

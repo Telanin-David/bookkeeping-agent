@@ -14,6 +14,8 @@ import ValidationSummary from '@/components/imports/ValidationSummary';
 import Button from '@/components/ui/Button';
 import { formatDateTime } from '@/lib/utils';
 import type { ImportCheck, ImportMapping, ImportPreview, ImportResult } from '@/types';
+import { useFeature } from '@/hooks/useBilling';
+import Locked from '@/components/billing/Locked';
 
 type Step = 'upload' | 'map' | 'check' | 'done';
 const STEPS: [Step, string][] = [['upload', 'Upload'], ['map', 'Match columns'], ['check', 'Check'], ['done', 'Done']];
@@ -23,6 +25,7 @@ export default function ImportsPage() {
   const shopId = shop?.id ?? '';
   const demo = isDemoShop(shopId);
   const qc = useQueryClient();
+  const importIncluded = useFeature('import');
   const [step, setStep] = useState<Step>('upload');
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<ImportMapping>({});
@@ -83,6 +86,16 @@ export default function ImportsPage() {
       const res = await importsApi.template();
       await shareOrDownload(res.data, downloadName(res.headers, 'bookkeeping-import-template.xlsx'), 'Import template');
     }, "Couldn't download the template.");
+  }
+
+  if (!importIncluded) {
+    return (
+      <PageWrapper title="Import from a spreadsheet">
+        <div className="max-w-2xl">
+          <Locked title="Importing comes with a paid plan" text="Bring in months of sales and expenses from Excel or a CSV file in one go. You can always record transactions one by one with the form." />
+        </div>
+      </PageWrapper>
+    );
   }
 
   return (

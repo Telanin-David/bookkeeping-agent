@@ -8,12 +8,15 @@ import LogoField from '@/components/branding/LogoField';
 import SignaturePad from '@/components/branding/SignaturePad';
 import Receipt from '@/components/receipts/Receipt';
 import type { Transaction } from '@/types';
+import { useFeature } from '@/hooks/useBilling';
+import Link from 'next/link';
 
 export default function BrandingPage() {
   const shop = useShopsStore((s) => s.activeShop());
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving]   = useState<BrandingKind | null>(null);
   const [error, setError]     = useState('');
+  const branded = useFeature('branding');
 
   // An invoice shows both the logo and the signature, so it previews everything at once.
   const sample = useMemo<Transaction | null>(() => {
@@ -106,6 +109,12 @@ export default function BrandingPage() {
         <aside>
           <p className="mb-3 text-[13px] font-medium text-white/55">Preview · invoice</p>
           <Receipt tx={sample} shop={shop} />
+          {!branded && (
+            <p className="mt-3 text-[13px] leading-relaxed text-white/50">
+              Your logo and signature print on receipts with a paid plan. On the free plan, receipts carry a small
+              &ldquo;Made with Bookkeeping AI&rdquo; line instead. <Link href="/billing" className="text-white/80 underline underline-offset-2">See plans</Link>
+            </p>
+          )}
         </aside>
       </div>
     </PageWrapper>

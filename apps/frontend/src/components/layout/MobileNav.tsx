@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   X, SquaresFour, ArrowsLeftRight, ChartBar, Bell,
-  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging, UploadSimple, Gauge, ChartLineUp,
+  Storefront, SignOut, DotsThree, NotePencil, CaretRight, Stamp, Package, BellRinging, UploadSimple, Gauge, ChartLineUp, CreditCard,
 } from '@phosphor-icons/react';
 import { MenuIcon } from '@/components/ui/icons';
 import { cn, formatDateTime } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth';
 import { useShopsStore } from '@/store/shops';
 import { useAlertsStore } from '@/store/alerts';
 import { useChatStore } from '@/store/chat';
+import { useBilling } from '@/hooks/useBilling';
 
 const PAGES = [
   { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
@@ -34,6 +35,7 @@ export default function MobileNav() {
   const alertCount = useAlertsStore((s) => s.activeCount);
   const user       = useAuthStore((s) => s.user);
   const shop       = useShopsStore((s) => s.activeShop());
+  const { data: billing } = useBilling();
   const activeSessionId    = useChatStore((s) => s.activeSessionId);
   const setActiveSessionId = useChatStore((s) => s.setActiveSessionId);
   const { sessions, createSession } = useChatSessions();
@@ -116,6 +118,7 @@ export default function MobileNav() {
             <div className="space-y-1">
               <MenuRow href="/shops" Icon={Storefront} label="Manage shops" onClick={closeAll} />
               <MenuRow href="/shops/branding" Icon={Stamp} label="Receipt branding" onClick={closeAll} />
+              {billing?.billingEnabled && <MenuRow href="/billing" Icon={CreditCard} label={`Plan · ${billing.planName}`} onClick={closeAll} />}
               <MenuRow href="/settings/alerts" Icon={BellRinging} label="Alert emails" onClick={closeAll} />
               {user?.isAdmin && <MenuRow href="/admin" Icon={Gauge} label="Business dashboard" onClick={closeAll} />}
             </div>

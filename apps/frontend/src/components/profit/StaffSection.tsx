@@ -10,6 +10,9 @@ import FormActions from '@/components/ui/FormActions';
 import { errorMessage } from '@/lib/errors';
 import { cn, formatShortDate, formatWhole, todayInLagos } from '@/lib/utils';
 import type { StaffFields, StaffMember } from '@/types';
+import Link from 'next/link';
+import { useFeature } from '@/hooks/useBilling';
+import Locked from '@/components/billing/Locked';
 
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
 
@@ -29,6 +32,7 @@ export default function StaffSection({ shopId, currency }: { shopId: string; cur
   const { data: staff, isLoading } = useStaff(shopId);
   const [editing, setEditing] = useState<StaffMember | 'new' | null>(null);
   const [paying, setPaying] = useState(false);
+  const staffIncluded = useFeature('staff');
   if (isLoading || !staff) return null;
   const money = (n: number) => formatWhole(n, currency);
 
@@ -42,18 +46,22 @@ export default function StaffSection({ shopId, currency }: { shopId: string; cur
               Add them with their monthly pay to get a reminder on pay day and record everyone&apos;s salary in one tap.
             </p>
           </div>
-          <Button variant="secondary" className="shrink-0" onClick={() => setEditing('new')}>Add staff</Button>
+          {staffIncluded
+            ? <Button variant="secondary" className="shrink-0" onClick={() => setEditing('new')}>Add staff</Button>
+            : <Link href="/billing" className="shrink-0 text-[14px] text-white/70 underline underline-offset-2 hover:text-white">Comes with a paid plan</Link>}
         </div>
       ) : (
         <div className="glass-card overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between border-b border-white/[0.06] py-2 pl-5 pr-2">
             <h2 className="text-sm font-semibold text-white/75">Staff</h2>
-            <button
-              type="button" onClick={() => setEditing('new')}
-              className="flex h-10 items-center gap-1.5 rounded-full px-3 text-[14px] text-white/55 transition hover:bg-white/[0.06] hover:text-white/85 sm:text-[13px]"
-            >
-              <Plus size={14} weight="bold" /> Add
-            </button>
+            {staffIncluded && (
+              <button
+                type="button" onClick={() => setEditing('new')}
+                className="flex h-10 items-center gap-1.5 rounded-full px-3 text-[14px] text-white/55 transition hover:bg-white/[0.06] hover:text-white/85 sm:text-[13px]"
+              >
+                <Plus size={14} weight="bold" /> Add
+              </button>
+            )}
           </div>
           <ul className="divide-y divide-white/[0.05]">
             {staff.map((s) => (
@@ -69,7 +77,9 @@ export default function StaffSection({ shopId, currency }: { shopId: string; cur
             ))}
           </ul>
           <div className="border-t border-white/[0.06] p-4">
-            <Button size="lg" className="w-full" onClick={() => setPaying(true)}>Pay salaries</Button>
+            {staffIncluded
+              ? <Button size="lg" className="w-full" onClick={() => setPaying(true)}>Pay salaries</Button>
+              : <Locked compact title="Paying salaries comes with a paid plan" text="Your staff list stays here. Salaries you pay can still be recorded as expenses with the form." />}
           </div>
         </div>
       )}
