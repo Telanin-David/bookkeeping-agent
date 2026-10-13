@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, CheckCircle, Clock, Lightning, LockSimple, WarningCircle } from '@phosphor-icons/react';
 import PageWrapper from '@/components/layout/PageWrapper';
-import Button from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { billingApi } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
@@ -24,7 +23,6 @@ const span = (from: string, to: string) => {
 };
 const naira = (kobo: number) => `₦${Math.round(kobo / 100).toLocaleString('en-NG')}`;
 
-const PERIOD: Record<PaidPlanId, string> = { monthly: 'a month', yearly: 'a year', weekly: 'a week', day: 'a day' };
 const CHANNEL: Record<string, string> = { bank_transfer: 'Bank transfer', card: 'Card', ussd: 'USSD', bank: 'Bank' };
 const FREE_INCLUDES = 'Recording by form, stock, debts, the Profit page, alerts in the app and receipts are free on every plan.';
 
@@ -146,107 +144,104 @@ function CurrentPlan({ b }: { b: BillingInfo }) {
 }
 
 /** What Monthly and Yearly include, as ticks under the price. */
-/** "6 a day" → "6 assistant messages a day"; "20 in 24 hours" → "20 assistant messages in 24 hours". */
-const messagesText = (m: string) => { const [n, ...rest] = m.split(' '); return `${n} assistant messages ${rest.join(' ')}`; };
 const INCLUDED = ['PDF reports: profit, debts and stock', 'Your logo and signature on receipts', 'Alert emails', 'Staff and salaries', 'Import from a spreadsheet', 'Up to 3 shops'];
 
+/** What each plan is for, under its name in the list. */
+const PLAN_LINE: Record<PaidPlanId, string> = {
+  monthly: '6 assistant messages a day',
+  yearly: '6 a day, for 12 months',
+  weekly: '20 assistant messages a day, for 7 days',
+  day: '20 assistant messages, for 24 hours',
+};
+const PRICE_UNIT: Record<PaidPlanId, string> = { monthly: '/ month', yearly: '/ year', weekly: '/ week', day: '/ day' };
+
+/**
+ * Every plan in one list, one under the other: tap one, then pay. Passes sit at the bottom
+ * of the same list, only once the admin has switched them on.
+ */
 function Offers({ b }: { b: BillingInfo }) {
-  const [busy, setBusy] = useState<PaidPlanId | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const subscriptions = b.offers.filter((o) => !o.pass);
-  const passes = b.offers.filter((o) => o.pass);
   const [choice, setChoice] = useState<PaidPlanId>(b.plan === 'yearly' ? 'yearly' : 'monthly');
   const onSubscription = b.plan === 'monthly' || b.plan === 'yearly' || b.upcoming.some((u) => u.plan === 'monthly' || u.plan === 'yearly');
+  const offer = b.offers.find((o) => o.id === choice) ?? b.offers[0];
+  const monthly = b.offers.find((o) => o.id === 'monthly');
+  if (!offer) return null;
 
-  async function pay(plan: PaidPlanId) {
+  async function pay() {
+    if (!offer) return;
     setError('');
-    setBusy(plan);
+    setBusy(true);
     try {
-      const { authorizationUrl } = await billingApi.checkout(plan);
+      const { authorizationUrl } = await billingApi.checkout(offer.id);
       window.location.assign(authorizationUrl); // Paystack's own page: transfer, card or USSD
     } catch (err) {
       setError(errorMessage(err, "Couldn't start the payment. Check your connection and try again."));
-      setBusy(null);
+      setBusy(false);
     }
   }
 
-  const offer = subscriptions.find((o) => o.id === choice) ?? subscriptions[0];
-  const monthly = subscriptions.find((o) => o.id === 'monthly');
-  const yearSaving = monthly && offer?.id === 'yearly' ? monthly.priceKobo * 12 - offer.priceKobo : 0;
+  const saving = (id: PaidPlanId, kobo: number) => (id === 'yearly' && monthly ? monthly.priceKobo * 12 - kobo : 0);
+  const when = offer.pass
+    ? (onSubscription ? 'Starts as soon as you pay, on top of your plan.' : 'Starts as soon as you pay.')
+    : (onSubscription ? 'Starts when your current plan ends, so no days are lost.' : 'Pay once. Nothing renews by itself.');
 
   return (
-    <>
-      {offer && (
-        <section>
-          <Heading>{b.plan === 'free' || b.plan === 'trial' ? 'Choose a plan' : 'Renew or add time'}</Heading>
-          <div className="glass-card rounded-2xl p-4 sm:p-5">
-            <div className="grid grid-cols-2 rounded-full bg-white/[0.05] p-1 ring-1 ring-inset ring-white/[0.08]" role="tablist" aria-label="Plan">
-              {subscriptions.map((o) => (
-                <button
-                  key={o.id} type="button" role="tab" aria-selected={o.id === offer.id} onClick={() => setChoice(o.id)}
-                  className={cn('h-9 rounded-full text-[14px] font-medium transition',
-                    o.id === offer.id ? 'bg-white/[0.14] text-white shadow-[0_1px_0_rgba(255,255,255,0.08)_inset]' : 'text-white/50 hover:text-white/80')}
-                >
-                  {o.name}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-5 px-1">
-              <p className="flex items-baseline gap-1.5">
-                <span className="text-[32px] font-bold leading-none tracking-tight tabular-nums text-white">{offer.priceText}</span>
-                <span className="text-[15px] text-white/45">/ {PERIOD[offer.id].replace('a ', '')}</span>
-              </p>
-              <p className="mt-2 text-[14px] text-white/50">
-                {yearSaving > 0 ? `${naira(Math.round(offer.priceKobo / 12))} a month · you save ${naira(yearSaving)}` : 'Pay once for 30 days. Nothing renews by itself.'}
-              </p>
-            </div>
-
-            <ul className="mt-5 space-y-2.5 px-1 text-[15px] text-white/75">
-              <li className="flex gap-3"><Check size={18} weight="bold" className="mt-0.5 shrink-0 text-white/60" />{messagesText(offer.messages)}</li>
-              {INCLUDED.map((f) => (
-                <li key={f} className="flex gap-3"><Check size={18} weight="bold" className="mt-0.5 shrink-0 text-white/60" />{f}</li>
-              ))}
-            </ul>
-
-            {onSubscription && <p className="mt-4 px-1 text-[13px] text-white/40">Starts when your current plan ends, so no days are lost.</p>}
+    <section>
+      <Heading>{b.plan === 'free' || b.plan === 'trial' ? 'Choose a plan' : 'Renew or add time'}</Heading>
+      <div className="glass-card divide-y divide-white/[0.06] overflow-hidden rounded-2xl" role="radiogroup" aria-label="Plans">
+        {b.offers.map((o) => {
+          const on = o.id === offer.id;
+          const save = saving(o.id, o.priceKobo);
+          return (
             <button
-              type="button" onClick={() => pay(offer.id)} disabled={busy !== null}
-              className="mt-5 inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-ink-950 transition hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
+              key={o.id} type="button" role="radio" aria-checked={on} onClick={() => setChoice(o.id)}
+              className={cn('flex w-full items-center gap-3.5 px-4 py-4 text-left transition', on ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]')}
             >
-              {busy === offer.id && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
-              Pay {offer.priceText}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {passes.length > 0 && (
-        <section>
-          <Heading>Full capacity</Heading>
-          <Group>
-            {passes.map((o) => (
-              <div key={o.id} className="flex items-center justify-between gap-4 px-4 py-3.5">
-                <span className="min-w-0">
-                  <span className="block text-[15px] text-white/85">{o.name.replace('Full capacity: ', '')}</span>
-                  <span className="mt-0.5 block text-[13px] text-white/40">{messagesText(o.messages)} · everything in Monthly</span>
+              <span className={cn('flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ring-1 ring-inset transition',
+                on ? 'bg-white ring-white' : 'ring-white/25')}>
+                {on && <Check size={13} weight="bold" className="text-ink-950" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className={cn('text-[15px] font-medium', on ? 'text-white' : 'text-white/80')}>{o.pass ? o.name.replace('Full capacity: ', 'Full capacity · ') : o.name}</span>
+                  {save > 0 && <span className="rounded-full bg-white/[0.1] px-2 py-0.5 text-[11px] font-medium text-white/75">Save {naira(save)}</span>}
                 </span>
-                <Button size="sm" variant="secondary" className="shrink-0 px-3.5 py-2 text-[14px]" loading={busy === o.id} disabled={busy !== null && busy !== o.id} onClick={() => pay(o.id)}>
-                  {o.priceText}
-                </Button>
-              </div>
-            ))}
-          </Group>
-          <p className="mt-2 px-1 text-[13px] leading-relaxed text-white/40">For busy days: 20 assistant messages instead of 6. Bought during Monthly, it starts at once.</p>
-        </section>
-      )}
+                <span className="mt-0.5 block text-[13px] text-white/45">{PLAN_LINE[o.id]}</span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className={cn('block text-[15px] font-semibold tabular-nums', on ? 'text-white' : 'text-white/80')}>{o.priceText}</span>
+                <span className="block text-[12px] text-white/35">{PRICE_UNIT[o.id]}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-      {error && <p className="px-1 text-[13px] text-white/70" role="alert">{error}</p>}
-      <p className="flex gap-2 px-1 text-[13px] leading-relaxed text-white/40">
+      <div className="mt-4 px-1">
+        <p className="text-[13px] font-medium text-white/45">Every paid plan includes</p>
+        <ul className="mt-2.5 space-y-2 text-[14px] text-white/70">
+          {INCLUDED.map((f) => (
+            <li key={f} className="flex gap-3"><Check size={16} weight="bold" className="mt-0.5 shrink-0 text-white/50" />{f}</li>
+          ))}
+        </ul>
+      </div>
+
+      <button
+        type="button" onClick={pay} disabled={busy}
+        className="mt-5 inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl bg-white text-[16px] font-semibold text-ink-950 transition hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
+      >
+        {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+        Pay {offer.priceText} for {offer.pass ? offer.name.replace('Full capacity: ', '') : offer.name}
+      </button>
+      <p className="mt-2 text-center text-[13px] text-white/40">{when}</p>
+      {error && <p className="mt-2 px-1 text-[13px] text-white/70" role="alert">{error}</p>}
+
+      <p className="mt-6 flex gap-2 px-1 text-[13px] leading-relaxed text-white/40">
         <LockSimple size={15} className="mt-0.5 shrink-0" />
         <span>Paid on Paystack&apos;s secure page by bank transfer, card or USSD. Your records stay yours on every plan: nothing is deleted if you stop paying.</span>
       </p>
-    </>
+    </section>
   );
 }
 
