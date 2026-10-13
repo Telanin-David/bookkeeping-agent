@@ -17,7 +17,7 @@
 | 9b | Business dashboard & daily message limit (owner's request) | ✅ Done | `feat/business-dashboard` | merged to main (#26) |
 | 9c | Running costs, staff & profit (owner's request) | ✅ Done | `feat/running-costs-profit` | merged to main (#30) |
 | 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | ✅ Done | `claude/hopeful-galileo-utx4b4` | merged to main (#31) |
-| 9e | Plans & payment: free trial, free plan, Monthly/Yearly, passes, Paystack (owner's request) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
+| 9e | Plans & payment: free trial, free plan, Monthly/Yearly, passes, Paystack (owner's request) | ✅ Done | `claude/focused-galileo-jfp0d6` | merged to main (#32) |
 | 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -426,6 +426,8 @@
     3. In Paystack (Settings → API Keys & Webhooks), set the Webhook URL to `https://<your API>/api/v1/billing/paystack/webhook`.
     4. Restart, then make one test payment with Paystack's test card or transfer and check it on the admin page.
     5. Swap to the `sk_live_…` key and restart.
+  - **Plan screen** (owner's design request): the current plan as label/value rows, then every plan in one list (one under the other) with its price and cost per day, and a single pay button.
+  - **Form fields on iPhones** (owner's report, same PR): Safari gives date fields a built-in minimum width, so the From/To boxes on Filter and Reports ran past their card. Every field can now shrink to its space, and Safari's own date-field frame is removed on iPhones (`globals.css`). Chrome can't reproduce this, so it was checked by measuring every form at 320px and 390px; confirm on a real iPhone after deploy. The shelf-count boxes had 14px text, which makes iPhones zoom in when tapped; 16px on phones now.
   - **Not built / known limits:**
     - Someone can sign up again with another email for another trial. The cap is small (40 messages); watch "Trials that paid" on the admin page.
     - No price lock for early owners: if prices change in `plans.ts`, everyone's next payment uses the new price.
