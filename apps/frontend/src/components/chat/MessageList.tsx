@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import Image from 'next/image';
 import ReceiptCard from '@/components/receipts/ReceiptCard';
 import BrandLogo from '@/components/brand/BrandLogo';
-import tile from '@/assets/brand/sabeebook-tile.png';
+import tile from '@/assets/brand/sabeebook-tile.svg';
 import type { ChatMessage } from '@/types';
 
 interface MessageListProps {

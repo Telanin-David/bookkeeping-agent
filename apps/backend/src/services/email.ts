@@ -68,7 +68,7 @@ function layout(heading: string, bodyHtml: string, footerHtml: string): string {
   return `<!doctype html><html><body style="margin:0;background:#f4f4f2;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:12px">
-<tr><td style="padding:28px 28px 8px"><p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#777">Bookkeeping AI</p>
+<tr><td style="padding:28px 28px 8px"><p style="margin:0 0 6px;font-size:18px;font-weight:700;letter-spacing:-.02em"><span style="color:#111713">sa</span><span style="color:#F5C928">bee</span><span style="color:#147A45">book</span></p>
 <h1 style="margin:0;font-size:20px;line-height:1.3">${esc(heading)}</h1></td></tr>
 <tr><td style="padding:12px 28px 24px;font-size:15px;line-height:1.55">${bodyHtml}</td></tr>
 <tr><td style="padding:16px 28px 24px;border-top:1px solid #eee;font-size:12px;line-height:1.5;color:#888">${footerHtml}</td></tr>
@@ -76,21 +76,21 @@ function layout(heading: string, bodyHtml: string, footerHtml: string): string {
 }
 
 function button(href: string, label: string): string {
-  return `<p style="margin:20px 0 4px"><a href="${esc(href)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:11px 18px;border-radius:8px;font-weight:600">${esc(label)}</a></p>`;
+  return `<p style="margin:20px 0 4px"><a href="${esc(href)}" style="display:inline-block;background:#147A45;color:#fff;text-decoration:none;padding:11px 18px;border-radius:8px;font-weight:600">${esc(label)}</a></p>`;
 }
 
 export async function sendVerificationEmail(to: string, name: string, token: string): Promise<Delivery> {
   const link = appUrl(`/verify-email?token=${encodeURIComponent(token)}`);
   return sendMail({
     to,
-    subject: 'Confirm your email for Bookkeeping AI',
+    subject: 'Confirm your email for sabeebook',
     html: layout(
       'Confirm your email',
       `<p style="margin:0">Hi ${esc(name)}, tap the button to confirm this is your email address. After that, alerts about your shop (money owed to you, bills due, low stock) can reach you here.</p>${button(link, 'Confirm my email')}
-<p style="margin:12px 0 0;font-size:13px;color:#777">The link works for 48 hours. If you didn't sign up for Bookkeeping AI, ignore this email.</p>`,
-      'You received this because this address was used to sign up for Bookkeeping AI.',
+<p style="margin:12px 0 0;font-size:13px;color:#777">The link works for 48 hours. If you didn't sign up for sabeebook, ignore this email.</p>`,
+      'You received this because this address was used to sign up for sabeebook.',
     ),
-    text: `Hi ${name},\n\nConfirm your email for Bookkeeping AI by opening this link (it works for 48 hours):\n${link}\n\nIf you didn't sign up, ignore this email.`,
+    text: `Hi ${name},\n\nConfirm your email for sabeebook by opening this link (it works for 48 hours):\n${link}\n\nIf you didn't sign up, ignore this email.`,
   });
 }
 
@@ -98,14 +98,14 @@ export async function sendPasswordResetEmail(to: string, name: string, token: st
   const link = appUrl(`/reset-password?token=${encodeURIComponent(token)}`);
   return sendMail({
     to,
-    subject: 'Reset your Bookkeeping AI password',
+    subject: 'Reset your sabeebook password',
     html: layout(
       'Reset your password',
-      `<p style="margin:0">Hi ${esc(name)}, someone (hopefully you) asked to reset the password for your Bookkeeping AI account. Tap the button to choose a new one.</p>${button(link, 'Choose a new password')}
+      `<p style="margin:0">Hi ${esc(name)}, someone (hopefully you) asked to reset the password for your sabeebook account. Tap the button to choose a new one.</p>${button(link, 'Choose a new password')}
 <p style="margin:12px 0 0;font-size:13px;color:#777">The link works once, for 1 hour. If you didn't ask for this, ignore this email: your password stays the same.</p>`,
-      'You received this because a password reset was requested for this address on Bookkeeping AI.',
+      'You received this because a password reset was requested for this address on sabeebook.',
     ),
-    text: `Hi ${name},\n\nTo choose a new Bookkeeping AI password, open this link (it works once, for 1 hour):\n${link}\n\nIf you didn't ask for this, ignore this email: your password stays the same.`,
+    text: `Hi ${name},\n\nTo choose a new sabeebook password, open this link (it works once, for 1 hour):\n${link}\n\nIf you didn't ask for this, ignore this email: your password stays the same.`,
   });
 }
 
@@ -156,7 +156,7 @@ export async function sendReportEmail(to: string, reportType: string, pdfBuffer:
   return sendMail({
     to,
     subject: `Your ${reportType} report`,
-    html: layout(`Your ${reportType} report`, '<p style="margin:0">Your report is attached as a PDF.</p>', 'Sent because you asked for this report in Bookkeeping AI.'),
+    html: layout(`Your ${reportType} report`, '<p style="margin:0">Your report is attached as a PDF.</p>', 'Sent because you asked for this report in sabeebook.'),
     text: `Your ${reportType} report is attached as a PDF.`,
     attachments: [{
       filename: `${reportType.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-report.pdf`,

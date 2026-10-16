@@ -1,6 +1,6 @@
 # The backend (Express API). Installed by docs/DEPLOY.md step 8.
 [Unit]
-Description=Bookkeeping AI backend
+Description=sabeebook backend
 After=network.target postgresql.service
 Requires=postgresql.service
 

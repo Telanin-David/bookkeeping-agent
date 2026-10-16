@@ -1,4 +1,4 @@
-# Putting Bookkeeping AI live on your VPS
+# Putting sabeebook live on your VPS
 
 This guide takes a fresh VPS to a live app at `https://yourdomain.com`. Do the steps in order. Every grey box is something to copy and paste into the server, one box at a time. After each box, check it finished without an error before moving on.
 
@@ -231,7 +231,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
-EMAIL_FROM=Bookkeeping AI <alerts@${DOMAIN}>
+EMAIL_FROM=sabeebook <alerts@${DOMAIN}>
 
 ALERT_WORKER=on
 ALERT_WORKER_INTERVAL_MS=600000

@@ -106,7 +106,7 @@ export const config = {
     smtpSecure: (process.env['SMTP_SECURE'] ?? '') === 'true',
     smtpUser: process.env['SMTP_USER'] ?? '',
     smtpPass: process.env['SMTP_PASS'] ?? '',
-    from: process.env['EMAIL_FROM'] ?? 'Bookkeeping AI <alerts@localhost>',
+    from: process.env['EMAIL_FROM'] ?? 'sabeebook <alerts@localhost>',
     outboxDir: process.env['EMAIL_OUTBOX_DIR'] ?? 'tmp/outbox',
   },
 

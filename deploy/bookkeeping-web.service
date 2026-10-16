@@ -1,6 +1,6 @@
 # The web app (Next.js). Installed by docs/DEPLOY.md step 8.
 [Unit]
-Description=Bookkeeping AI web app
+Description=sabeebook web app
 After=network.target bookkeeping-api.service
 
 [Service]

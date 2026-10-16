@@ -4,6 +4,7 @@ import Badge from '@/components/ui/Badge';
 import CostKindChip from './CostKindChip';
 import type { Transaction } from '@/types';
 import { formatCurrency, formatDate, typeLabel, isMoneyIn, cn } from '@/lib/utils';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 interface TransactionTableProps {
   data: Transaction[];
@@ -61,7 +62,7 @@ export default function TransactionTable({ data, onRowClick, onRecordPayment }: 
       {/* Phones: one card per transaction, so the amount, status and "Record payment" are
           always on screen — a wide table would hide them off the right edge. */}
       <ul className="space-y-2 md:hidden">
-        {data.length === 0 && <li className="glass-card rounded-2xl py-10 text-center text-sm text-white/30">No transactions yet</li>}
+        {data.length === 0 && <li className="glass-card rounded-2xl py-10 text-center text-sm text-white/40"><BrandLogo variant="bee" className="mx-auto mb-3 w-[64px] opacity-80" />No transactions yet</li>}
         {data.map((tx) => (
           <li
             key={tx.id}

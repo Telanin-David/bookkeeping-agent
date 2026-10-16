@@ -25,7 +25,7 @@ export function receiptStatus(tx: Transaction): string {
 export interface ReceiptImages {
   logo: Buffer | null;
   signature: Buffer | null;
-  /** Free plan: a "Made with Bookkeeping AI" line, in place of the shop's own branding. */
+  /** Free plan: a "Made with sabeebook" line, in place of the shop's own branding. */
   madeWith?: boolean;
 }
 
@@ -97,10 +97,10 @@ function draw(pdf: Pdf, tx: Transaction, shop: Shop, images: ReceiptImages): num
 
   pdf.text('Thank you for your patronage.', PAD, y, { size: 8.5, color: INK, align: 'center', width: INNER });
   y += 13;
-  pdf.text(`Issued ${day(todayIso())}${images.madeWith ? '' : ' · Bookkeeping AI'}`, PAD, y, { size: 7, color: FAINT, align: 'center', width: INNER });
+  pdf.text(`Issued ${day(todayIso())}${images.madeWith ? '' : ' · sabeebook'}`, PAD, y, { size: 7, color: FAINT, align: 'center', width: INNER });
   if (images.madeWith) {
     y += 11;
-    pdf.text('Made with Bookkeeping AI · free bookkeeping for your shop', PAD, y, { size: 7, color: MUTED, align: 'center', width: INNER });
+    pdf.text('Made with sabeebook · free bookkeeping for your shop', PAD, y, { size: 7, color: MUTED, align: 'center', width: INNER });
   }
   return y + 10 + PAD;
 }

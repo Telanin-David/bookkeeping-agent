@@ -2,7 +2,7 @@
 // which plan applies at a given moment. No database here, so the rules can be tested alone.
 //
 // Plans (prices in kobo, as Paystack takes them):
-//   free     no assistant, one shop, receipts carry a "Made with Bookkeeping AI" line
+//   free     no assistant, one shop, receipts carry a "Made with sabeebook" line
 //   trial    everything Monthly has, for TRIAL_DAYS, with TRIAL_MESSAGES assistant messages in all
 //   monthly  ₦5,000 for 30 days, 6 assistant messages a day
 //   yearly   ₦50,000 for 365 days, the same as Monthly (two months free)
@@ -24,7 +24,7 @@ export interface Features {
   assistant: boolean;
   /** Profit & Loss, credit and stock PDFs. Receipts are always available. */
   reports: boolean;
-  /** The shop's logo and signature on receipts, without the "Made with Bookkeeping AI" line. */
+  /** The shop's logo and signature on receipts, without the "Made with sabeebook" line. */
   branding: boolean;
   emailAlerts: boolean;
   /** Adding staff and paying salaries. Existing staff stay visible either way. */
