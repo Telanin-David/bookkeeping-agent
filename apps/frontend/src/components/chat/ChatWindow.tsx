@@ -150,7 +150,7 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <MessageList messages={[...messages, ...optimistic]} />
+      <MessageList messages={[...messages, ...optimistic]} thinking={optimistic.length > 0} />
       <MessageInput onSend={handleSend} disabled={usage?.remaining === 0} footer={<UsageLine usage={usage} plan={billing?.billingEnabled ? billing.plan : undefined} />} />
     </div>
   );
