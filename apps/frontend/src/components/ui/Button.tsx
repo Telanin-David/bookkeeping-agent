@@ -35,7 +35,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       disabled={disabled || loading}
       className={cn(
         // Presses shrink a touch, so a tap on a phone feels answered.
-        'inline-flex select-none items-center justify-center gap-2 font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 active:scale-[0.97] disabled:active:scale-100',
+        'inline-flex select-none items-center justify-center gap-2 font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-leaf/50 active:scale-[0.97] disabled:active:scale-100',
         variantCls[variant],
         sizeCls[size],
         className,

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 const schema = z.object({
   name:     z.string().min(2),
@@ -50,8 +51,8 @@ export default function SignupPage() {
 
       <div className="glass-card relative w-full max-w-sm rounded-2xl p-8">
         <div className="mb-7">
-          <p className="text-lg font-bold tracking-tight text-white/85">Bookkeeping AI</p>
-          <p className="mt-0.5 text-xs text-white/30 tracking-wide">Create your account</p>
+          <BrandLogo variant="full" priority className="w-[210px]" />
+          <p className="mt-4 text-[13px] text-white/40">Create your account</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

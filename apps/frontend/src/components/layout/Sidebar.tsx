@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import { useChatStore } from '@/store/chat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { useBilling } from '@/hooks/useBilling';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 const NAV = [
   { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
@@ -52,8 +53,7 @@ export default function Sidebar() {
     <aside className="flex h-full w-60 flex-col border-r border-white/[0.07] bg-ink-950/90 backdrop-blur-2xl">
       {/* Wordmark */}
       <div className="flex items-center gap-2 px-5 py-5 border-b border-white/[0.06]">
-        <p className="text-base font-bold tracking-tight text-white/85">Bookkeeping</p>
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-white/25 self-end pb-0.5">AI</span>
+        <BrandLogo className="w-[118px]" />
       </div>
 
       <nav className="shrink-0 space-y-0.5 px-2 py-2">
@@ -74,7 +74,7 @@ export default function Sidebar() {
                 size={17}
                 className={cn(
                   'shrink-0 transition-colors',
-                  active ? 'text-white/80' : 'text-white/35 group-hover:text-white/60',
+                  active ? 'text-brand-yellow' : 'text-white/35 group-hover:text-white/60',
                 )}
               />
               <span>{label}</span>

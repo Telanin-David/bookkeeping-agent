@@ -9,6 +9,7 @@ import VerifyEmailBanner from '@/components/layout/VerifyEmailBanner';
 import { useShops } from '@/hooks/useShops';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useAlertsStore } from '@/store/alerts';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
@@ -45,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       // While the app checks the sign-in: a dark screen, with the name fading in only if it
       // takes a moment, instead of "Loading…" flashing up on every start.
       <div className="flex h-[100dvh] items-center justify-center bg-ink-950" role="status" aria-label="Loading">
-        <span className="anim-fade-in-late font-display text-[19px] font-semibold tracking-[-0.03em] text-white/35">Bookkeeping AI</span>
+        <BrandLogo className="anim-fade-in-late w-[140px] opacity-60" />
       </div>
     );
   }
