@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       // While the app checks the sign-in: a dark screen, with the name fading in only if it
       // takes a moment, instead of "Loading…" flashing up on every start.
       <div className="flex h-[100dvh] items-center justify-center bg-ink-950" role="status" aria-label="Loading">
-        <BrandLogo className="anim-fade-in-late w-[140px] opacity-60" />
+        <BrandLogo variant="bee" className="anim-fade-in-late w-[84px] opacity-80" />
       </div>
     );
   }

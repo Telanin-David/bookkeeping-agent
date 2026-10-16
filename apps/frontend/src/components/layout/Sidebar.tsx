@@ -53,7 +53,7 @@ export default function Sidebar() {
     <aside className="flex h-full w-60 flex-col border-r border-white/[0.07] bg-ink-950/90 backdrop-blur-2xl">
       {/* Wordmark */}
       <div className="flex items-center gap-2 px-5 py-5 border-b border-white/[0.06]">
-        <BrandLogo className="w-[118px]" />
+        <BrandLogo className="w-[108px]" />
       </div>
 
       <nav className="shrink-0 space-y-0.5 px-2 py-2">

@@ -8,7 +8,7 @@ export default function AuthCard({ subtitle, children }: { subtitle: string; chi
       <div className="pointer-events-none absolute left-1/2 top-1/3 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/[0.025] blur-3xl" />
       <div className="glass-card anim-page relative w-full max-w-sm rounded-2xl p-7 sm:p-8">
         <div className="mb-7">
-          <BrandLogo variant="full" priority className="w-[210px]" />
+          <BrandLogo priority className="w-[168px]" />
           <p className="mt-4 text-[13px] text-white/40">{subtitle}</p>
         </div>
         {children}

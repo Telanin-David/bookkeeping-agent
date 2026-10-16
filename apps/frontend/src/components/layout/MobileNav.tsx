@@ -156,7 +156,7 @@ export default function MobileNav() {
         aria-hidden={!menuOpen}
       >
         <div className="flex items-center justify-between px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
-          <BrandLogo className="w-[128px]" />
+          <BrandLogo className="w-[118px]" />
           <button
             onClick={closeAll}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/55 transition hover:text-white/90"

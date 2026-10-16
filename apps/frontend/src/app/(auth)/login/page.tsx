@@ -64,7 +64,7 @@ export default function LoginPage() {
       <div className="glass-card relative w-full max-w-sm rounded-2xl p-8">
         {/* Wordmark */}
         <div className="mb-7">
-          <BrandLogo variant="full" priority className="w-[210px]" />
+          <BrandLogo priority className="w-[168px]" />
           <p className="mt-4 text-[13px] text-white/40">Sign in to continue</p>
         </div>
 
