@@ -9,6 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // sabeebook brand sheet. `leaf` is the logo's lighter green ("book" on dark), for green
+        // text and icons on the dark background, where the brand green is too dark to read.
+        brand: {
+          green:  '#147A45',
+          'green-hover': '#18904F',
+          leaf:   '#4DA569',
+          yellow: '#F5C928',
+          black:  '#111713',
+          paper:  '#F7F8F4',
+        },
         ink: {
           950: '#09090b',
           900: '#0f0f12',

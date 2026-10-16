@@ -2223,7 +2223,7 @@ components:
       properties:
         assistant: { type: boolean }
         reports: { type: boolean }
-        branding: { type: boolean, description: Logo and signature on receipts; without it, receipts carry a "Made with Bookkeeping AI" line }
+        branding: { type: boolean, description: Logo and signature on receipts; without it, receipts carry a "Made with sabeebook" line }
         emailAlerts: { type: boolean }
         staff: { type: boolean }
         import: { type: boolean }

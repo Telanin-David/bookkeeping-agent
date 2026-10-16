@@ -176,7 +176,7 @@ export class Report {
   finish(): Promise<Buffer> {
     const { pdf } = this;
     const range = pdf.doc.bufferedPageRange();
-    const generated = `${this.shop.name} · ${this.title} · generated ${dateTime(new Date())} · Bookkeeping AI`;
+    const generated = `${this.shop.name} · ${this.title} · generated ${dateTime(new Date())} · sabeebook`;
     for (let i = 0; i < range.count; i++) {
       pdf.doc.switchToPage(range.start + i);
       const fy = pdf.pageHeight - MARGIN;

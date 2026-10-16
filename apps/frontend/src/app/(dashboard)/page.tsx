@@ -15,7 +15,8 @@ import { quantityText } from '@/lib/quantity';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Badge from '@/components/ui/Badge';
-import { formatCurrency, formatDate, formatWhole, typeLabel } from '@/lib/utils';
+import { formatCurrency, formatDate, formatWhole, typeLabel, isMoneyIn, cn } from '@/lib/utils';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 export default function DashboardPage() {
   useShops();
@@ -119,7 +120,7 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : txData?.data.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-white/30">No transactions yet.</p>
+          <div className="px-5 py-8 text-center text-sm text-white/40"><BrandLogo variant="bee" className="mx-auto mb-3 w-[64px] opacity-80" />No transactions yet. Tell the assistant what you sold, or add it on the Transactions page.</div>
         ) : (
           txData?.data.map((tx) => (
             <div key={tx.id} className="flex items-center justify-between border-b border-white/[0.04] px-5 py-3.5 last:border-0 hover:bg-white/[0.02] transition-colors">
@@ -129,7 +130,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <Badge>{typeLabel(tx.type)}</Badge>
-                <span className="whitespace-nowrap text-sm font-medium tabular-nums text-white/70">
+                <span className={cn('whitespace-nowrap text-sm font-medium tabular-nums', isMoneyIn(tx.type) ? 'text-brand-leaf' : 'text-white/70')}>
                   {isCost(tx.type) ? '−' : '+'}{formatCurrency(tx.amount, tx.currency)}
                 </span>
               </div>

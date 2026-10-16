@@ -199,13 +199,13 @@ function Offers({ b }: { b: BillingInfo }) {
               className={cn('flex w-full items-center gap-3.5 px-4 py-4 text-left transition', on ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]')}
             >
               <span className={cn('flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ring-1 ring-inset transition',
-                on ? 'bg-white ring-white' : 'ring-white/25')}>
-                {on && <Check size={13} weight="bold" className="text-ink-950" />}
+                on ? 'bg-brand-yellow ring-brand-yellow' : 'ring-white/25')}>
+                {on && <Check size={13} weight="bold" className="text-brand-black" />}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className={cn('text-[15px] font-medium', on ? 'text-white' : 'text-white/80')}>{o.pass ? o.name.replace('Full capacity: ', 'Full capacity · ') : o.name}</span>
-                  {save > 0 && <span className="rounded-full bg-white/[0.1] px-2 py-0.5 text-[11px] font-medium text-white/75">Save {naira(save)}</span>}
+                  {save > 0 && <span className="rounded-full bg-brand-yellow/15 px-2 py-0.5 text-[11px] font-medium text-brand-yellow">Save {naira(save)}</span>}
                 </span>
                 <span className="mt-0.5 block text-[13px] text-white/45">{PLAN_LINE[o.id]}</span>
                 {o.id !== 'day' && <span className="block text-[13px] text-white/35">About {naira(Math.round(o.priceKobo / o.days / 100) * 100)} a day</span>}
@@ -223,14 +223,14 @@ function Offers({ b }: { b: BillingInfo }) {
         <p className="text-[13px] font-medium text-white/45">Every paid plan includes</p>
         <ul className="mt-2.5 space-y-2 text-[14px] text-white/70">
           {INCLUDED.map((f) => (
-            <li key={f} className="flex gap-3"><Check size={16} weight="bold" className="mt-0.5 shrink-0 text-white/50" />{f}</li>
+            <li key={f} className="flex gap-3"><Check size={16} weight="bold" className="mt-0.5 shrink-0 text-brand-leaf" />{f}</li>
           ))}
         </ul>
       </div>
 
       <button
         type="button" onClick={pay} disabled={busy}
-        className="mt-5 inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl bg-white text-[16px] font-semibold text-ink-950 transition hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
+        className="mt-5 inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl bg-brand-green text-[16px] font-semibold text-white ring-1 ring-inset ring-white/15 transition hover:bg-brand-green-hover active:scale-[0.98] disabled:opacity-50"
       >
         {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
         Pay {offer.priceText} for {offer.pass ? offer.name.replace('Full capacity: ', '') : offer.name}

@@ -12,6 +12,7 @@ import { useShopsStore } from '@/store/shops';
 import { DEMO_USER_ID } from '@/lib/demo';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 const schema = z.object({
   email:    z.string().email(),
@@ -63,8 +64,8 @@ export default function LoginPage() {
       <div className="glass-card relative w-full max-w-sm rounded-2xl p-8">
         {/* Wordmark */}
         <div className="mb-7">
-          <p className="text-lg font-bold tracking-tight text-white/85">Bookkeeping AI</p>
-          <p className="mt-0.5 text-xs text-white/30 tracking-wide">Sign in to continue</p>
+          <BrandLogo priority className="w-[168px]" />
+          <p className="mt-4 text-[13px] text-white/40">Sign in to continue</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

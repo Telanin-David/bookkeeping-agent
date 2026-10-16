@@ -18,7 +18,8 @@
 | 9c | Running costs, staff & profit (owner's request) | ✅ Done | `feat/running-costs-profit` | merged to main (#30) |
 | 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | ✅ Done | `claude/hopeful-galileo-utx4b4` | merged to main (#31) |
 | 9e | Plans & payment: free trial, free plan, Monthly/Yearly, passes, Paystack (owner's request) | ✅ Done | `claude/focused-galileo-jfp0d6` | merged to main (#32) |
-| 10 | DevOps & Infrastructure | ⬜ Not started | — | — |
+| 9f | Rebrand to sabeebook: logo, brand colours, name (owner's request) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
+| 10 | DevOps & Infrastructure (single VPS) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
 
@@ -373,6 +374,22 @@
     - Every browser suite passes on the production build: login 11/11, payments 18/18, part-paid 5/5, stock 16/16, alerts 10/10, import 11/11, daily limit 6/6, business dashboard 11/11, hidden from owners 11/11.
     - Screens render as before.
 
+- **Rebrand to sabeebook** (owner's request and brand sheet; on the same branch as D10). The design stays the same: dark background, glass cards, fonts, layout.
+  - **Logo:** the owner has no original file, so the "sabeebook" word and the bee are redrawn as vector shapes (`src/assets/brand/*.svg`) from the brand sheet's dark version, in the exact brand colours: white `#F7F8F4`, yellow `#F5C928`, and the logo's green `#4DA569`. One piece per place, never both together (the owner's rule): the word on the sign-in screens and in the menus; the bee on the loading screen, empty screens (dashboard, Transactions, Alerts), the not-found page and as the chat assistant's avatar.
+  - **App icon** (browser tab `icon.png`, iPhone home screen `apple-icon.png`, chat avatar): the redrawn bee on the brand dark green `#0B3826`. The sheet's own icon (green wings) was too small to redraw sharply, and the owner chose this version.
+  - **Colours:** brand green `#147A45` on primary buttons and the Plan screen's pay button, with white text. Yellow on selected states: the chosen plan, the savings tag, and the current page in the menus. The logo's lighter green for ticks, the input focus border, and money coming in (sales and credit sales) on the dashboard and Transactions. `#147A45` is too dark to read as text on the dark background. Tailwind: `brand.green`, `brand.yellow`, `brand.leaf`, `brand.black`.
+  - **Chat:** an empty chat shows the bee and "What did you sell today?", and the bee "types" (three yellow dots) while a reply is on its way. There was nothing on screen while waiting before.
+  - **Name:** "Bookkeeping AI" → "sabeebook" everywhere: receipts on screen and as PDF ("Made with sabeebook"), PDF reports, emails (subjects, wording, a coloured wordmark header, a green button), the assistant's instructions, the browser title, `EMAIL_FROM`, the docs and the server files.
+  - **Checked:** 143 unit tests. Billing on: API walkthrough 47/47, payment screens 28/28, every form at 320/390px (nothing sticks out). Billing off: profit 44/44, payments 26/26, stock 36/36, import 38/38, reports 30/30, dashboard and forgot-password with no failures, and the browser suites D7 18/18, stock 16/16, alerts 10/10, import 11/11, profit 26/26, part-paid 5/5. Screenshots reviewed for the sign-in, menu, dashboard, Transactions, Plan, chat, empty screens, not-found page and the confirmation email.
+
+- **Deliverable 10: going live on one VPS** (`docs/DEPLOY.md`, `deploy/`). The owner's plan: everything on one VPS under one domain.
+  - **Layout:** nginx is the only thing open to the internet (ports 80/443). It sends `/api/` to the backend (127.0.0.1:4000) and everything else to the Next.js app (127.0.0.1:3000). One domain means the `SameSite=Strict` refresh cookie works with no cross-site setup; `www` redirects to the bare domain. HTTPS is from Let's Encrypt (certbot, renews itself). nginx allows uploads up to 6 MB (imports are 5 MB) and waits 120s for chat replies.
+  - **Processes:** two systemd services (`bookkeeping-api`, `bookkeeping-web`) running as an unprivileged `bookkeeping` user. They restart on crash and on reboot, with a 700 MB memory cap each.
+  - **Database updates:** `deploy/migrate.sh` records what it has applied in a `schema_migrations` table, applies only new files, and stops at the first error. The old `npm run migrate` re-runs every file, and they aren't written to run twice. Tested on a fresh database owned by a non-superuser role (`pgcrypto` is a trusted extension, so the owner can create it): 13 applied, then 0 on a second run.
+  - **Nightly job** (`deploy/backup.sh`, cron 2:30am): `pg_dump` plus a tar of uploads, 14 days kept, and it deletes refresh tokens that expired more than a day ago (the clean-up D6 asked for). Tested: the dump lists all 22 tables' data with `pg_restore -l`.
+  - **Updates:** `deploy/update.sh` (pull, `npm ci`, build, migrate, restart, health check).
+  - **Checked here:** the production build (`tsc` → `node dist/server.js` with `NODE_ENV=production`) starts and answers `/health`; the bundled fonts resolve from `dist/`. Not checked here (no systemd, nginx or certbot in this environment): the service files, nginx config and certificate step. Those are checked on the VPS by the guide's own commands (`nginx -t`, `curl` health checks, `certbot renew --dry-run`).
+
 ## Voice input (owner's decision)
 - **For now:** owners use their phone keyboard's microphone to dictate into the chat box. The app's own mic button does nothing yet.
 - **When voice is built: self-hosted Whisper on the VPS from day one** (not a paid speech-to-text API). It is to be moved to its own VPS as users grow.
@@ -401,7 +418,7 @@
     | Plan | Price | Length | Assistant | Everything else |
     |---|---|---|---|---|
     | Free trial | ₦0 | 14 days | 40 messages in total | all paid features |
-    | Free | ₦0 | always | none | record sales/expenses/debts, stock, receipts, profit page, in-app alerts; 1 shop; receipts carry "Made with Bookkeeping AI" |
+    | Free | ₦0 | always | none | record sales/expenses/debts, stock, receipts, profit page, in-app alerts; 1 shop; receipts carry "Made with sabeebook" |
     | Monthly | ₦5,000 | 30 days | 6 a day | PDF reports, logo and signature on receipts, alert emails, staff and salaries, spreadsheet import, up to 3 shops |
     | Yearly | ₦50,000 | 365 days | 6 a day | as Monthly |
     | Full capacity: 1 week | ₦3,000 | 7 days | 20 a day | as Monthly |

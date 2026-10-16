@@ -9,6 +9,7 @@ import { ListSkeleton } from '@/components/ui/Skeleton';
 import { CaretDown, GearSix } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { AlertStatus } from '@/types';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 const FILTERS = ['active', 'acknowledged', 'dismissed', 'resolved', ''] as const;
 const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
@@ -79,9 +80,10 @@ export default function AlertsPage() {
       ) : (
         <div className="space-y-3">
           {data?.data.length === 0 && (
-            <p className="glass-card rounded-2xl px-5 py-8 text-center text-[14px] text-white/40">
+            <div className="glass-card rounded-2xl px-5 py-8 text-center text-[14px] text-white/40">
+              <BrandLogo variant="bee" className="mx-auto mb-3 w-[64px] opacity-80" />
               {statusFilter === 'active' ? 'Nothing needs your attention.' : 'No alerts here.'}
-            </p>
+            </div>
           )}
           {data?.data.map((alert) => (
             <AlertCard key={alert.id} alert={alert} showStatus={statusFilter === ''} onAcknowledge={() => apply(alert, 'ack')} onDismiss={() => apply(alert, 'dismiss')} />

@@ -5,8 +5,8 @@ import './globals.css';
 import Providers from './providers';
 
 export const metadata: Metadata = {
-  title:       'Bookkeeping AI',
-  description: 'AI-powered bookkeeping for small shop owners',
+  title:       'sabeebook',
+  description: 'Easy bookkeeping for busy people.',
 };
 
 export const viewport: Viewport = {

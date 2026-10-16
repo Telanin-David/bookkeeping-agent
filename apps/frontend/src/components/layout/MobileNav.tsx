@@ -15,6 +15,7 @@ import { useShopsStore } from '@/store/shops';
 import { useAlertsStore } from '@/store/alerts';
 import { useChatStore } from '@/store/chat';
 import { useBilling } from '@/hooks/useBilling';
+import BrandLogo from '@/components/brand/BrandLogo';
 
 const PAGES = [
   { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
@@ -155,7 +156,7 @@ export default function MobileNav() {
         aria-hidden={!menuOpen}
       >
         <div className="flex items-center justify-between px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
-          <p className="font-display text-[21px] font-semibold tracking-[-0.03em] text-white/90">Bookkeeping AI</p>
+          <BrandLogo className="w-[118px]" />
           <button
             onClick={closeAll}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/55 transition hover:text-white/90"
@@ -189,7 +190,7 @@ export default function MobileNav() {
                   active ? 'bg-white/[0.08] font-medium text-white' : 'text-white/65 hover:bg-white/[0.05] hover:text-white/90 active:bg-white/[0.09]',
                 )}
               >
-                <Icon size={20} weight={active ? 'fill' : 'regular'} className={cn('shrink-0', active ? 'text-white/85' : 'text-white/45')} />
+                <Icon size={20} weight={active ? 'fill' : 'regular'} className={cn('shrink-0', active ? 'text-brand-yellow' : 'text-white/45')} />
                 <span className="flex-1">{label}</span>
                 {label === 'Alerts' && alertCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/[0.10] px-1.5 text-[11px] font-medium tabular-nums text-white/70">

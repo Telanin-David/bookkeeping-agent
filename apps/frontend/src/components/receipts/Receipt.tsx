@@ -31,7 +31,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 
 const Rule = () => <div className="my-4 border-t border-dashed border-black/20" />;
 
-/** `branded` false (free plan): no logo or signature, and a "Made with Bookkeeping AI" line. */
+/** `branded` false (free plan): no logo or signature, and a "Made with sabeebook" line. */
 export default function Receipt({ tx, shop, branded = true }: { tx: Transaction; shop: Shop; branded?: boolean }) {
   const isInvoice = tx.type === 'receivable';
   const loggedAt = new Date(tx.createdAt);
@@ -108,8 +108,8 @@ export default function Receipt({ tx, shop, branded = true }: { tx: Transaction;
 
       <footer className="text-center">
         <p className="text-[13px] text-black/70">Thank you for your patronage.</p>
-        <p className="mt-1 text-[11px] text-black/35">Issued {dateFmt.format(new Date(lagosDay.format(new Date())))}{branded && ' · Bookkeeping AI'}</p>
-        {!branded && <p className="mt-1 text-[11px] text-black/45">Made with Bookkeeping AI · free bookkeeping for your shop</p>}
+        <p className="mt-1 text-[11px] text-black/35">Issued {dateFmt.format(new Date(lagosDay.format(new Date())))}{branded && ' · sabeebook'}</p>
+        {!branded && <p className="mt-1 text-[11px] text-black/45">Made with sabeebook · free bookkeeping for your shop</p>}
       </footer>
     </article>
   );

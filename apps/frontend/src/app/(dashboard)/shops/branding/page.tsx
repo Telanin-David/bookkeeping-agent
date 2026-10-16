@@ -112,7 +112,7 @@ export default function BrandingPage() {
           {!branded && (
             <p className="mt-3 text-[13px] leading-relaxed text-white/50">
               Your logo and signature print on receipts with a paid plan. On the free plan, receipts carry a small
-              &ldquo;Made with Bookkeeping AI&rdquo; line instead. <Link href="/billing" className="text-white/80 underline underline-offset-2">See plans</Link>
+              &ldquo;Made with sabeebook&rdquo; line instead. <Link href="/billing" className="text-white/80 underline underline-offset-2">See plans</Link>
             </p>
           )}
         </aside>

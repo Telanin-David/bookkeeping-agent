@@ -43,7 +43,7 @@ export class Pdf {
   readonly doc: PDFKit.PDFDocument;
 
   constructor(options: PDFKit.PDFDocumentOptions) {
-    this.doc = new PDFDocument({ ...options, autoFirstPage: true, info: { Producer: 'Bookkeeping AI', ...options.info } });
+    this.doc = new PDFDocument({ ...options, autoFirstPage: true, info: { Producer: 'sabeebook', ...options.info } });
     for (const w of Object.keys(PRIMARY) as Weight[]) {
       this.doc.registerFont(`p-${w}`, path.join(FONT_DIR, PRIMARY[w]));
       this.doc.registerFont(`f-${w}`, path.join(FONT_DIR, FALLBACK[w]));

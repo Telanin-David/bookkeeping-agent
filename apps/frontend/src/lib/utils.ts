@@ -41,6 +41,11 @@ export function capitalize(str: string): string {
 }
 
 /** Everyday names for transaction types — "receivable"/"payable" are accounting jargon. */
+/** Sales and credit sales: money coming in, shown in green. */
+export function isMoneyIn(type: string): boolean {
+  return type === 'sale' || type === 'receivable';
+}
+
 export function typeLabel(type: string): string {
   switch (type) {
     case 'sale':       return 'Sale';
