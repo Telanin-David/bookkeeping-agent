@@ -5,6 +5,7 @@ A step-by-step guide in simple English. It takes a brand-new VPS to a live app a
 - Do the steps **in order**, one grey box at a time.
 - Each box says **what to do**, and **Why** says what it is for.
 - Plan for **2 to 3 hours**. Much of it is waiting for things to download or build.
+- **New to servers?** Read **`docs/HOSTING-BASICS.md`** ("Hosting explained simply") first. It explains every word used here (server, IP address, domain, DNS, terminal and the rest) in plain English.
 
 ---
 
