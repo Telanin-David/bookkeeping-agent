@@ -40,18 +40,42 @@ A step-by-step guide in simple English. It takes a brand-new VPS to a live app a
 
 | Item | Where you get it | Needed for |
 |---|---|---|
-| The server's **IP address** (four numbers, like `102.89.34.11`) and its **root password** | The email from your VPS company, or its dashboard | Everything |
+| Your **Hostinger** login (where you bought the VPS) | hostinger.com | Step 0 |
 | A login to the website where you **bought the domain** | That company | Step 1 |
 | A login to **GitHub** (the account that owns `Telanin-David/bookkeeping-agent`) | github.com | Step 6 |
 | An **Anthropic API key** | console.anthropic.com | Step 7. **The app will not start without it.** |
 | *(Can wait)* Brevo email login | brevo.com, free | "Forgot password" and alert emails |
 | *(Can wait)* Paystack login | dashboard.paystack.com | Online payments |
 
-If your VPS company asks which system to install, choose **Ubuntu 24.04**. Ubuntu 22.04 also works.
+---
+
+## Step 0: Set up your new VPS on Hostinger (first time only)
+
+**Why:** a VPS you've just bought is like a new, empty computer in a data centre. Before anything else, you choose what system it runs (Ubuntu, a free system made for servers), and set its administrator password. Hostinger then switches it on and gives you its **IP address**: the number your laptop and your domain will use to reach it.
+
+> Hostinger changes its screens from time to time, so a button may have a slightly different name. Look for the closest match. If you're stuck on a screen, send me a screenshot (with any passwords hidden).
+
+1. Go to **hostinger.com** and click **Log in**. You land in Hostinger's control panel, called **hPanel**.
+2. In the menu (top or left), click **VPS**. You'll see your new server, probably with a **Setup** button. Click **Setup**.
+3. **Location** (if it asks): choose a European location such as **France**, **United Kingdom**, **Netherlands** or **Germany**. **Why:** Europe is the closest Hostinger has to Nigeria, so the app feels fastest for your customers.
+4. **Type of setup / OS:** choose **Plain OS** (sometimes called **Operating system** or **Clean OS**), then **Ubuntu 24.04**. Ubuntu 22.04 also works if 24.04 isn't offered.
+   - **Do NOT pick** an option "with a control panel" (CloudPanel, cPanel, Plesk, CyberPanel…) or an "application" (Docker, Coolify, WordPress…). **Why:** those install their own website software, which clashes with how this guide sets up sabeebook.
+5. **Malware scanner** (if offered): you can leave it **on**. It doesn't get in the way.
+6. **Root password:** type a **strong password** (at least 12 characters, mixing letters, numbers and symbols) and **write it down somewhere safe**, like a password manager or a paper notebook at home. **Why:** `root` is the server's administrator account; this password is the key to the whole server.
+   - If it offers **SSH key**, skip it for now. The password is enough tonight.
+7. Click **Next** / **Finish setup** / **Confirm**. Hostinger takes a few minutes to prepare the server. Wait until the status says **Running** (or shows a green dot).
+8. Open the server's **Overview** page (click its name in the VPS list). Find and **write down**:
+   - the **IP address**: four numbers with dots, like `102.89.34.11` (often under **VPS information** or **SSH access**);
+   - the **SSH username**, which is usually `root`.
+
+   **Why:** you need these two things to log in to the server (step 2) and to point your domain at it (step 1).
+9. Look for **Firewall** (under the server's **Security** settings in hPanel). If Hostinger's firewall is switched on, make sure it allows ports **22**, **80** and **443**: add a rule to **Accept** each one, or switch the firewall off and rely on the one this guide sets up in step 3. **Why:** port 22 is how you log in; 80 and 443 are how website visitors arrive. If they're blocked here, nothing else in this guide can reach the internet.
+
+> **Already chose the wrong system?** No harm done: the server is empty. In hPanel, open the server, find **OS & Panel → Operating System** (or **Change OS**), choose **Ubuntu 24.04** (plain, no panel), and confirm. This wipes the server and starts it fresh, which is fine for a new server.
 
 ---
 
-## Step 1: Point your domain at the server (do this first)
+## Step 1: Point your domain at the server (do this straight after step 0)
 
 **Why:** right now your domain doesn't know where your server is. This step tells the internet: "when someone types sabeebook.com, send them to this server's IP address". It can take from a few minutes to a few hours to spread across the internet, so start it first and carry on with the other steps while it does.
 
@@ -68,6 +92,11 @@ On the website where you bought the domain:
 4. Click **Add record** again and add a second one, the same way, but with **Name / Host:** `www`. This is so `www.yourdomain.com` works too.
 5. If the list already has other **A** or **AAAA** records with name `@` or `www` (often a "parking page" the seller adds), **delete** them. **Why:** if two addresses are listed, some visitors land on the wrong one.
 
+> **If you bought the domain on Hostinger too:** in hPanel, click **Domains**, click your domain, then **DNS / Nameservers** (or **Manage DNS records**).
+> - Hostinger usually already has an **A** record for `@` pointing to a Hostinger parking page. **Edit** it: click **Edit**, change **Points to** to your VPS's IP address, and click **Update**. Don't add a second one.
+> - If there's a **CNAME** record for `www` that points to your domain, **leave it**: `www` then follows `@` automatically, so you don't need the `www` A record from point 4.
+> - If the page says your domain uses **other nameservers** (not Hostinger's), the DNS records live at that other company instead.
+
 **To check it's working:** go to **dnschecker.org**, type your domain, choose **A** and press **Search**. Green ticks showing your server's IP mean it's done. You don't have to wait for this: carry on with steps 2–9, and come back to check before step 10.
 
 ---
@@ -77,6 +106,8 @@ On the website where you bought the domain:
 **Open the terminal on your laptop:**
 - **Windows:** press the **Windows key**, type `PowerShell`, and press **Enter**.
 - **Mac:** press **Cmd+Space**, type `Terminal`, and press **Enter**.
+
+> **Easier option on Hostinger:** in hPanel, open your server and click **Browser terminal** (or **Terminal**). A terminal opens in your web browser, already logged in to the server, so you can skip the `ssh` part below and go straight to "Tell the server your domain". Pasting works with **Ctrl+Shift+V** (Windows) or **Cmd+V** (Mac), or with right-click → **Paste**. If pasting gives you trouble there, use PowerShell or Terminal instead.
 
 Type this, with **your server's IP** instead of the example numbers, and press **Enter**:
 
