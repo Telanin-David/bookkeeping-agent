@@ -3,7 +3,7 @@ import Table from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
 import CostKindChip from './CostKindChip';
 import type { Transaction } from '@/types';
-import { formatCurrency, formatDate, typeLabel, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, typeLabel, isMoneyIn, cn } from '@/lib/utils';
 
 interface TransactionTableProps {
   data: Transaction[];
@@ -70,7 +70,7 @@ export default function TransactionTable({ data, onRowClick, onRecordPayment }: 
           >
             <div className="flex items-start justify-between gap-3">
               <p className="min-w-0 text-[15px] leading-snug text-white/90">{tx.description ?? '—'}</p>
-              <p className="shrink-0 whitespace-nowrap text-[15px] font-medium tabular-nums text-white/90">{formatCurrency(tx.amount, tx.currency)}</p>
+              <p className={cn('shrink-0 whitespace-nowrap text-[15px] font-medium tabular-nums', isMoneyIn(tx.type) ? 'text-brand-leaf' : 'text-white/90')}>{formatCurrency(tx.amount, tx.currency)}</p>
             </div>
             <p className="mt-1 truncate text-[13px] text-white/45">
               {[formatDate(tx.date), tx.counterparty, typeLabel(tx.type)].filter(Boolean).join(' · ')}
@@ -94,7 +94,7 @@ export default function TransactionTable({ data, onRowClick, onRecordPayment }: 
           columns={[
             { key: 'date',         header: 'Date',         render: (r) => <span className="whitespace-nowrap">{formatDate(r.date)}</span> },
             { key: 'description',  header: 'Description',  render: (r) => r.description ?? '—' },
-            { key: 'amount',       header: 'Amount',       render: (r) => formatCurrency(r.amount, r.currency), className: 'text-right font-mono whitespace-nowrap' },
+            { key: 'amount',       header: 'Amount',       render: (r) => <span className={isMoneyIn(r.type) ? 'text-brand-leaf' : undefined}>{formatCurrency(r.amount, r.currency)}</span>, className: 'text-right font-mono whitespace-nowrap' },
             {
               key: 'status',
               header: 'Status',

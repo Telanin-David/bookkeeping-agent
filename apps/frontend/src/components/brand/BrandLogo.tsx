@@ -1,11 +1,11 @@
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import word from '@/assets/brand/sabeebook-word.png';
-import bee from '@/assets/brand/sabeebook-bee.png';
+import word from '@/assets/brand/sabeebook-word.svg';
+import bee from '@/assets/brand/sabeebook-bee.svg';
 
 /**
- * The sabeebook logo, cut exactly from the brand sheet (its dark-panel version, with the
- * panel's green taken out so it sits on the app's own background). One or the other per
+ * The sabeebook logo, redrawn as vector shapes from the brand sheet's dark-panel version in
+ * the exact brand colours, so it stays sharp at any size. One or the other per
  * place, never both together: `word` where there's width (sign-in, menus), `bee` where
  * the space is small or square (the loading screen).
  */

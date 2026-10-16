@@ -15,7 +15,7 @@ import { quantityText } from '@/lib/quantity';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Badge from '@/components/ui/Badge';
-import { formatCurrency, formatDate, formatWhole, typeLabel } from '@/lib/utils';
+import { formatCurrency, formatDate, formatWhole, typeLabel, isMoneyIn, cn } from '@/lib/utils';
 
 export default function DashboardPage() {
   useShops();
@@ -129,7 +129,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <Badge>{typeLabel(tx.type)}</Badge>
-                <span className="whitespace-nowrap text-sm font-medium tabular-nums text-white/70">
+                <span className={cn('whitespace-nowrap text-sm font-medium tabular-nums', isMoneyIn(tx.type) ? 'text-brand-leaf' : 'text-white/70')}>
                   {isCost(tx.type) ? '−' : '+'}{formatCurrency(tx.amount, tx.currency)}
                 </span>
               </div>
