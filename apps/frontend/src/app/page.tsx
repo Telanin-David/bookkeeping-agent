@@ -168,7 +168,7 @@ function Hero() {
               </div>
             </Glass>
 
-            <Glass className="landing-float-2 absolute -right-14 top-[56%] w-[206px] bg-[#0d3a28]/80 p-3 sm:-right-28 sm:top-[46%] sm:w-[228px] sm:p-3.5">
+            <Glass className="landing-float-2 absolute -right-14 top-[63%] w-[206px] bg-[#0d3a28]/80 p-3 sm:-right-28 sm:top-[60%] sm:w-[228px] sm:p-3.5">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-yellow text-[12px] font-bold text-brand-black">MT</span>
                 <div className="min-w-0">
