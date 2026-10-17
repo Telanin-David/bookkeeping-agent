@@ -57,7 +57,7 @@ A **terminal** is a window where you **type instructions** to a computer instead
 2. **Paste** it into the terminal:
    - **Windows (PowerShell):** click inside the window, then right-click (or **Ctrl+V**). If it asks *"You are about to paste text that contains multiple lines"*, click **Paste anyway**.
    - **Mac (Terminal):** **Cmd+V**.
-   - **Hostinger's browser terminal:** **Ctrl+Shift+V**, or right-click → **Paste**.
+   - **Hostinger's Web console:** **Ctrl+Shift+V**, or right-click → **Paste**. Test it first with a harmless word: some web consoles don't allow pasting. If yours doesn't, use your laptop's own terminal (step 2).
 3. Press **Enter** if the last line hasn't run by itself.
 4. **Wait** until you see the **prompt** again: the line that starts with `root@...:~#`. **The prompt means "I'm ready for your next instruction".** While a command is still working, the prompt doesn't show.
 5. **Read the last few lines.** Words like `error`, `failed`, `denied` or `not found` mean something went wrong. **Stop, and don't paste the next box.** Send me those lines.
@@ -102,7 +102,8 @@ A **terminal** is a window where you **type instructions** to a computer instead
 3. **Location** (if it asks): pick a European one, such as **France**, **United Kingdom**, **Netherlands** or **Germany**. **Why:** it's the closest Hostinger has to Nigeria, so the app feels fastest for your customers.
 4. **Operating system:** choose **Plain OS** (sometimes called **Operating system** or **Clean OS**), then **Ubuntu 24.04**. The number is the version, released April 2024, with years of security updates. Ubuntu 22.04 also works if 24.04 isn't offered.
    - **Don't pick** anything "with a control panel" (CloudPanel, cPanel, Plesk…) or an "application" (Docker, Coolify, WordPress…). **Why:** those install their own website software, which clashes with the way this guide sets things up.
-5. **Malware scanner** (if offered): fine to leave **on**.
+5. **Malware scanner** (if offered): leave it **off**. **Why:** it hunts attacks on PHP websites (like WordPress), and sabeebook isn't PHP, so it adds a program to the server without protecting much. The real protection is in step 3. You can switch it on later under **Security → Malware Scanner** if you change your mind.
+   - **Docker** (if offered): leave it **off** too. This guide doesn't use it.
 6. **Root password:** type a **strong password** (12+ characters, mixing letters, numbers and symbols). **Write it down somewhere safe**, like a password manager or a notebook at home. Anyone with it controls the whole server.
    - If it offers an **SSH key**, skip it for now. The password is enough tonight.
 7. Click **Next** / **Finish setup**. Hostinger takes a few minutes to prepare the server. Wait until it says **Running** (or shows a green dot).
@@ -147,6 +148,12 @@ You make these changes on the website of the company you **bought the domain fro
 4. Add a second record the same way, but with **Name / Host:** `www`.
 5. If the list already has other **A** (or **AAAA**) records for `@` or `www`, such as a "parking page" the seller added, **delete** them. **Why:** with two addresses listed, some visitors land on the wrong one.
 
+> **If your domain is on Namecheap:** sign in → **Domain List** → **Manage** next to your domain.
+> - On the **Domain** tab, **NAMESERVERS** should say **Namecheap BasicDNS**. If it says **Custom DNS**, the phone book lives at that other company instead.
+> - Open the **Advanced DNS** tab. Under **HOST RECORDS**, delete Namecheap's parking records with the bin icon: the **CNAME** for `www` (pointing to `parkingpage.namecheap.com`) and the **URL Redirect** for `@`.
+> - **ADD NEW RECORD → A Record**, Host `@`, Value your IPv4, TTL **Automatic**, then click the **green tick ✓** (without it, nothing is saved). Repeat with Host `www`.
+> - Use the **IPv4** address only (four numbers with dots). Don't add an **AAAA** (IPv6) record.
+>
 > **If your domain is on Hostinger:** in hPanel, click **Domains** → your domain → **DNS / Nameservers** (or **Manage DNS records**).
 > - Hostinger usually already has an **A** record for `@` pointing to a parking page. Click **Edit**, change **Points to** to your server's IP, and click **Update**. Edit it; don't add a second one.
 > - If there's a **CNAME** record for `www` pointing to your domain, **leave it**. A CNAME means "this name is the same as that name", so `www` simply follows `@`, and you can skip point 4.
@@ -167,7 +174,8 @@ You make these changes on the website of the company you **bought the domain fro
 **Open a terminal on your laptop:**
 - **Windows:** press the **Windows key**, type `PowerShell`, and press **Enter**.
 - **Mac:** press **Cmd+Space**, type `Terminal`, and press **Enter**.
-- **Or, easier:** in hPanel, open your server and click **Browser terminal**. It opens already logged in, so skip to "Tell the server your domain" below.
+- **Or, easier:** in hPanel, click **VPS** → **Manage**, then **Web console** on the Overview page (next to **Reboot**). A black window opens. If it shows `login:`, type `root`, press **Enter**, then type the root password (nothing shows while you type) and press **Enter**. Once you see the prompt, skip to "Tell the server your domain" below.
+- **From your phone (later):** apps like **Termius** (iPhone and Android) or **JuiceSSH** (Android) make the same secure call. Fine for quick checks after launch; use a laptop for the setup itself, especially step 7.
 
 Type this, with **your** IP address instead of the example, and press **Enter**:
 
