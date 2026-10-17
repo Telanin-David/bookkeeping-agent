@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import SiteHeader from '@/components/landing/SiteHeader';
 import BrandLogo from '@/components/brand/BrandLogo';
 import { Laptop, Phone, Snip } from '@/components/landing/Frames';
-import { Bee, FlightPath, Grain, HexBadge, Honeycomb, MarketStall, Swash } from '@/components/landing/Art';
+import { Bee, FlightPath, Grain, HexBadge, Honeycomb, MarketStall } from '@/components/landing/Art';
 import chat from '@/assets/landing/phone-chat-2.webp';
 import alerts from '@/assets/landing/phone-alerts.webp';
 import profit from '@/assets/landing/phone-profit.webp';
@@ -118,17 +118,13 @@ function Hero() {
       <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-14 pt-24 sm:gap-16 sm:px-6 sm:pt-36 lg:grid-cols-[1.2fr_0.8fr] lg:gap-4 lg:pb-24 lg:pt-40">
         <div>
           <Glass className="inline-flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3.5 text-[12px] font-medium sm:py-1.5 sm:pl-2 sm:pr-4 sm:text-[13px]">
-            <Bee className="h-6 w-8" />
+            <Bee tone="dark" className="w-8 sm:w-9" />
             Bookkeeping for Nigerian shops
           </Glass>
           <h1 className="mt-5 font-display text-[2.6rem] sm:mt-7 font-bold leading-[0.95] tracking-[-0.045em] sm:text-[4.4rem] lg:text-[4.6rem]">
             Tell it what you sold.
             <span className="mt-2 block">
-              <span className="landing-honey">It keeps the </span>
-              <span className="relative inline-block">
-                <span className="landing-honey">books.</span>
-                <Swash className="absolute -bottom-3 left-0 h-4 w-full text-brand-yellow/80" />
-              </span>
+              <span className="landing-honey">It keeps the books.</span>
             </span>
           </h1>
           <p className="mt-6 max-w-[33rem] text-[16px] leading-relaxed text-brand-paper/75 sm:mt-8 sm:text-[19px]">
@@ -153,7 +149,8 @@ function Hero() {
           <FlightPath
             viewBox="0 0 320 200"
             d="M14 196 C 40 130, 130 170, 170 100 S 262 26, 300 30"
-            beeAt={[300, 26]}
+            beeAt={[300, 22]}
+            beeSize={60}
             className="absolute -left-10 -top-24 hidden h-[200px] w-[320px] lg:block"
           />
           <div className="relative mx-auto w-[220px] [perspective:1800px] sm:w-[290px]">
@@ -238,7 +235,7 @@ function HowItWorks() {
   ];
   return (
     <section id="how" className="relative scroll-mt-24 overflow-hidden">
-      <Honeycomb id="hex-how" className="absolute inset-0 h-full w-full text-brand-green/[0.07] [mask-image:linear-gradient(to_bottom,black,transparent_70%)]" />
+      <Honeycomb id="hex-how" className="absolute inset-0 h-full w-full text-brand-green/[0.05] [mask-image:linear-gradient(to_bottom,black,transparent_70%)]" />
       <div className="relative mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-32">
         <div className="grid gap-6 lg:grid-cols-2 lg:items-end">
           <div className="landing-rise">
@@ -258,6 +255,7 @@ function HowItWorks() {
             d="M70 70 C 200 -10, 300 140, 420 60 S 640 -10, 760 60 S 900 120, 960 40"
             beeAt={[968, 34]}
             stroke="#147A45"
+            tone="light"
             className="absolute -top-10 left-0 hidden h-[120px] w-full md:block"
           />
           <ol className="landing-scroller relative -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:snap-none md:grid-cols-3 md:items-start md:gap-6 md:overflow-visible md:px-0 md:pb-0">
@@ -310,7 +308,7 @@ function Features() {
             <div className="mt-8 h-[300px] overflow-hidden sm:absolute sm:-bottom-24 sm:right-8 sm:mt-0 sm:h-auto sm:w-[250px] sm:overflow-visible lg:right-10 lg:w-[270px]">
               <Phone src={alerts} alt="Alerts: Alhaji Musa owes ₦148,000 that was due on 14 Oct; sugar is out of stock; a ₦25,000 bill to Mr. Femi is due" time="08:06" className="mx-auto w-[240px] sm:w-full" />
             </div>
-            <Glass className="landing-float relative z-10 -mt-14 w-full max-w-[290px] p-4 sm:absolute sm:bottom-10 sm:left-9 sm:mt-0">
+            <Glass className="relative z-10 -mt-14 w-full max-w-[290px] p-4 sm:absolute sm:bottom-10 sm:left-9 sm:mt-0">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[13px] font-semibold">Iya Bisi</p>
                 <p className="text-[12px] text-brand-paper/60">3 cartons of Peak milk</p>
@@ -337,7 +335,7 @@ function Features() {
               <div className="rotate-[-4deg] shadow-[0_40px_60px_-24px_rgba(17,23,19,0.55)]">
                 <Snip src={invoice} alt="The invoice sabeebook made for Mama Tunde: Amaka Provisions, 5 cartons of Indomie, ₦72,500, balance due" sizes="260px" className="rounded-2xl bg-white" />
               </div>
-              <div className="landing-float-2 absolute -right-4 bottom-10 flex items-center gap-2 rounded-full bg-brand-black px-4 py-2.5 text-[13px] font-semibold text-brand-paper shadow-xl sm:-right-12">
+              <div className="absolute -right-4 bottom-10 flex items-center gap-2 rounded-full bg-brand-black px-4 py-2.5 text-[13px] font-semibold text-brand-paper shadow-xl sm:-right-12">
                 <ShareNetwork size={16} weight="bold" className="text-brand-yellow" /> Share PDF
               </div>
             </div>
@@ -368,7 +366,7 @@ function Features() {
               <p className="mt-4 text-[15px] leading-relaxed text-brand-paper/65">
                 Sales take goods off the shelf and restocks put them back. You&apos;ll know sugar is finished before a customer asks for it.
               </p>
-              <Glass className="landing-float-3 mt-7 inline-flex items-center gap-3 p-3.5 pr-5">
+              <Glass className="mt-7 inline-flex items-center gap-3 p-3.5 pr-5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#C9472F]/90"><Warning size={18} weight="fill" /></span>
                 <div>
                   <p className="text-[13px] font-semibold">Sugar, 50kg bag</p>
@@ -393,11 +391,18 @@ function OneMessage() {
     <section className="relative isolate overflow-hidden bg-brand-yellow">
       <Honeycomb id="hex-honey" className="absolute inset-0 -z-10 h-full w-full text-[#B8860B]/[0.22] [mask-image:radial-gradient(70%_90%_at_80%_50%,black,transparent)]" />
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 sm:px-6 sm:py-28 lg:grid-cols-[1.15fr_0.85fr]">
-        <h2 className="landing-rise font-display text-[2.6rem] font-bold leading-[0.98] tracking-[-0.045em] text-brand-black sm:text-[4.4rem]">
-          One message can hold a whole day&apos;s sales.
-        </h2>
+        <div className="landing-rise">
+          <h2 className="font-display text-[2.6rem] font-bold leading-[0.98] tracking-[-0.045em] text-brand-black sm:text-[4.4rem]">
+            One message can hold a whole day&apos;s sales.
+          </h2>
+          <Link href="/signup" className="group mt-8 inline-flex h-[52px] items-center gap-2 rounded-full bg-brand-black pl-6 pr-2 text-[15px] font-semibold text-brand-yellow transition hover:bg-[#1d2620]">
+            Try it free for {TRIAL_DAYS} days
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-yellow text-brand-black transition group-hover:translate-x-0.5">
+              <ArrowRight size={16} weight="bold" />
+            </span>
+          </Link>
+        </div>
         <div className="landing-rise relative">
-          <Bee className="landing-buzz absolute -right-2 -top-14 h-14 w-20" flip />
           <div className="ml-auto max-w-[360px] rounded-[22px] rounded-br-md bg-brand-black px-5 py-4 text-[16px] leading-relaxed text-brand-paper shadow-[0_30px_50px_-24px_rgba(17,23,19,0.6)]">
             Sold rice 82k, 2 cartons of milk 48k, Semovita 16.5k. Iya Bisi took a keg of oil on credit, 78k.
           </div>
@@ -442,8 +447,8 @@ function BothPlaces() {
             </div>
           </div>
           <div className="landing-scroller -mx-5 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:mt-8 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:absolute lg:-bottom-6 lg:left-1/2 lg:mt-0 lg:w-[880px] lg:-translate-x-1/2">
-            {reports.map(([t, d], i) => (
-              <Glass key={t} className={cn('flex w-[78%] shrink-0 snap-start items-center gap-3 p-3.5 sm:w-auto', i === 0 ? 'landing-float' : i === 1 ? 'landing-float-2' : 'landing-float-3')}>
+            {reports.map(([t, d]) => (
+              <Glass key={t} className="flex w-[78%] shrink-0 snap-start items-center gap-3 p-3.5 sm:w-auto">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-yellow text-brand-black"><FilePdf size={20} weight="fill" /></span>
                 <div className="min-w-0">
                   <p className="text-[14px] font-semibold">{t}</p>
@@ -604,7 +609,7 @@ function Questions() {
           <p className="mt-5 max-w-sm text-[16px] leading-relaxed text-black/60">
             Still unsure? Try it with your own shop for {TRIAL_DAYS} days. It costs nothing, and there&apos;s no card to enter.
           </p>
-          <Bee className="landing-buzz mt-8 hidden h-14 w-20 lg:block" />
+          <Bee className="mt-10 hidden w-28 lg:block" />
         </div>
         <div className="space-y-3">
           {qs.map(([q, a]) => (

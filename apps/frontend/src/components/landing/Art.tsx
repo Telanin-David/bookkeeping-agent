@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import beeOnLight from '@/assets/brand/sabeebook-bee-mark-light.svg';
+import beeOnDark from '@/assets/brand/sabeebook-bee-mark-dark.svg';
 
 /**
  * The home page's art, drawn as vector shapes so it's sharp and light on data. The language
@@ -34,44 +37,22 @@ export function Grain({ className }: { className?: string }) {
   );
 }
 
-/** A small bee, readable on light and dark: yellow body, dark stripes, pale wings. */
-export function Bee({ className, flip }: { className?: string; flip?: boolean }) {
-  return (
-    <svg aria-hidden viewBox="0 0 64 48" className={cn(className, flip && '-scale-x-100')} xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="27" cy="13" rx="11" ry="8" transform="rotate(-25 27 13)" fill="#F7F8F4" fillOpacity="0.92" stroke="#111713" strokeOpacity="0.35" strokeWidth="1.2" />
-      <ellipse cx="38" cy="12" rx="10" ry="7" transform="rotate(20 38 12)" fill="#F7F8F4" fillOpacity="0.85" stroke="#111713" strokeOpacity="0.35" strokeWidth="1.2" />
-      <ellipse cx="32" cy="29" rx="17" ry="11" fill="#F5C928" />
-      <rect x="24" y="18.6" width="5" height="20.8" rx="2.5" fill="#111713" />
-      <rect x="34" y="18.4" width="5" height="21.2" rx="2.5" fill="#111713" />
-      <ellipse cx="32" cy="29" rx="17" ry="11" fill="none" stroke="#111713" strokeWidth="1.6" />
-      <path d="M15.5 29 L10 30.5 L15.5 32" fill="#111713" />
-      <circle cx="50" cy="27" r="6.5" fill="#111713" />
-      <circle cx="52" cy="25.5" r="1.6" fill="#F7F8F4" />
-      <path d="M50 21 C51 15 54 13 57 12 M53 22 C56 18 59 18 61 18" fill="none" stroke="#111713" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
+/** The logo's bee (without its "1 2 3"): green wings on light backgrounds, pale ones on dark. */
+export function Bee({ className, tone = 'light' }: { className?: string; tone?: 'light' | 'dark' }) {
+  return <Image src={tone === 'dark' ? beeOnDark : beeOnLight} alt="" aria-hidden className={cn('h-auto select-none', className)} />;
 }
 
-/** A bee's dotted flight path, with the bee at the end of it. */
-export function FlightPath({ d, viewBox, className, beeAt, beeSize = 44, stroke = '#F5C928', flipBee }: {
-  d: string; viewBox: string; className?: string; beeAt: [number, number]; beeSize?: number; stroke?: string; flipBee?: boolean;
+/** A bee's dotted flight path, with the logo's bee at the end of it. */
+export function FlightPath({ d, viewBox, className, beeAt, beeSize = 52, stroke = '#F5C928', tone = 'dark' }: {
+  d: string; viewBox: string; className?: string; beeAt: [number, number]; beeSize?: number; stroke?: string; tone?: 'light' | 'dark';
 }) {
   const [x, y] = beeAt;
+  const bee = tone === 'dark' ? beeOnDark : beeOnLight;
+  const h = beeSize * (bee.height / bee.width);
   return (
     <svg aria-hidden viewBox={viewBox} className={cn('pointer-events-none overflow-visible', className)} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d={d} stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeDasharray="2 9" className="landing-flight" />
-      <foreignObject x={x - beeSize / 2} y={y - beeSize / 2} width={beeSize} height={beeSize * 0.75} className="overflow-visible">
-        <Bee className="h-full w-full landing-buzz" flip={flipBee} />
-      </foreignObject>
-    </svg>
-  );
-}
-
-/** A hand-drawn style swash under a word. */
-export function Swash({ className }: { className?: string }) {
-  return (
-    <svg aria-hidden viewBox="0 0 300 24" preserveAspectRatio="none" className={cn('pointer-events-none', className)} fill="none">
-      <path d="M4 15 C 60 6, 130 4, 200 8 S 280 14, 296 9" stroke="currentColor" strokeWidth="7" strokeLinecap="round" />
+      <path d={d} stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeDasharray="2 9" />
+      <image href={bee.src} x={x - beeSize / 2} y={y - h / 2} width={beeSize} height={h} />
     </svg>
   );
 }
@@ -182,7 +163,7 @@ export function MarketStall({ className }: { className?: string }) {
         <rect x="308" y="264" width="24" height="4" rx="2" fill="#F7F8F4" opacity="0.7" />
         <rect x="308" y="272" width="16" height="4" rx="2" fill="#F5C928" />
       </g>
-      <g className="landing-float">
+      <g>
         <rect x="324" y="186" width="150" height="46" rx="14" fill="#F7F8F4" />
         <path d="M344 231 l-6 12 l16 -12 Z" fill="#F7F8F4" />
         <circle cx="344" cy="209" r="10" fill="#147A45" />
@@ -193,9 +174,7 @@ export function MarketStall({ className }: { className?: string }) {
 
       {/* The bee and its path */}
       <path d="M40 120 C 10 60, 90 10, 150 30 S 230 10, 250 -4" fill="none" stroke="#F5C928" strokeWidth="2" strokeDasharray="2 8" strokeLinecap="round" opacity="0.8" />
-      <foreignObject x="236" y="-26" width="48" height="36" className="overflow-visible">
-        <Bee className="h-full w-full landing-buzz" />
-      </foreignObject>
+      <image href={beeOnDark.src} x="226" y="-34" width="58" height={58 * (beeOnDark.height / beeOnDark.width)} />
     </svg>
   );
 }
