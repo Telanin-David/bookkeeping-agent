@@ -18,7 +18,7 @@ import { useBilling } from '@/hooks/useBilling';
 import BrandLogo from '@/components/brand/BrandLogo';
 
 const PAGES = [
-  { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
+  { href: '/dashboard',    label: 'Dashboard',    Icon: SquaresFour },
   { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
   { href: '/profit',       label: 'Profit',       Icon: ChartLineUp },
   { href: '/stock',        label: 'Stock',        Icon: Package },
@@ -179,7 +179,7 @@ export default function MobileNav() {
         {/* A small gap between rows, so their highlights never touch. */}
         <nav className="mt-3 space-y-1 px-3">
           {PAGES.map(({ href, label, Icon }) => {
-            const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+            const active = pathname.startsWith(href);
             return (
               <Link
                 key={href}

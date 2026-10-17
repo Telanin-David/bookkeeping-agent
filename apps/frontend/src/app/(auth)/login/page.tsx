@@ -29,7 +29,7 @@ export default function LoginPage() {
 
   // A device that's still signed in (restored on load) skips the login screen.
   useEffect(() => {
-    if (status === 'authenticated' && user?.id !== DEMO_USER_ID) router.replace('/');
+    if (status === 'authenticated' && user?.id !== DEMO_USER_ID) router.replace('/dashboard');
   }, [status, user, router]);
   const { setShops } = useShopsStore();
 

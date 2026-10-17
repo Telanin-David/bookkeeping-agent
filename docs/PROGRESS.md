@@ -19,6 +19,7 @@
 | 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | ✅ Done | `claude/hopeful-galileo-utx4b4` | merged to main (#31) |
 | 9e | Plans & payment: free trial, free plan, Monthly/Yearly, passes, Paystack (owner's request) | ✅ Done | `claude/focused-galileo-jfp0d6` | merged to main (#32) |
 | 9f | Rebrand to sabeebook: logo, brand colours, name (owner's request) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
+| 9g | Home page for visitors (owner's request) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
 | 10 | DevOps & Infrastructure (single VPS) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -347,6 +348,42 @@
       | browser: alerts | 10/10 |
       | browser: import | 11/11 |
   - After merging, run `npm run migrate` on the server (it runs 010, then 011).
+
+- **9g, the home page.** Visitors at `/` now get a home page. The app's dashboard moved to `/dashboard`.
+  - **What changed in the routes:**
+    - Sign-in, sign-up, the menus, the 404 page and the email-confirmed page all point at `/dashboard`.
+    - A signed-in device that opens `/` goes straight to `/dashboard`. This works through a small `sb_signed_in` hint cookie, set and cleared with the session (never for demo mode). `src/proxy.ts` reads it, so the home page itself stays static.
+    - If the session has expired, `/dashboard` sends the owner to `/login` as before.
+  - **Every screen on the page is a real screenshot** of the app, in `src/assets/landing/`, taken from a sample shop (Amaka Provisions, about a month of trade).
+    - The phone and laptop around them are drawn in CSS (`components/landing/Frames.tsx`).
+    - **The chat replies in those screenshots came from a scripted stand-in for the AI**, because no API key was available. The stand-in called the app's real tools, so the books, receipt and numbers are real. Retake the chat screenshots with the real assistant after launch.
+  - **Look ("honey and ledger").** The bee in the logo gives the page its own art: honeycomb patterns, a bee's dotted flight path, honey-gold light on deep green, and a drawn market kiosk. All of it lives in `components/landing/Art.tsx` as vector shapes.
+    - **Glass:** frosted cards float over the app screens, each showing a real figure from the sample shop. Kept to a few, because the blur is heavy on cheap phones.
+    - **Features:** a bento grid of four panels.
+    - **Motion:** sections rise in as they scroll into view. This is done in CSS from the scroll position (`animation-timeline: view()`), so it needs no script, and browsers without it just show everything. Floating cards, the bee and the strip of examples move gently. Everything stops for visitors who turn motion off.
+  - **Font.** The brand sheet's typeface isn't named, and the sheet looks AI-generated, so there's likely no original font file. The closest free match is **Outfit**, now used for headings across the app and for all text on the home page. Bricolage is gone. Outfit has no ₦, so `globals.css` adds a one-character face ("sabeebook naira", from League Spartan's latin-ext file, 20 KB) that supplies just ₦. The app's body text stays Geist, which suits dense tables and numbers; Geist has no ₦ either, and phones fill it in from their system font, as before.
+  - **Phones.** On phones everything reads top to bottom: the steps, the report cards and the prices (Monthly, then Yearly, then Free, so the two paid plans sit together). Sideways rows were tried and dropped, because people need to compare plans and many never swipe. The small features are one compact list. The laptop runs off the right edge so its screen is big enough to read, the debts panel's phone is shortened, the floating cards in the opening screen are more solid and placed over empty parts of the chat, and the spacing is tighter. There's no sideways scrolling at 360 or 390 pixels wide.
+  - **The bee.** The bee is now traced from the light version on the brand sheet (green wings, black head), and recoloured for dark backgrounds (pale wings and head, as on the sheet's dark panel). Each comes with and without the "1 2 3": `assets/brand/sabeebook-bee*.svg`. These replace the earlier trace of the dark panel and the simplified bee drawn for the home page. The chat avatar (`sabeebook-tile.svg`) and the app icons (`app/icon.png`, `app/apple-icon.png`) are rebuilt from the same drawing.
+    - The chat and invoice screenshots on the home page were retaken, so they show the new bee too.
+  - **Fewer distractions.** Only the opening screen's three cards float; the bees and flight paths stay still. The honey band has a "Try it free" button, so there's a way to start in the middle of the page as well as in the header, the opening screen, the prices and the end.
+  - **What the page doesn't claim:** reading photos and voice notes. The chat's photo and microphone buttons exist, but the assistant doesn't use them yet.
+  - **Prices and limits are written on the page itself.** Keep them in step with `services/plans.ts` and the `TRIAL_DAYS`/`TRIAL_MESSAGES` defaults.
+  - **Fixed along the way:** an overdue debt's alert kept the amount from when it was raised. After a part-payment, the alert and the reminder email still showed the old balance. They now show what's still owed.
+  - **Checks:**
+
+    | Check | Result |
+    |---|---|
+    | home page and route flow (browser) | 17/17 |
+    | browser: payments | 18/18 |
+    | browser: stock | 16/16 |
+    | browser: profit | 26/26 |
+    | browser: alerts | 10/10 |
+    | browser: part-paid | 5/5 |
+    | browser: import | 11/11 |
+    | browser: sign-in | 11/11 |
+    | alerts with the worker and email | 31/31 |
+    | payments | 26/26 |
+    | backend tests | 143 |
 
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").

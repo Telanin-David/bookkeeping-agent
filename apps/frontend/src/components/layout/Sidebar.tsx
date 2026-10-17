@@ -14,7 +14,7 @@ import { useBilling } from '@/hooks/useBilling';
 import BrandLogo from '@/components/brand/BrandLogo';
 
 const NAV = [
-  { href: '/',             label: 'Dashboard',    Icon: SquaresFour },
+  { href: '/dashboard',    label: 'Dashboard',    Icon: SquaresFour },
   { href: '/transactions', label: 'Transactions', Icon: ArrowsLeftRight },
   { href: '/profit',       label: 'Profit',        Icon: ChartLineUp },
   { href: '/stock',        label: 'Stock',         Icon: Package },
@@ -58,7 +58,7 @@ export default function Sidebar() {
 
       <nav className="shrink-0 space-y-0.5 px-2 py-2">
         {[...NAV, ...(billing?.billingEnabled ? [PLAN_NAV] : []), ...(isAdmin ? [ADMIN_NAV] : [])].map(({ href, label, Icon }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+          const active = pathname.startsWith(href);
           return (
             <Link
               key={href}

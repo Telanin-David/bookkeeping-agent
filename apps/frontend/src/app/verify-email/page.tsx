@@ -52,7 +52,7 @@ function VerifyEmail() {
         )}
         {state.kind !== 'working' && (
           <Link
-            href={signedIn ? (state.kind === 'done' ? '/' : '/settings/alerts') : '/login'}
+            href={signedIn ? (state.kind === 'done' ? '/dashboard' : '/settings/alerts') : '/login'}
             className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-white/90 px-6 text-[14px] font-semibold text-ink-950 transition hover:bg-white"
           >
             {signedIn ? (state.kind === 'done' ? 'Go to the app' : 'Get a new link') : 'Sign in'}
