@@ -10,13 +10,13 @@ export function useAuth() {
   async function login(email: string, password: string) {
     const { data } = await authApi.login({ email, password });
     setAuth(data.user, data.accessToken);
-    router.push('/');
+    router.push('/dashboard');
   }
 
   async function signup(name: string, email: string, password: string, phone?: string) {
     const { data } = await authApi.signup({ name, email, password, phone });
     setAuth(data.user, data.accessToken);
-    router.push('/');
+    router.push('/dashboard');
   }
 
   async function logout() {

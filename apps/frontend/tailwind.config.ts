@@ -18,6 +18,8 @@ const config: Config = {
           yellow: '#F5C928',
           black:  '#111713',
           paper:  '#F7F8F4',
+          // The app icon's background: the home page's deep green.
+          forest: '#0B3826',
         },
         ink: {
           950: '#09090b',

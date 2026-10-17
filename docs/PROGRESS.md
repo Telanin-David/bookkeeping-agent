@@ -19,6 +19,7 @@
 | 9d | Chat memory of its own actions; fixing and removing transactions in chat (owner's request) | ✅ Done | `claude/hopeful-galileo-utx4b4` | merged to main (#31) |
 | 9e | Plans & payment: free trial, free plan, Monthly/Yearly, passes, Paystack (owner's request) | ✅ Done | `claude/focused-galileo-jfp0d6` | merged to main (#32) |
 | 9f | Rebrand to sabeebook: logo, brand colours, name (owner's request) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
+| 9g | Home page for visitors (owner's request) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
 | 10 | DevOps & Infrastructure (single VPS) | 🔄 In review | `claude/focused-galileo-jfp0d6` | — |
 | 11 | Testing & QA | ⬜ Not started | — | — |
 | 12 | Documentation & Runbooks | ⬜ Not started | — | — |
@@ -347,6 +348,33 @@
       | browser: alerts | 10/10 |
       | browser: import | 11/11 |
   - After merging, run `npm run migrate` on the server (it runs 010, then 011).
+
+- **9g, the home page.** Visitors at `/` now get a home page. The app's dashboard moved to `/dashboard`.
+  - **What changed in the routes:**
+    - Sign-in, sign-up, the menus, the 404 page and the email-confirmed page all point at `/dashboard`.
+    - A signed-in device that opens `/` goes straight to `/dashboard`. This works through a small `sb_signed_in` hint cookie, set and cleared with the session (never for demo mode). `src/proxy.ts` reads it, so the home page itself stays static.
+    - If the session has expired, `/dashboard` sends the owner to `/login` as before.
+  - **Every screen on the page is a real screenshot** of the app, in `src/assets/landing/`, taken from a sample shop (Amaka Provisions, about a month of trade).
+    - The phone and laptop around them are drawn in CSS (`components/landing/Frames.tsx`).
+    - **The chat replies in those screenshots came from a scripted stand-in for the AI**, because no API key was available. The stand-in called the app's real tools, so the books, receipt and numbers are real. Retake the chat screenshots with the real assistant after launch.
+  - **What the page doesn't claim:** reading photos and voice notes. The chat's photo and microphone buttons exist, but the assistant doesn't use them yet.
+  - **Prices and limits are written on the page itself.** Keep them in step with `services/plans.ts` and the `TRIAL_DAYS`/`TRIAL_MESSAGES` defaults.
+  - **Fixed along the way:** an overdue debt's alert kept the amount from when it was raised. After a part-payment, the alert and the reminder email still showed the old balance. They now show what's still owed.
+  - **Checks:**
+
+    | Check | Result |
+    |---|---|
+    | home page and route flow (browser) | 17/17 |
+    | browser: payments | 18/18 |
+    | browser: stock | 16/16 |
+    | browser: profit | 26/26 |
+    | browser: alerts | 10/10 |
+    | browser: part-paid | 5/5 |
+    | browser: import | 11/11 |
+    | browser: sign-in | 11/11 |
+    | alerts with the worker and email | 31/31 |
+    | payments | 26/26 |
+    | backend tests | 143 |
 
 ## Before hosting (owner's decision)
 - **Live AI test is the last step before the VPS launch**, once the owner has an `ANTHROPIC_API_KEY`. It covers the chat agent end to end: recording sales and expenses, stock, and `record_debt_payment` for part-payments ("Mama Nkechi paid ₦5,000 yesterday").
