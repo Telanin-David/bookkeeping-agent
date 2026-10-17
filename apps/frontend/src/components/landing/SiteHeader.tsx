@@ -25,7 +25,7 @@ export default function SiteHeader() {
             : 'border border-transparent bg-transparent',
         )}
       >
-        <Link href="/" aria-label="sabeebook home" className="shrink-0">
+        <Link href="/" aria-label="sabeebook home" className="shrink-0 py-3">
           <BrandLogo priority className="w-[108px] sm:w-[124px]" />
         </Link>
         <nav className="hidden items-center gap-1 text-[14px] text-brand-paper/70 md:flex">

@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Outfit, the brand font, has no naira sign. This face supplies just that character, from
+   League Spartan (the same geometric family), so ₦ in a heading matches the digits next to it. */
+@font-face {
+  font-family: 'sabeebook naira';
+  src: url('../assets/fonts/naira-league-spartan.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+20A6;
+}
+
 @layer base {
   html {
     font-family: var(--font-geist-sans), system-ui, sans-serif;
@@ -21,8 +31,8 @@
   }
 
   h1, h2, h3 {
-    font-family: 'Bricolage Grotesque Variable', var(--font-geist-sans), system-ui, sans-serif;
-    letter-spacing: -0.025em;
+    font-family: 'Outfit Variable', 'sabeebook naira', var(--font-geist-sans), system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 
   /* Date fields: a softer calendar icon that brightens on hover, and the date itself
@@ -192,6 +202,9 @@
       animation-range: entry 0% entry 55%;
     }
   }
+  /* Rows you swipe through on a phone, without a scrollbar showing. */
+  .landing-scroller { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .landing-scroller::-webkit-scrollbar { display: none; }
   /* Text in the honey gradient. */
   .landing-honey {
     background: linear-gradient(100deg, #FFE27A 0%, #F5C928 45%, #E8A317 100%);

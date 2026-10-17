@@ -40,7 +40,7 @@ const TRIAL_DAYS = 14;
 
 export default function Home() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[#FAF6EA] text-brand-black [color-scheme:light]">
+    <div className="min-h-screen overflow-x-clip bg-[#FAF6EA] font-display text-brand-black [color-scheme:light]">
       <SiteHeader />
       <main>
         <Hero />
@@ -115,13 +115,13 @@ function Hero() {
       <Honeycomb id="hex-hero" className="absolute -right-24 -top-16 -z-10 h-[760px] w-[900px] text-brand-yellow/[0.10] [mask-image:radial-gradient(closest-side,black_30%,transparent)]" />
       <Grain />
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-16 px-5 pb-16 pt-28 sm:px-6 sm:pt-36 lg:grid-cols-[1.2fr_0.8fr] lg:gap-4 lg:pb-24 lg:pt-40">
+      <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-14 pt-24 sm:gap-16 sm:px-6 sm:pt-36 lg:grid-cols-[1.2fr_0.8fr] lg:gap-4 lg:pb-24 lg:pt-40">
         <div>
-          <Glass className="inline-flex items-center gap-2 rounded-full py-1.5 pl-2 pr-4 text-[13px] font-medium">
+          <Glass className="inline-flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3.5 text-[12px] font-medium sm:py-1.5 sm:pl-2 sm:pr-4 sm:text-[13px]">
             <Bee className="h-6 w-8" />
             Bookkeeping for Nigerian shops
           </Glass>
-          <h1 className="mt-7 font-display text-[3.1rem] font-bold leading-[0.95] tracking-[-0.045em] sm:text-[4.4rem] lg:text-[4.6rem]">
+          <h1 className="mt-5 font-display text-[2.6rem] sm:mt-7 font-bold leading-[0.95] tracking-[-0.045em] sm:text-[4.4rem] lg:text-[4.6rem]">
             Tell it what you sold.
             <span className="mt-2 block">
               <span className="landing-honey">It keeps the </span>
@@ -131,17 +131,17 @@ function Hero() {
               </span>
             </span>
           </h1>
-          <p className="mt-8 max-w-[33rem] text-[17px] leading-relaxed text-brand-paper/75 sm:text-[19px]">
+          <p className="mt-6 max-w-[33rem] text-[16px] leading-relaxed text-brand-paper/75 sm:mt-8 sm:text-[19px]">
             Type your sales, expenses and debts the way you&apos;d tell a friend. sabeebook writes them down,
             keeps track of who owes you, and shows the profit you&apos;re really making.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <PrimaryButton href="/signup">Start free for {TRIAL_DAYS} days</PrimaryButton>
-            <a href="#how" className="inline-flex h-[52px] items-center rounded-full border border-white/15 bg-white/[0.06] px-6 text-[15px] font-medium text-brand-paper/90 backdrop-blur transition hover:bg-white/[0.12]">
+          <div className="mt-8 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center">
+            <PrimaryButton href="/signup" className="justify-between sm:justify-start">Start free for {TRIAL_DAYS} days</PrimaryButton>
+            <a href="#how" className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-6 text-[15px] font-medium text-brand-paper/90 transition hover:bg-white/[0.12] sm:h-[52px]">
               See how it works
             </a>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-[14px] text-brand-paper/60">
+          <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-brand-paper/60 sm:mt-8 sm:gap-x-6 sm:text-[14px]">
             {['No card needed', 'Works in your phone’s browser', 'Every amount in naira'].map((t) => (
               <li key={t} className="flex items-center gap-2"><Check size={15} weight="bold" className="text-brand-leaf" />{t}</li>
             ))}
@@ -156,12 +156,12 @@ function Hero() {
             beeAt={[300, 26]}
             className="absolute -left-10 -top-24 hidden h-[200px] w-[320px] lg:block"
           />
-          <div className="relative mx-auto w-[248px] [perspective:1800px] sm:w-[290px]">
-            <div className="[transform:rotateY(-13deg)_rotateX(5deg)_rotateZ(1.5deg)]">
+          <div className="relative mx-auto w-[220px] [perspective:1800px] sm:w-[290px]">
+            <div className="sm:[transform:rotateY(-13deg)_rotateX(5deg)_rotateZ(1.5deg)]">
               <Phone src={chat} priority alt="sabeebook's chat: the owner types 'Sold 2 bags of rice for 164k cash. Mama Tunde took 5 cartons of Indomie, 72,500, she'll pay Friday' and the assistant records both" />
             </div>
 
-            <Glass className="landing-float absolute -left-14 top-14 w-[200px] p-3.5 sm:-left-36 sm:w-[220px]">
+            <Glass className="landing-float absolute -left-14 -top-4 w-[196px] bg-[#0d3a28]/80 p-3 sm:-left-36 sm:top-14 sm:w-[220px] sm:p-3.5">
               <div className="flex items-center gap-2.5">
                 <CheckCircle size={30} weight="fill" className="shrink-0 text-brand-leaf" />
                 <div className="min-w-0">
@@ -171,17 +171,17 @@ function Hero() {
               </div>
             </Glass>
 
-            <Glass className="landing-float-2 absolute -right-8 top-[46%] w-[206px] p-3.5 sm:-right-28 sm:w-[228px]">
+            <Glass className="landing-float-2 absolute -right-14 top-[56%] w-[206px] bg-[#0d3a28]/80 p-3 sm:-right-28 sm:top-[46%] sm:w-[228px] sm:p-3.5">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-yellow text-[12px] font-bold text-brand-black">MT</span>
                 <div className="min-w-0">
                   <p className="text-[12px] text-brand-paper/60">Mama Tunde owes you</p>
-                  <p className="font-display text-[17px] font-bold tabular-nums">₦72,500 <span className="text-[12px] font-medium text-brand-yellow">· due Friday</span></p>
+                  <p className="whitespace-nowrap font-display text-[17px] font-bold tabular-nums">₦72,500 <span className="text-[12px] font-medium text-brand-yellow">· due Friday</span></p>
                 </div>
               </div>
             </Glass>
 
-            <Glass className="landing-float-3 absolute -bottom-6 -left-10 w-[200px] p-4 sm:-left-44 sm:w-[218px]">
+            <Glass className="landing-float-3 absolute -bottom-12 -left-12 w-[176px] bg-[#0d3a28]/80 p-3.5 sm:-bottom-6 sm:-left-44 sm:w-[218px] sm:p-4">
               <p className="text-[12px] text-brand-paper/60">Profit this month</p>
               <p className="mt-0.5 font-display text-[24px] font-bold tabular-nums landing-honey">₦388,595</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[10%] rounded-full bg-brand-leaf" /></div>
@@ -239,7 +239,7 @@ function HowItWorks() {
   return (
     <section id="how" className="relative scroll-mt-24 overflow-hidden">
       <Honeycomb id="hex-how" className="absolute inset-0 h-full w-full text-brand-green/[0.07] [mask-image:linear-gradient(to_bottom,black,transparent_70%)]" />
-      <div className="relative mx-auto max-w-6xl px-5 py-24 sm:px-6 sm:py-32">
+      <div className="relative mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-32">
         <div className="grid gap-6 lg:grid-cols-2 lg:items-end">
           <div className="landing-rise">
             <Kicker>How it works</Kicker>
@@ -252,7 +252,7 @@ function HowItWorks() {
           </p>
         </div>
 
-        <div className="relative mt-16">
+        <div className="relative mt-10 md:mt-16">
           <FlightPath
             viewBox="0 0 1000 120"
             d="M70 70 C 200 -10, 300 140, 420 60 S 640 -10, 760 60 S 900 120, 960 40"
@@ -260,9 +260,9 @@ function HowItWorks() {
             stroke="#147A45"
             className="absolute -top-10 left-0 hidden h-[120px] w-full md:block"
           />
-          <ol className="relative grid items-start gap-6 md:grid-cols-3">
+          <ol className="landing-scroller relative -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:snap-none md:grid-cols-3 md:items-start md:gap-6 md:overflow-visible md:px-0 md:pb-0">
             {steps.map((s, i) => (
-              <li key={s.title} className={cn('landing-rise flex flex-col rounded-[28px] border border-black/[0.06] bg-white/80 p-5 shadow-[0_30px_60px_-40px_rgba(11,56,38,0.45)] sm:p-6', i === 1 && 'md:mt-14', i === 2 && 'md:mt-28')}>
+              <li key={s.title} className={cn('landing-rise flex w-[84%] shrink-0 snap-center flex-col rounded-[28px] md:w-auto border border-black/[0.06] bg-white/80 p-5 shadow-[0_30px_60px_-40px_rgba(11,56,38,0.45)] sm:p-6', i === 1 && 'md:mt-14', i === 2 && 'md:mt-28')}>
                 <div className="flex items-center gap-3">
                   <HexBadge className="h-12 w-[44px] text-brand-yellow">
                     <span className="font-display text-[17px] font-bold text-brand-black">{i + 1}</span>
@@ -284,7 +284,7 @@ function HowItWorks() {
 
 function Features() {
   return (
-    <section id="features" className="relative scroll-mt-24 pb-24 sm:pb-32">
+    <section id="features" className="relative scroll-mt-24 pb-16 sm:pb-32">
       <div className="mx-auto max-w-6xl px-5 sm:px-6">
         <div className="landing-rise max-w-2xl">
           <Kicker>What it does for you</Kicker>
@@ -307,10 +307,10 @@ function Features() {
                 nobody&apos;s ₦148,000 quietly becomes a gift.
               </p>
             </div>
-            <div className="mt-8 sm:absolute sm:-bottom-24 sm:right-8 sm:mt-0 sm:w-[250px] lg:right-10 lg:w-[270px]">
+            <div className="mt-8 h-[300px] overflow-hidden sm:absolute sm:-bottom-24 sm:right-8 sm:mt-0 sm:h-auto sm:w-[250px] sm:overflow-visible lg:right-10 lg:w-[270px]">
               <Phone src={alerts} alt="Alerts: Alhaji Musa owes ₦148,000 that was due on 14 Oct; sugar is out of stock; a ₦25,000 bill to Mr. Femi is due" time="08:06" className="mx-auto w-[240px] sm:w-full" />
             </div>
-            <Glass className="landing-float relative mt-6 w-full max-w-[290px] p-4 sm:absolute sm:bottom-10 sm:left-9 sm:mt-0">
+            <Glass className="landing-float relative z-10 -mt-14 w-full max-w-[290px] p-4 sm:absolute sm:bottom-10 sm:left-9 sm:mt-0">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[13px] font-semibold">Iya Bisi</p>
                 <p className="text-[12px] text-brand-paper/60">3 cartons of Peak milk</p>
@@ -376,7 +376,7 @@ function Features() {
                 </div>
               </Glass>
             </div>
-            <div className="mt-10 h-[340px] overflow-hidden sm:absolute sm:-bottom-0 sm:right-10 sm:mt-0 sm:h-[400px] sm:w-[240px] lg:w-[250px]">
+            <div className="mt-8 h-[300px] overflow-hidden sm:absolute sm:-bottom-0 sm:right-10 sm:mt-0 sm:h-[400px] sm:w-[240px] lg:w-[250px]">
               <Phone src={stock} alt="The stock list: six products with how many are left, sugar out of stock" className="mx-auto w-[230px] sm:mt-10 sm:w-full" />
             </div>
           </article>
@@ -424,7 +424,7 @@ function BothPlaces() {
     <section className="relative isolate overflow-hidden bg-[#052117] text-brand-paper">
       <div aria-hidden className="absolute inset-0 -z-10" style={{ background: 'radial-gradient(50% 45% at 50% 75%, rgba(245,201,40,0.18), transparent 70%), linear-gradient(180deg,#052117,#0B3826)' }} />
       <Grain />
-      <div className="mx-auto max-w-6xl px-5 py-24 sm:px-6 sm:py-32">
+      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-32">
         <div className="landing-rise mx-auto max-w-3xl text-center">
           <Kicker tone="honey">Phone and laptop</Kicker>
           <h2 className="mt-4 font-display text-[2.4rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-6xl">
@@ -435,15 +435,15 @@ function BothPlaces() {
           </p>
         </div>
 
-        <div className="relative mx-auto mt-16 max-w-5xl">
-          <div className="[perspective:2200px]">
+        <div className="relative mx-auto mt-12 max-w-5xl sm:mt-16">
+          <div className="w-[175%] [perspective:2200px] sm:w-full">
             <div className="landing-rise [transform:rotateX(9deg)] [transform-origin:50%_100%]">
               <Laptop src={desk} alt="sabeebook on a laptop: Amaka Provisions' dashboard with profit, sales, alerts and recent sales" />
             </div>
           </div>
-          <div className="mt-8 grid gap-3 sm:grid-cols-3 lg:absolute lg:-bottom-6 lg:left-1/2 lg:mt-0 lg:w-[880px] lg:-translate-x-1/2">
+          <div className="landing-scroller -mx-5 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:mt-8 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:absolute lg:-bottom-6 lg:left-1/2 lg:mt-0 lg:w-[880px] lg:-translate-x-1/2">
             {reports.map(([t, d], i) => (
-              <Glass key={t} className={cn('flex items-center gap-3 p-3.5', i === 0 ? 'landing-float' : i === 1 ? 'landing-float-2' : 'landing-float-3')}>
+              <Glass key={t} className={cn('flex w-[78%] shrink-0 snap-start items-center gap-3 p-3.5 sm:w-auto', i === 0 ? 'landing-float' : i === 1 ? 'landing-float-2' : 'landing-float-3')}>
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-yellow text-brand-black"><FilePdf size={20} weight="fill" /></span>
                 <div className="min-w-0">
                   <p className="text-[14px] font-semibold">{t}</p>
@@ -471,15 +471,15 @@ function SmallThings() {
   ];
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto max-w-6xl px-5 py-24 sm:px-6 sm:py-32">
+      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-32">
         <div className="landing-rise max-w-2xl">
           <Kicker>And more</Kicker>
           <h2 className="mt-4 font-display text-[2.4rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-6xl">The small things that save you time.</h2>
         </div>
-        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 divide-y divide-black/[0.06] overflow-hidden rounded-[26px] border border-black/[0.06] bg-white/80 sm:mt-14 sm:grid sm:grid-cols-2 sm:gap-4 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent lg:grid-cols-3">
           {items.map(([icon, t, d]) => (
-            <div key={t} className="landing-rise group flex gap-4 rounded-[26px] border border-black/[0.06] bg-white/70 p-5 shadow-[0_24px_50px_-40px_rgba(11,56,38,0.5)] transition hover:-translate-y-1 hover:bg-white sm:block sm:p-6">
-              <HexBadge className="text-[#0B3826]"><span className="text-brand-yellow">{icon}</span></HexBadge>
+            <div key={t} className="landing-rise group flex gap-4 p-5 sm:block sm:rounded-[26px] sm:border sm:border-black/[0.06] sm:bg-white/70 sm:p-6 sm:shadow-[0_24px_50px_-40px_rgba(11,56,38,0.5)] sm:transition sm:hover:-translate-y-1 sm:hover:bg-white">
+              <HexBadge className="h-11 w-10 text-[#0B3826] sm:h-14 sm:w-[52px]"><span className="text-brand-yellow">{icon}</span></HexBadge>
               <div>
                 <h3 className="font-display text-[19px] font-bold tracking-[-0.02em] sm:mt-5 sm:text-[20px]">{t}</h3>
                 <p className="mt-1.5 text-[15px] leading-relaxed text-black/60 sm:mt-2">{d}</p>
@@ -500,7 +500,7 @@ function Pricing() {
       <div aria-hidden className="absolute inset-0 -z-10" style={{ background: 'radial-gradient(40% 50% at 50% 55%, rgba(245,201,40,0.16), transparent 70%), radial-gradient(40% 50% at 0% 0%, rgba(77,165,105,0.25), transparent 70%), linear-gradient(180deg,#0B3826,#052117)' }} />
       <Honeycomb id="hex-price" className="absolute -left-20 top-0 -z-10 h-[600px] w-[700px] text-brand-yellow/[0.07] [mask-image:radial-gradient(closest-side,black,transparent)]" />
       <Grain />
-      <div className="mx-auto max-w-6xl px-5 py-24 sm:px-6 sm:py-32">
+      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-32">
         <div className="landing-rise mx-auto max-w-2xl text-center">
           <Kicker tone="honey">Pricing</Kicker>
           <h2 className="mt-4 font-display text-[2.4rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-6xl">Simple prices, in naira.</h2>
@@ -508,7 +508,7 @@ function Pricing() {
             Every new account gets {TRIAL_DAYS} days of everything free, with 40 messages to the assistant. No card needed to start.
           </p>
         </div>
-        <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-3">
+        <div className="landing-scroller -mx-5 mt-10 flex snap-x snap-mandatory items-stretch gap-4 overflow-x-auto px-5 pb-3 sm:mt-16 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:overflow-visible lg:px-0 lg:pb-0">
           <Plan name="Free" price="₦0" note="For writing your book yourself" points={['Record sales, expenses and debts', 'Receipts and invoices, with a small “Made with sabeebook” line', 'One shop']} />
           <Plan
             featured
@@ -527,7 +527,8 @@ function Pricing() {
           />
           <Plan name="Yearly" price="₦50,000" per="/ year" note="About ₦137 a day: two months free" points={['Everything in Monthly, for a whole year', 'One payment, then nothing to renew until next year']} />
         </div>
-        <p className="mt-8 text-center text-[14px] text-brand-paper/50">Pay with Paystack. If you stop paying, your records stay and you move to the free plan.</p>
+        <p className="mt-3 text-center text-[13px] text-brand-paper/45 lg:hidden">Swipe to see all three plans →</p>
+        <p className="mt-6 text-center text-[14px] text-brand-paper/50 lg:mt-8">Pay with Paystack. If you stop paying, your records stay and you move to the free plan.</p>
       </div>
     </section>
   );
@@ -537,7 +538,7 @@ function Plan({ name, price, per, note, points, featured, className }: {
   name: string; price: string; per?: string; note: string; points: string[]; featured?: boolean; className?: string;
 }) {
   return (
-    <div className={cn('landing-rise relative', className)}>
+    <div className={cn('landing-rise relative w-[86%] max-w-[380px] shrink-0 snap-center lg:w-auto lg:max-w-none', className)}>
       {featured && <div aria-hidden className="absolute -inset-px rounded-[30px] bg-gradient-to-b from-brand-yellow via-brand-yellow/40 to-transparent" />}
       <div className={cn(
         'relative flex h-full flex-col rounded-[29px] p-7 backdrop-blur-xl sm:p-8',
@@ -596,14 +597,14 @@ function Questions() {
   ];
   return (
     <section id="questions" className="relative scroll-mt-24 overflow-hidden">
-      <div className="mx-auto grid max-w-6xl gap-14 px-5 py-24 sm:px-6 sm:py-32 lg:grid-cols-[0.85fr_1.15fr]">
+      <div className="mx-auto grid max-w-6xl gap-8 px-5 py-16 lg:gap-14 sm:px-6 sm:py-32 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="landing-rise lg:sticky lg:top-28 lg:self-start">
           <Kicker>Questions</Kicker>
           <h2 className="mt-4 font-display text-[2.4rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-6xl">What owners ask first.</h2>
           <p className="mt-5 max-w-sm text-[16px] leading-relaxed text-black/60">
             Still unsure? Try it with your own shop for {TRIAL_DAYS} days. It costs nothing, and there&apos;s no card to enter.
           </p>
-          <Bee className="landing-buzz mt-8 h-14 w-20" />
+          <Bee className="landing-buzz mt-8 hidden h-14 w-20 lg:block" />
         </div>
         <div className="space-y-3">
           {qs.map(([q, a]) => (

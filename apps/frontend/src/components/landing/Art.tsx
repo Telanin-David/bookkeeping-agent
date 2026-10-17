@@ -112,7 +112,7 @@ export function MarketStall({ className }: { className?: string }) {
       {/* Sign board */}
       <rect x="120" y="44" width="280" height="44" rx="10" fill="#111713" />
       <rect x="120" y="44" width="280" height="44" rx="10" fill="none" stroke="#F5C928" strokeOpacity="0.5" strokeWidth="2" />
-      <text x="260" y="73" textAnchor="middle" fontFamily="'Bricolage Grotesque Variable', system-ui, sans-serif" fontWeight="700" fontSize="21" fill="#F7F8F4" letterSpacing="-0.3">Amaka Provisions</text>
+      <text x="260" y="73" textAnchor="middle" fontFamily="'Outfit Variable', system-ui, sans-serif" fontWeight="700" fontSize="21" fill="#F7F8F4" letterSpacing="-0.3">Amaka Provisions</text>
       <rect x="150" y="88" width="6" height="12" fill="#111713" />
       <rect x="364" y="88" width="6" height="12" fill="#111713" />
 
