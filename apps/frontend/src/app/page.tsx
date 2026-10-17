@@ -258,9 +258,9 @@ function HowItWorks() {
             tone="light"
             className="absolute -top-10 left-0 hidden h-[120px] w-full md:block"
           />
-          <ol className="landing-scroller relative -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:snap-none md:grid-cols-3 md:items-start md:gap-6 md:overflow-visible md:px-0 md:pb-0">
+          <ol className="relative grid items-start gap-4 md:grid-cols-3 md:gap-6">
             {steps.map((s, i) => (
-              <li key={s.title} className={cn('landing-rise flex w-[84%] shrink-0 snap-center flex-col rounded-[28px] md:w-auto border border-black/[0.06] bg-white/80 p-5 shadow-[0_30px_60px_-40px_rgba(11,56,38,0.45)] sm:p-6', i === 1 && 'md:mt-14', i === 2 && 'md:mt-28')}>
+              <li key={s.title} className={cn('landing-rise flex flex-col rounded-[28px] border border-black/[0.06] bg-white/80 p-5 shadow-[0_30px_60px_-40px_rgba(11,56,38,0.45)] sm:p-6', i === 1 && 'md:mt-14', i === 2 && 'md:mt-28')}>
                 <div className="flex items-center gap-3">
                   <HexBadge className="h-12 w-[44px] text-brand-yellow">
                     <span className="font-display text-[17px] font-bold text-brand-black">{i + 1}</span>
@@ -446,9 +446,9 @@ function BothPlaces() {
               <Laptop src={desk} alt="sabeebook on a laptop: Amaka Provisions' dashboard with profit, sales, alerts and recent sales" />
             </div>
           </div>
-          <div className="landing-scroller -mx-5 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:mt-8 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:absolute lg:-bottom-6 lg:left-1/2 lg:mt-0 lg:w-[880px] lg:-translate-x-1/2">
+          <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-3 lg:absolute lg:-bottom-6 lg:left-1/2 lg:mt-0 lg:w-[880px] lg:-translate-x-1/2">
             {reports.map(([t, d]) => (
-              <Glass key={t} className="flex w-[78%] shrink-0 snap-start items-center gap-3 p-3.5 sm:w-auto">
+              <Glass key={t} className="flex items-center gap-3 p-3.5">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-yellow text-brand-black"><FilePdf size={20} weight="fill" /></span>
                 <div className="min-w-0">
                   <p className="text-[14px] font-semibold">{t}</p>
@@ -513,8 +513,8 @@ function Pricing() {
             Every new account gets {TRIAL_DAYS} days of everything free, with 40 messages to the assistant. No card needed to start.
           </p>
         </div>
-        <div className="landing-scroller -mx-5 mt-10 flex snap-x snap-mandatory items-stretch gap-4 overflow-x-auto px-5 pb-3 sm:mt-16 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:overflow-visible lg:px-0 lg:pb-0">
-          <Plan name="Free" price="₦0" note="For writing your book yourself" points={['Record sales, expenses and debts', 'Receipts and invoices, with a small “Made with sabeebook” line', 'One shop']} />
+        <div className="mx-auto mt-10 grid max-w-md items-stretch gap-4 sm:mt-16 lg:max-w-none lg:grid-cols-3 lg:gap-5">
+          <Plan name="Free" className="order-last lg:order-none" price="₦0" note="For writing your book yourself" points={['Record sales, expenses and debts', 'Receipts and invoices, with a small “Made with sabeebook” line', 'One shop']} />
           <Plan
             featured
             className="order-first lg:order-none"
@@ -532,7 +532,6 @@ function Pricing() {
           />
           <Plan name="Yearly" price="₦50,000" per="/ year" note="About ₦137 a day: two months free" points={['Everything in Monthly, for a whole year', 'One payment, then nothing to renew until next year']} />
         </div>
-        <p className="mt-3 text-center text-[13px] text-brand-paper/45 lg:hidden">Swipe to see all three plans →</p>
         <p className="mt-6 text-center text-[14px] text-brand-paper/50 lg:mt-8">Pay with Paystack. If you stop paying, your records stay and you move to the free plan.</p>
       </div>
     </section>
@@ -543,7 +542,7 @@ function Plan({ name, price, per, note, points, featured, className }: {
   name: string; price: string; per?: string; note: string; points: string[]; featured?: boolean; className?: string;
 }) {
   return (
-    <div className={cn('landing-rise relative w-[86%] max-w-[380px] shrink-0 snap-center lg:w-auto lg:max-w-none', className)}>
+    <div className={cn('landing-rise relative', className)}>
       {featured && <div aria-hidden className="absolute -inset-px rounded-[30px] bg-gradient-to-b from-brand-yellow via-brand-yellow/40 to-transparent" />}
       <div className={cn(
         'relative flex h-full flex-col rounded-[29px] p-7 backdrop-blur-xl sm:p-8',

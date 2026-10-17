@@ -198,9 +198,6 @@
       animation-range: entry 0% entry 55%;
     }
   }
-  /* Rows you swipe through on a phone, without a scrollbar showing. */
-  .landing-scroller { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .landing-scroller::-webkit-scrollbar { display: none; }
   /* Text in the honey gradient. */
   .landing-honey {
     background: linear-gradient(100deg, #FFE27A 0%, #F5C928 45%, #E8A317 100%);
