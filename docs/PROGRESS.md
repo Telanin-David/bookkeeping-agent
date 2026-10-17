@@ -357,6 +357,10 @@
   - **Every screen on the page is a real screenshot** of the app, in `src/assets/landing/`, taken from a sample shop (Amaka Provisions, about a month of trade).
     - The phone and laptop around them are drawn in CSS (`components/landing/Frames.tsx`).
     - **The chat replies in those screenshots came from a scripted stand-in for the AI**, because no API key was available. The stand-in called the app's real tools, so the books, receipt and numbers are real. Retake the chat screenshots with the real assistant after launch.
+  - **Look ("honey and ledger").** The bee in the logo gives the page its own art: honeycomb patterns, a bee's dotted flight path, honey-gold light on deep green, and a drawn market kiosk. All of it lives in `components/landing/Art.tsx` as vector shapes.
+    - **Glass:** frosted cards float over the app screens, each showing a real figure from the sample shop. Kept to a few, because the blur is heavy on cheap phones.
+    - **Features:** a bento grid of four panels.
+    - **Motion:** sections rise in as they scroll into view. This is done in CSS from the scroll position (`animation-timeline: view()`), so it needs no script, and browsers without it just show everything. Floating cards, the bee and the strip of examples move gently. Everything stops for visitors who turn motion off.
   - **What the page doesn't claim:** reading photos and voice notes. The chat's photo and microphone buttons exist, but the assistant doesn't use them yet.
   - **Prices and limits are written on the page itself.** Keep them in step with `services/plans.ts` and the `TRIAL_DAYS`/`TRIAL_MESSAGES` defaults.
   - **Fixed along the way:** an overdue debt's alert kept the amount from when it was raised. After a part-payment, the alert and the reminder email still showed the old balance. They now show what's still owed.

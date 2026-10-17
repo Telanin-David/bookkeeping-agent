@@ -167,6 +167,44 @@
   .skeleton { animation: none; }
 }
 
+/* ── Home page ──────────────────────────────────────────────────
+   Gentle and few: cards float, the bee buzzes, its path drifts, the strip of examples
+   scrolls, and sections rise in as they come into view (where the browser can do that
+   from scrolling alone: no script, and nothing hidden if it can't). */
+@keyframes landing-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes landing-buzz  { 0%, 100% { transform: translate(0, 0) rotate(-4deg); } 50% { transform: translate(2px, -3px) rotate(3deg); } }
+@keyframes landing-dash  { to { stroke-dashoffset: -110; } }
+@keyframes landing-marquee { to { transform: translateX(-50%); } }
+@keyframes landing-rise { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+
+@layer utilities {
+  .landing-float   { animation: landing-float 7s ease-in-out infinite; }
+  .landing-float-2 { animation: landing-float 8.5s ease-in-out -2s infinite; }
+  .landing-float-3 { animation: landing-float 6.5s ease-in-out -4s infinite; }
+  .landing-buzz    { animation: landing-buzz 1.6s ease-in-out infinite; transform-origin: center; }
+  .landing-flight  { animation: landing-dash 6s linear infinite; }
+  .landing-marquee { animation: landing-marquee 48s linear infinite; }
+  .landing-marquee:hover { animation-play-state: paused; }
+  @supports (animation-timeline: view()) {
+    .landing-rise {
+      animation: landing-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+  }
+  /* Text in the honey gradient. */
+  .landing-honey {
+    background: linear-gradient(100deg, #FFE27A 0%, #F5C928 45%, #E8A317 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-float, .landing-float-2, .landing-float-3, .landing-buzz, .landing-flight, .landing-marquee, .landing-rise { animation: none; }
+}
+
 @media print {
   @page { margin: 10mm; }
   html, body { background: #fff !important; }
