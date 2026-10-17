@@ -69,15 +69,20 @@ export async function scanDebts(today: string, transactionId?: string, client: Q
       ? `${who || 'A customer'} owes you ${amount}${what ? ` for ${what}` : ''}. It was due on ${day(due)}.`
       : `You owe ${who || 'a supplier'} ${amount}${what ? ` for ${what}` : ''}. ${due < today ? `It was due on ${day(due)}.` : due === today ? 'It is due today.' : `It is due on ${day(due)}.`}`;
     const type = isCustomer ? 'overdue_receivable' : 'bill_due';
-    const { rowCount } = await client.query(
+    // A debt that already has an open alert keeps it, but with the amount brought up to
+    // date: after a part-payment it must say what's still owed, not the old balance.
+    const { rows: saved } = await client.query(
       `INSERT INTO alerts (user_id, shop_id, type, message, metadata, source_key)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (source_key) WHERE source_key IS NOT NULL AND status <> 'resolved' DO NOTHING`,
+       ON CONFLICT (source_key) WHERE source_key IS NOT NULL AND status <> 'resolved'
+       DO UPDATE SET message = EXCLUDED.message, metadata = EXCLUDED.metadata, updated_at = NOW()
+         WHERE alerts.message IS DISTINCT FROM EXCLUDED.message
+       RETURNING (xmax = 0) AS inserted`,
       [r['user_id'], r['shop_id'], type, message,
        JSON.stringify({ transactionId: r['id'], amountOwed: Math.round(owed * 100) / 100, dueDate: due, counterparty: who ?? null }),
        `${isCustomer ? 'overdue' : 'bill_due'}:${r['id']}`],
     );
-    raised += rowCount ?? 0;
+    raised += saved.filter((s) => s['inserted'] === true).length;
   }
   return { raised, resolved };
 }
