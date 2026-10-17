@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import SiteHeader from '@/components/landing/SiteHeader';
 import BrandLogo from '@/components/brand/BrandLogo';
 import { Laptop, Phone, Snip } from '@/components/landing/Frames';
-import { Bee, FlightPath, Grain, HexBadge, Honeycomb, MarketStall } from '@/components/landing/Art';
+import { Bee, CountTrail, FlightPath, Grain, HexBadge, Honeycomb, MarketStall } from '@/components/landing/Art';
 import chat from '@/assets/landing/phone-chat-2.webp';
 import alerts from '@/assets/landing/phone-alerts.webp';
 import profit from '@/assets/landing/phone-profit.webp';
@@ -117,10 +117,10 @@ function Hero() {
 
       <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-14 pt-24 sm:gap-16 sm:px-6 sm:pt-36 lg:grid-cols-[1.2fr_0.8fr] lg:gap-4 lg:pb-24 lg:pt-40">
         <div>
-          <Glass className="inline-flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3.5 text-[12px] font-medium sm:py-1.5 sm:pl-2 sm:pr-4 sm:text-[13px]">
-            <Bee tone="dark" className="w-8 sm:w-9" />
-            Bookkeeping for Nigerian shops
-          </Glass>
+          <p className="flex items-end gap-3 text-[15px] font-medium text-brand-paper/85 sm:text-[16px]">
+            <CountTrail className="h-[30px] w-[82px] shrink-0 text-brand-leaf sm:h-[34px] sm:w-[92px]" />
+            <span className="pb-[3px]">Bookkeeping for Nigerian shops</span>
+          </p>
           <h1 className="mt-5 font-display text-[2.6rem] sm:mt-7 font-bold leading-[0.95] tracking-[-0.045em] sm:text-[4.4rem] lg:text-[4.6rem]">
             Tell it what you sold.
             <span className="mt-2 block">

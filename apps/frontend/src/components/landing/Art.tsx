@@ -42,6 +42,20 @@ export function Bee({ className, tone = 'light' }: { className?: string; tone?: 
   return <Image src={tone === 'dark' ? beeOnDark : beeOnLight} alt="" aria-hidden className={cn('h-auto select-none', className)} />;
 }
 
+/** The logo's "1 2 3" and its dotted trail: the bee counting as it flies. */
+export function CountTrail({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 92 34" className={cn('overflow-visible', className)} fill="none">
+      <g fill="currentColor" fontFamily="'Outfit Variable', system-ui, sans-serif" fontWeight="700" fontSize="16">
+        <text x="1" y="25">1</text>
+        <text x="18" y="13">2</text>
+        <text x="37" y="20">3</text>
+      </g>
+      <path d="M7 31 C 16 24, 26 35, 38 31 S 62 27, 90 22" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="4 5" />
+    </svg>
+  );
+}
+
 /** A bee's dotted flight path, with the logo's bee at the end of it. */
 export function FlightPath({ d, viewBox, className, beeAt, beeSize = 52, stroke = '#F5C928', tone = 'dark' }: {
   d: string; viewBox: string; className?: string; beeAt: [number, number]; beeSize?: number; stroke?: string; tone?: 'light' | 'dark';
